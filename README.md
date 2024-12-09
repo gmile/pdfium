@@ -1,21 +1,85 @@
-# Pdfium
+# PDFium
 
-**TODO: Add description**
+Bindings to [PDFium](https://pdfium.googlesource.com/pdfium/). Uses statically compiled library https://github.com/bblanchon/pdfium-binaries.
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `pdfium` to your list of dependencies in `mix.exs`:
+The package can be installed by adding `pdfium` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:pdfium, "~> 0.1.0"}
+    {:pdfium, "~> 0.1"}
   ]
 end
+```
+
+## Development
+
+1. Clean-up `_build` directory. Run:
+
+    ```sh
+    rm -fr _build
+    ```
+
+2. For macOS, run:
+
+    ```sh
+    iex -S mix do clean + compile
+    ```
+
+3. For Alpine Linux:
+
+    ```sh
+    docker run --interactive --tty --workdir /pdfium --volume $(pwd):/pdfium alpine:3.21 ash
+    ```
+
+    or for x86_64 platform:
+
+    ```sh
+    docker run --interactive --tty --workdir /pdfium --volume $(pwd):/pdfium --platform linux/amd64 alpine:3.21 ash
+    ```
+
+    then:
+
+    ```sh
+    apk add build-base curl tar elixir
+    rm _build deps # just in case
+    mix do local.rebar --force + local.hex --force
+    ```
+
+    and:
+
+    ```sh
+    mix elixir_make.precompile
+    ```
+
+    or:
+
+    ```sh
+    iex -S mix # will compile
+    ```
+
+4. Run:
+
+    ```elixir
+    {:ok, document} = PDFium.load_document("/Users/eugene/Downloads/7ade6db09604a8b41104763c6f16a987.pdf")
+    {:ok, pages} = PDFium.get_page_count(document)
+    pages # => 1
+    ```
+
+## Precompiling
+
+Run:
+
+```sh
+mix elixir_make.precompile
 ```
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/pdfium>.
 
+## Copyright
+
+Copyright © 2024 Ievgen Pyrogov. See [LICENSE](LICENSE) for further details.

@@ -1,28 +1,56 @@
 defmodule Pdfium.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :pdfium,
-      version: "0.1.0",
+      description: "Elixir interface for pdfium",
+      licenses: ["MIT"],
+      link: "https://github.com/gmile/pdfium",
+      version: @version,
       elixir: "~> 1.17",
+      compilers: [:elixir_make] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      package: package(),
+      deps: deps(),
+    ] ++ make_precompiler()
+  end
+
+  def make_precompiler do
+    [
+      make_precompiler: {:nif, CCPrecompiler},
+      make_precompiler_filename: "pdfium_nif",
+      make_precompiler_priv_paths: ~w"pdfium_nif.so libpdfium.dylib",
+      make_precompiler_url: "https://github.com/gmile/pdfium/releases/download/v#{@version}/@{artefact_filename}"
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger]
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:req, "~> 0.5"},
+      {:cc_precompiler, "~> 0.1", runtime: false},
+      {:elixir_make, "~> 0.1", runtime: false}
+    ]
+  end
+
+  defp package do
+    [
+      files: ~w"
+        lib
+        LICENSE
+        mix.exs
+        README.md
+        c_src/*.[ch]
+        Makefile
+      "
     ]
   end
 end

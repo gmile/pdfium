@@ -24,3 +24,6 @@ pdfium-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+/priv/
+
+c_src/pdfium_nif.o
