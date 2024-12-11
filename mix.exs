@@ -1,4 +1,4 @@
-defmodule Pdfium.MixProject do
+defmodule PDFium.MixProject do
   use Mix.Project
 
   @version "0.1.0"
