@@ -1,0 +1,123 @@
+name: precompile
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: "prod"
+    strategy:
+      matrix:
+        include:
+          - elixir: 1.14.x
+            otp: 25.x
+          - elixir: 1.14.x
+            otp: 26.x
+    steps:
+      - uses: actions/checkout@v3
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+          elixir-version: ${{matrix.elixir}}
+      - name: Cache musl cross compilers
+        id: cache-musl
+        uses: actions/cache@v3
+        with:
+          path: |
+            x86_64-linux-musl-cross
+            aarch64-linux-musl-cross
+          key: musl-${{ runner.os }}-build
+      - if: ${{ steps.cache-musl.outputs.cache-hit != 'true' }}
+        name: Setup musl compilers
+        continue-on-error: true
+        run: |
+          curl -s https://more.musl.cc/11.2.1/x86_64-linux-musl/x86_64-linux-musl-cross.tgz | tar -xz
+          curl -s https://more.musl.cc/11.2.1/x86_64-linux-musl/aarch64-linux-musl-cross.tgz | tar -xz
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc make curl tar \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+          echo "$PWD/x86_64-linux-musl-cross/bin" >> $GITHUB_PATH
+          echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+      - run: |
+          mix deps.get
+          MIX_ENV=test mix test
+      - name: Pre-compile NIF library
+        run: |
+          export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
+          mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          mix elixir_make.precompile
+      - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            cache/*.tar.gz
+
+  macos:
+    runs-on: macos-14
+    env:
+      MIX_ENV: "prod"
+    strategy:
+      matrix:
+        include:
+          - elixir: '1.14.5'
+            otp: '25.1'
+          - elixir: '1.14.5'
+            otp: '26.0'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install asdf
+        uses: asdf-vm/actions/setup@v2
+
+      - name: Cache asdf
+        id: asdf-cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.asdf
+          key: asdf-${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}
+
+      - if: ${{ steps.asdf-cache.outputs.cache-hit != 'true' }}
+        name: Install Erlang & Elixir
+        env:
+          ELIXIR_VERSION: ${{ matrix.elixir }}
+          OTP_VERSION: ${{ matrix.otp }}
+        run: |
+          asdf plugin-add erlang
+          asdf install erlang ${OTP_VERSION}
+
+          ELIXIR_OTP_VERSION=$(echo $OTP_VERSION | cut -d. -f1)
+          asdf plugin-add elixir
+          asdf install elixir ${ELIXIR_VERSION}-otp-${ELIXIR_OTP_VERSION}
+
+      - name: Setup Erlang & Elixir
+        env:
+          ELIXIR_VERSION: ${{ matrix.elixir }}
+          OTP_VERSION: ${{ matrix.otp }}
+        run: |
+          asdf global erlang ${OTP_VERSION}
+          ELIXIR_OTP_VERSION=$(echo $OTP_VERSION | cut -d. -f1)
+          asdf global elixir ${ELIXIR_VERSION}-otp-${ELIXIR_OTP_VERSION}
+
+      - name: Install hex & rebar
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+      - run: |
+          mix deps.get
+          MIX_ENV=test mix test
+
+      - name: Pre-compile NIF library
+        run: |
+          export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
+          mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          mix elixir_make.precompile
+      - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            cache/*.tar.gz
