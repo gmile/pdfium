@@ -21,7 +21,7 @@ defmodule PDFium.MixProject do
   def make_precompiler do
     [
       cc_precompiler: [
-        cleanup: "clean_precompiled_libvips",
+        cleanup: "clean",
         allow_missing_compiler: true,
         compilers: %{
           {:unix, :linux} => %{
