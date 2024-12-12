@@ -2,7 +2,7 @@ defmodule PDFium do
   @on_load :load_nif
 
   def load_nif do
-    :erlang.load_nif(~c"/tmp/pdfium-mac-arm64-output/pdfium_nif", 0)
+    :erlang.load_nif(~c"pdfium_nif", 0)
   end
 
   def load_document(_filename), do: :erlang.nif_error(:nif_not_loaded)

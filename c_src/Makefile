@@ -1,4 +1,4 @@
-MIX_APP_PATH = ..
+MIX_APP_PATH ?= ..
 PREFIX = $(MIX_APP_PATH)/priv
 SHARED_LIB = $(PREFIX)/pdfium_nif.so
 
@@ -52,7 +52,7 @@ UNAME_SYS := $(shell uname -s)
 ifeq ($(UNAME_SYS), Darwin)
     LDFLAGS += -undefined dynamic_lookup
     LDLIBS += -lpdfium
-    POST_BUILD = cp $(PRECOMPILED_PATH)/lib/libpdfium.dylib $(PREFIX)/ && \
+    POST_BUILD = cp $(PRECOMPILED_PATH)/lib/libpdfium.dylib ../priv && \
                 install_name_tool -change ./libpdfium.dylib @loader_path/libpdfium.dylib $(SHARED_LIB)
 else
     LDFLAGS += -Wl,-s -Wl,--disable-new-dtags -Wl,-rpath='$$ORIGIN/$(PDFIUM_VARIANT)/lib'
@@ -76,6 +76,7 @@ $(PRECOMPILED_PATH)/lib/libpdfium.so:
 	curl --silent --location $(LIBRARY_BASE_URL)/$(PDFIUM_VARIANT).tgz | tar --extract --gunzip --directory=$(PRECOMPILED_PATH)
 
 %.o: %.c $(PRECOMPILED_PATH)
+	$(info $(CFLAGS))
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:

@@ -19,19 +19,15 @@ otp_archive_name=$(basename $otp_download_link)
 pdfium_directory_name=$(basename $pdfium_download_link .tgz)
 pdfium_archive_name=$(basename $pdfium_download_link)
 
-output_directory_name="pdfium-mac-arm64-output"
-
 # 1. Clean-up
 
 rm -fr $otp_directory_name
 rm -fr $otp_archive_name
 rm -fr $pdfium_directory_name
 rm -fr $pdfium_archive_name
-rm -fr $output_directory_name
 
 mkdir $otp_directory_name
 mkdir $pdfium_directory_name
-mkdir $output_directory_name
 
 # 2. Download Erlang
 
@@ -71,16 +67,28 @@ gcc \
   -l pdfium \
   --library-directory $otp_directory_name/usr/lib \
   --library-directory $pdfium_directory_name/lib \
-  --output $output_directory_name/pdfium_nif.so \
+  --output pdfium_nif.so \
   pdfium_nif.o
 
 # 3. Package
 
-install_name_tool -change "./libpdfium.dylib" "@rpath/libpdfium.dylib" $output_directory_name/pdfium_nif.so
-install_name_tool -add_rpath "@loader_path" $output_directory_name/pdfium_nif.so
+install_name_tool -change "./libpdfium.dylib" "@rpath/libpdfium.dylib" pdfium_nif.so
+install_name_tool -add_rpath "@loader_path" pdfium_nif.so
 
 # 4. Create archive
-tar -cvf $output_name -s '|.*/||' $output_directory_name/pdfium_nif.so $pdfium_directory_name/lib/libpdfium.dylib
+tar --create \
+    --verbose \
+    --file="$output_name" \
+    -s '|.*/||' \
+    pdfium_nif.so \
+    "$pdfium_directory_name/lib/libpdfium.dylib"
+
+rm pdfium_nif.o
+rm pdfium_nif.so
+rm -fr $otp_directory_name
+rm -fr $otp_archive_name
+rm -fr $pdfium_directory_name
+rm -fr $pdfium_archive_name
 
 echo $output_name
 
