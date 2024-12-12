@@ -20,6 +20,9 @@ defmodule PDFium.MixProject do
 
   def make_precompiler do
     [
+      make_precompiler_nif_versions: [
+        versions: ["2.16", "2.17"]
+      ],
       cc_precompiler: [
         cleanup: "clean",
         allow_missing_compiler: true,
