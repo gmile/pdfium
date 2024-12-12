@@ -1,0 +1,24 @@
+{
+  "builds": [
+    {
+      "os": "macos",
+      "arch": "arm64",
+      "otp": "27.2",
+      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-mac-arm64.tgz",
+      "pdfium_sha256sum": "49babf3a146fced6d44014cd003b52d59b96dfd1be9ff6a88afc01c4b4d4f3d2",
+      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-27.2/otp-aarch64-apple-darwin.tar.gz",
+      "otp_sha256sum": "cfdc9eff4bc3d7ac1b61e1d7adee92153e707249e9a1ade899ea5b7c52f6850d",
+      "output_name": "pdfium-nif-2.17-arm64-apple-darwin-0.1.0.tar.gz"
+    },
+    {
+      "os": "macos",
+      "arch": "arm64",
+      "otp": "27.2",
+      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-mac-arm64.tgz",
+      "pdfium_sha256sum": "49babf3a146fced6d44014cd003b52d59b96dfd1be9ff6a88afc01c4b4d4f3d2",
+      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-27.2/otp-aarch64-apple-darwin.tar.gz",
+      "otp_sha256sum": "cfdc9eff4bc3d7ac1b61e1d7adee92153e707249e9a1ade899ea5b7c52f6850d",
+      "output_name": "pdfium-nif-2.17-arm64-apple-darwin-0.1.0.tar.gz"
+    }
+  ]
+}
