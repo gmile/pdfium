@@ -1,4 +1,4 @@
 %{
-  "pdfium-nif-2.17-aarch64-apple-darwin-0.1.0.tar.gz" => "sha256:60c800fc2dcb251aa8778022125211421a8fb5399306f95f2be42939adbfddd9",
-  "pdfium-nif-2.17-x86_64-apple-darwin-0.1.0.tar.gz" => "sha256:4a36b85e8711d34a50e73783485f71131617e463a59cef70fea15cca32276e67",
+  "pdfium-nif-2.17-aarch64-apple-darwin-0.1.0.tar.gz" => "sha256:7b6ffe32e0aa2cdfb683c2b4a2d0ffe24efb7149bb8cc91aae2f06f27770c1f5",
+  "pdfium-nif-2.17-x86_64-apple-darwin-0.1.0.tar.gz" => "sha256:aa20d06193e4fec4f153a876525a5926c291240a98df945714b0ec65ce2ac1ee",
 }

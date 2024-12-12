@@ -1,4 +1,4 @@
-MIX_APP_PATH ?= ..
+MIX_APP_PATH = ..
 PREFIX = $(MIX_APP_PATH)/priv
 SHARED_LIB = $(PREFIX)/pdfium_nif.so
 
@@ -10,11 +10,9 @@ PDFIUM_MAPPING_aarch64-apple-darwin = pdfium-mac-arm64
 
 PDFIUM_MAPPING_x86_64-linux-gnu     = pdfium-linux-x64
 PDFIUM_MAPPING_aarch64-linux-gnu    = pdfium-linux-arm64
-PDFIUM_MAPPING_armv7l-linux-gnueabihf  = pdfium-linux-arm
+PDFIUM_MAPPING_armv7l-linux-gnueabihf = pdfium-linux-arm
 PDFIUM_MAPPING_x86_64-linux-musl    = pdfium-linux-musl-x64
 PDFIUM_MAPPING_aarch64-linux-musl   = pdfium-linux-musl-arm64
-
-# armv7l
 
 ifndef CC_PRECOMPILER_CURRENT_TARGET
     # System and architecture detection

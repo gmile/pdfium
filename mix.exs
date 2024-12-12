@@ -53,7 +53,7 @@ defmodule PDFium.MixProject do
       ],
       make_precompiler: {:nif, CCPrecompiler},
       make_precompiler_filename: "pdfium_nif",
-      make_precompiler_priv_paths: ~w"pdfium_nif.so libpdfium.so",
+      make_precompiler_priv_paths: ~w"pdfium_nif.so libpdfium.so libpdfium.dylib",
       make_precompiler_url: "https://github.com/gmile/pdfium/releases/download/v#{@version}/@{artefact_filename}"
     ]
   end
