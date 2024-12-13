@@ -7,7 +7,7 @@ on:
 
 jobs:
   linux:
-    runs-on: 24.04
+    runs-on: ubuntu-latest
     env:
       MIX_ENV: prod
     steps:
