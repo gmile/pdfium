@@ -10,11 +10,22 @@ jobs:
       MIX_ENV: prod
     steps:
       - uses: actions/checkout@v3
-      - run: docker build --platform=linux/amd64 --load --tag pdfium-musl-builder - < custom/Dockerfile.musl
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and load
+        uses: docker/build-push-action@v6
+        with:
+          context: ./custom
+          platforms: linux/amd64,linux/arm64
+          file: custom/Dockerfile.musl
+          tags: pdfium-musl-builder
+          push: false
       - run: |
           docker run \
             --workdir=/pdfium-build \
             --platform=linux/arm64 \
-            --mount type=bind,source=$(pwd),target=/pdfium-build \
+            --mount type=bind,source=$(realpath ./custom),target=/pdfium-build \
             pdfium-musl-builder \
             ./build-for-linux.sh linux-musl armv8-a 27.2
