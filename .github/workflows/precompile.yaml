@@ -6,8 +6,13 @@ on:
 jobs:
   linux:
     runs-on: ubuntu-latest
-    env:
-      MIX_ENV: prod
+
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+
     steps:
       - uses: actions/checkout@v3
       - name: Set up QEMU
@@ -19,9 +24,9 @@ jobs:
         with:
           context: ./custom
           platforms: linux/amd64,linux/arm64
-          file: custom/Dockerfile.musl
+          file: ./custom/Dockerfile.musl
           tags: pdfium-musl-builder
-          push: false
+          tags: localhost:5000/gmile/pdfium-musl-builder:latest
       - run: |
           docker run \
             --workdir=/pdfium-build \
