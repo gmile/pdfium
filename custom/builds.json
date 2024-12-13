@@ -8,7 +8,7 @@
       "pdfium_sha256sum": "49babf3a146fced6d44014cd003b52d59b96dfd1be9ff6a88afc01c4b4d4f3d2",
       "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-27.2/OTP-27.2-macos-arm64.tar.gz",
       "otp_sha256sum": "cfdc9eff4bc3d7ac1b61e1d7adee92153e707249e9a1ade899ea5b7c52f6850d",
-      "output_name": "pdfium-nif-2.17-arm64-apple-darwin-0.1.0.tar.gz"
+      "output_name": "pdfium-nif-2.17-aarch64-apple-darwin-0.1.0.tar.gz"
     },
     {
       "os": "macos",
@@ -18,7 +18,7 @@
       "pdfium_sha256sum": "1461985c13556b762a288115c39a5c2b1d22db159dca1eb0f1acf88b8087fc91",
       "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-27.2/OTP-27.2-macos-amd64.tar.gz",
       "otp_sha256sum": "91fd068ed9748b83f95b6e4a8c60e59562567a507cf6d4da8f8d44a88523ce54",
-      "output_name": "pdfium-nif-2.17-amd64-apple-darwin-0.1.0.tar.gz"
+      "output_name": "pdfium-nif-2.17-x86_64-apple-darwin-0.1.0.tar.gz"
     },
     {
       "os": "linux-musl",
@@ -26,9 +26,31 @@
       "otp": "27.2",
       "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-linux-musl-arm64.tgz",
       "pdfium_sha256sum": "40dcaee17834a3195a61032cd51d7d8d7940a1bd2b95e8af4278a7ba340cd1f2",
-      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-27.2/OTP-27.2-macos-arm64.tar.gz",
-      "otp_sha256sum": "cfdc9eff4bc3d7ac1b61e1d7adee92153e707249e9a1ade899ea5b7c52f6850d",
-      "output_name": "pdfium-nif-2.17-linux-musl-0.1.0.tar.gz"
+      "output_name": "pdfium-nif-2.17-arm64-linux-musl-0.1.0.tar.gz"
+    },
+    {
+      "os": "linux-musl",
+      "arch": "x86-64",
+      "otp": "27.2",
+      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-linux-musl-x64.tgz",
+      "pdfium_sha256sum": "29f47dd559efd8fec215aeb74fe0fd046f6e0dd39400262b017112bea1006cd2",
+      "output_name": "pdfium-nif-2.17-x86_64-linux-musl-0.1.0.tar.gz"
+    },
+    {
+      "os": "linux",
+      "arch": "x86-64",
+      "otp": "27.2",
+      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-linux-x64.tgz",
+      "pdfium_sha256sum": "9259c17ca66070224e3eaa898c31eb89cd9078efb4db6eb4c74627527a39ef25",
+      "output_name": "pdfium-nif-2.17-x86_64-linux-gnu-0.1.0.tar.gz"
+    },
+    {
+      "os": "linux",
+      "arch": "armv8-a",
+      "otp": "27.2",
+      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-linux-arm64.tgz",
+      "pdfium_sha256sum": "9a968880cabbe78e27b99557a7531cd1d31d3293657966938159920f17a48626",
+      "output_name": "pdfium-nif-2.17-arm64-linux-gnu-0.1.0.tar.gz"
     }
   ]
 }
