@@ -16,50 +16,6 @@ end
 
 ## Development
 
-1. Clean-up `_build` directory. Run:
-
-    ```sh
-    rm -fr _build
-    ```
-
-2. For macOS, run:
-
-    ```sh
-    iex -S mix do clean + compile
-    ```
-
-3. For Alpine Linux:
-
-    ```sh
-    docker run --interactive --tty --workdir /pdfium --volume $(pwd):/pdfium alpine:3.21 ash
-    ```
-
-    or for x86_64 platform:
-
-    ```sh
-    docker run --interactive --tty --workdir /pdfium --volume $(pwd):/pdfium --platform linux/amd64 alpine:3.21 ash
-    ```
-
-    then:
-
-    ```sh
-    apk add build-base curl tar elixir
-    rm _build deps # just in case
-    mix do local.rebar --force + local.hex --force
-    ```
-
-    and:
-
-    ```sh
-    mix elixir_make.precompile
-    ```
-
-    or:
-
-    ```sh
-    iex -S mix # will compile
-    ```
-
 4. Run:
 
     ```elixir
@@ -68,34 +24,31 @@ end
     pages # => 1
     ```
 
-## Building
+## Building (locally)
 
-Prepare linux builders:
+1. Build all targets:
 
-```sh
-docker build --platform=linux/amd64 --load --tag pdfium-musl-builder - < Dockerfile.musl
-docker build --platform=linux/arm64 --load --tag pdfium-glibc-builder - < Dockerfile.glibc
-docker build --platform=linux/amd64 --load --tag pdfium-glibc-builder - < Dockerfile.glibc
-```
+    ```sh
+    ./custom/build-all.sh
+    ```
 
-# for docker builds consider "native" target
+2. Upload all targets:
 
-```sh
-./build-for-mac.sh macos amd64 27.2
-./build-for-mac.sh macos arm64 27.2
+    ```sh
+    gh release upload v0.1.0 custom/pdfium-nif-2.17*
+    ```
 
-docker build --platform=linux/arm64 --load --tag pdfium-musl-builder - < Dockerfile.musl
-docker run --workdir=/pdfium-build --platform=linux/arm64 --mount type=bind,source=(pwd),target=/pdfium-build pdfium-musl-builder ./build-for-linux.sh linux-musl armv8-a 27.2
+3. Generate checksums:
 
-docker build --platform=linux/amd64 --load --tag pdfium-musl-builder - < Dockerfile.musl
-docker run --workdir=/pdfium-build --platform=linux/amd64 --mount type=bind,source=(pwd),target=/pdfium-build pdfium-musl-builder ./build-for-linux.sh linux-musl x86-64 27.2
+    ```sh
+    mix elixir_make.checksum --all
+    ```
 
-docker build --platform=linux/arm64 --load --tag pdfium-glibc-builder - < Dockerfile.glibc
-docker run --workdir=/pdfium-build --platform=linux/arm64 --mount type=bind,source=(pwd),target=/pdfium-build pdfium-glibc-builder ./build-for-linux.sh linux armv8-a 27.2
+4. Commit checksums (???)
 
-docker build --platform=linux/amd64 --load --tag pdfium-glibc-builder - < Dockerfile.glibc
-docker run --workdir=/pdfium-build --platform=linux/amd64 --mount type=bind,source=(pwd),target=/pdfium-build pdfium-glibc-builder ./build-for-linux.sh linux x86-64 27.2
-```
+5. Push commit
+
+6. Create tag
 
 ## Precompiling
 
@@ -108,6 +61,10 @@ mix elixir_make.precompile
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/pdfium>.
+
+## TODO
+
+- [ ] for docker builds consider just using "native" target in the script
 
 ## Copyright
 

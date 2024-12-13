@@ -15,6 +15,27 @@ defmodule PDFium.MixProject do
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
+    ] ++ make_precompiler()
+  end
+
+  def make_precompiler do
+    [
+      make_precompiler: {:nif, CCPrecompiler},
+      make_precompiler_url: "https://github.com/gmile/pdfium/releases/download/v#{@version}/@{artefact_filename}",
+      cc_precompiler: [
+        compilers: %{
+          {:unix, :linux} => %{
+            "x86_64-linux-gnu" => nil,
+            "x86_64-linux-musl" => nil,
+            "aarch64-linux-gnu" => nil,
+            "aarch64-linux-musl" => nil
+          },
+          {:unix, :darwin} => %{
+            "x86_64-apple-darwin" => nil,
+            "aarch64-apple-darwin" => nil
+          }
+        }
+      ]
     ]
   end
 
@@ -26,7 +47,6 @@ defmodule PDFium.MixProject do
 
   defp deps do
     [
-      {:req, "~> 0.5"},
       {:cc_precompiler, "~> 0.1", runtime: false},
       {:elixir_make, "~> 0.1", runtime: false}
     ]
@@ -39,7 +59,7 @@ defmodule PDFium.MixProject do
         LICENSE
         mix.exs
         README.md
-        c_src/*.[ch]
+        c_src/pdfium_nif.c
         Makefile
       "
     ]

@@ -1,3 +1,5 @@
+pushd custom
+
 ./build-for-mac.sh macos arm64 27.2
 ./build-for-mac.sh macos x86_64 27.2
 
@@ -12,3 +14,5 @@ docker run --workdir=/pdfium-build --platform=linux/arm64 --mount type=bind,sour
 
 docker build --platform=linux/amd64 --load --tag pdfium-glibc-builder - < Dockerfile.glibc
 docker run --workdir=/pdfium-build --platform=linux/amd64 --mount type=bind,source=$(pwd),target=/pdfium-build pdfium-glibc-builder ./build-for-linux.sh linux x86-64 27.2
+
+popd
