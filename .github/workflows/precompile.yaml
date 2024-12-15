@@ -24,5 +24,5 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            precompile --libc ${{ matrix.libc }} --c-src-dir c_src --build-scripts-src-dir custom --plat ${{ matrix.platform }}
+            precompile --libc ${{ matrix.libc }} --c-src-dir c_src --plat ${{ matrix.platform }}
             export --path output/ --allowParentDirPath
