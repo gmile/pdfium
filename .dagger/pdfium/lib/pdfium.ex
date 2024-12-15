@@ -5,16 +5,16 @@ defmodule Pdfium do
   Produces artifact
   """
   defn precompile(plat: String.t(), libc: String.t(), build_scripts_src_dir: Dagger.Directory.t(), c_src_dir: Dagger.Directory.t()) :: Dagger.File.t() do
-    in_erl_platform =
-      case plat do
-        "linux/arm64" -> "armv8-a"
-        "linux/amd64" -> "x86-64"
-      end
-
     out_erl_platform =
       case plat do
         "linux/arm64" -> "aarch64"
         "linux/amd64" -> "x86_64"
+      end
+
+    pdfium_platform =
+      case plat do
+        "linux/arm64" -> "aarch64"
+        "linux/amd64" -> "x64"
       end
 
     base =
@@ -39,7 +39,7 @@ defmodule Pdfium do
         "musl" -> "musl"
       end
 
-    what_to_build =
+    pdfium_libc =
       case libc do
         "glibc" -> "linux"
         "musl" -> "linux-musl"
@@ -49,13 +49,65 @@ defmodule Pdfium do
     builds = Dagger.Directory.file(build_scripts_src_dir, "builds.json")
     build_script = Dagger.Directory.file(build_scripts_src_dir, "build-for-linux.sh")
 
+    # TODO: implement sha256 check for this file
+    pdfium = Dagger.Client.http(dag(), "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-#{pdfium_libc}-#{pdfium_platform}.tgz")
+
+    otp_directory_name="/usr/local/lib/erlang/"
+    pdfium_directory_name="/pdfium"
+
+    compile = ~w(
+      gcc
+        -march=native
+        -Wall
+        -Wextra
+        -Werror
+        -Wno-unused-parameter
+        -Wmissing-prototypes
+        --pic
+        --optimize=2
+        --std c11
+        --include-directory #{otp_directory_name}/usr/include
+        --include-directory #{pdfium_directory_name}/include
+        --compile
+        --output pdfium_nif.o
+        pdfium_nif.c
+    )
+
+    link = ~w(
+      gcc
+        pdfium_nif.o
+        --shared
+        --output=pdfium_nif.so
+        --library-directory=#{otp_directory_name}/usr/lib
+        --library-directory=#{pdfium_directory_name}/lib
+        -Wl,-s
+        -Wl,--disable-new-dtags
+        -Wl,-rpath='$ORIGIN'
+        -l:libpdfium.so
+    )
+
+    output = "/build/pdfium-nif-2.17-#{out_erl_platform}-linux-#{out_name}-0.1.0.tar.gz"
+
+    pack = ~w(
+      tar
+        --create
+        --verbose
+        --file=#{output}
+        --directory /build pdfium_nif.so
+        --directory #{pdfium_directory_name}/lib libpdfium.so
+    )
+
     base
     |> Dagger.Container.with_workdir("/build")
     |> Dagger.Container.with_file("/build/pdfium_nif.c", src)
     |> Dagger.Container.with_file("/build/builds.json", builds)
-    |> Dagger.Container.with_file("/build/build-for-linux.sh", build_script)
-    |> Dagger.Container.with_exec(~w"./build-for-linux.sh #{what_to_build} #{in_erl_platform} 27.2")
-    |> Dagger.Container.file("/build/pdfium-nif-2.17-#{out_erl_platform}-linux-#{out_name}-0.1.0.tar.gz")
+    |> Dagger.Container.with_file("/build/pdfium.tar", pdfium)
+    |> Dagger.Container.with_exec(~w"mkdir #{pdfium_directory_name}")
+    |> Dagger.Container.with_exec(~w"tar --extract --gunzip --directory=#{pdfium_directory_name} --file=/build/pdfium.tar")
+    |> Dagger.Container.with_exec(compile)
+    |> Dagger.Container.with_exec(link)
+    |> Dagger.Container.with_exec(pack)
+    |> Dagger.Container.file(output)
   end
 
   # modify to only accept a path to file to test
