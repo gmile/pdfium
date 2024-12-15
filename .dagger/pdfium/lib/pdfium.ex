@@ -46,8 +46,6 @@ defmodule Pdfium do
       end
 
     src = Dagger.Directory.file(c_src_dir, "pdfium_nif.c")
-    builds = Dagger.Directory.file(build_scripts_src_dir, "builds.json")
-    build_script = Dagger.Directory.file(build_scripts_src_dir, "build-for-linux.sh")
 
     # TODO: implement sha256 check for this file
     pdfium = Dagger.Client.http(dag(), "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-#{pdfium_libc}-#{pdfium_platform}.tgz")
@@ -100,7 +98,6 @@ defmodule Pdfium do
     base
     |> Dagger.Container.with_workdir("/build")
     |> Dagger.Container.with_file("/build/pdfium_nif.c", src)
-    |> Dagger.Container.with_file("/build/builds.json", builds)
     |> Dagger.Container.with_file("/build/pdfium.tar", pdfium)
     |> Dagger.Container.with_exec(~w"mkdir #{pdfium_directory_name}")
     |> Dagger.Container.with_exec(~w"tar --extract --gunzip --directory=#{pdfium_directory_name} --file=/build/pdfium.tar")
