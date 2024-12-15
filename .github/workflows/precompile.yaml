@@ -9,14 +9,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: Hello
+      - name: Precompile
         uses: dagger/dagger-for-github@v6
         with:
           version: 0.15.1
           call: |
-            precompile --libc glibc --c-src-dir c_src --build-scripts-src-dir custom --plat linux/amd64 \
-            export --path . --allowParentDirPath
-
+            precompile \
+              --libc glibc \
+              --c-src-dir c_src \
+              --build-scripts-src-dir custom \
+              --plat linux/amd64 \
+            export \
+              --path . \
+              --allowParentDirPath
 
           # dagger call \
           #   precompile --libc glibc --c-src-dir c_src --build-scripts-src-dir custom --plat linux/amd64 \
