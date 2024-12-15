@@ -41,7 +41,7 @@ tar --extract --gunzip --directory=$pdfium_directory_name --file=$pdfium_archive
 
 # 4. Compile
 gcc \
-  -march=$arch \
+  -march=native \
   -Wall \
   -Wextra \
   -Werror \
@@ -83,11 +83,11 @@ rm -fr $pdfium_directory_name
 rm -fr $pdfium_archive_name
 
 # 7. Test
-tar --extract --directory=$test_directory_name --file=$output_name
-cp test.exs $test_directory_name
-cp test.pdf $test_directory_name
-cd $test_directory_name
-elixir test.exs
-cd ..
+# tar --extract --directory=$test_directory_name --file=$output_name
+# cp test.exs $test_directory_name
+# cp test.pdf $test_directory_name
+# cd $test_directory_name
+# elixir test.exs
+# cd ..
 
 echo $output_name

@@ -50,6 +50,14 @@ end
 
 6. Create tag
 
+## Building via dagger
+
+```sh
+dagger call \
+  precompile --c-src-dir c_src --build-scripts-src-dir custom --plat linux/amd64 \
+  export --path output/ --allowParentDirPath
+```
+
 ## Precompiling
 
 Run:
