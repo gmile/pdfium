@@ -13,7 +13,7 @@ jobs:
         uses: dagger/dagger-for-github@v6
         with:
           version: 0.15.1
-          call: |
+          args: |
             precompile \
               --libc glibc \
               --c-src-dir c_src \
