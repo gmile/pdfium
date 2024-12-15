@@ -14,14 +14,7 @@ jobs:
         with:
           version: 0.15.1
           args: |
-            precompile \
-              --libc glibc \
-              --c-src-dir c_src \
-              --build-scripts-src-dir custom \
-              --plat linux/amd64 \
-            export \
-              --path . \
-              --allowParentDirPath
+            precompile --libc glibc --c-src-dir c_src --build-scripts-src-dir custom --plat linux/amd64
 
           # dagger call \
           #   precompile --libc glibc --c-src-dir c_src --build-scripts-src-dir custom --plat linux/amd64 \
