@@ -13,7 +13,9 @@ jobs:
         uses: dagger/dagger-for-github@v6
         with:
           version: 0.15.1
-          call: precompile --libc glibc --c-src-dir c_src --build-scripts-src-dir custom --plat linux/amd64
+          call: |
+            precompile --libc glibc --c-src-dir c_src --build-scripts-src-dir custom --plat linux/amd64 \
+            export --path . --allowParentDirPath
 
 
           # dagger call \
