@@ -27,3 +27,4 @@ pdfium-*.tar
 /priv/
 
 c_src/pdfium_nif.o
+output
