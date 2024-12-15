@@ -7,19 +7,12 @@ jobs:
   linux:
     runs-on: ubuntu-latest
 
-    services:
-      registry:
-        image: registry:2
-        ports:
-          - 5000:5000
-
     steps:
       - uses: actions/checkout@v3
       - name: Hello
         uses: dagger/dagger-for-github@v6
         with:
-          version: "0.15.1"
-          module: github.com/shykes/daggerverse/hello
+          version: 0.15.1
           call: precompile --libc glibc --c-src-dir c_src --build-scripts-src-dir custom --plat linux/amd64
 
 
