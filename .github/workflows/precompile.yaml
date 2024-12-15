@@ -10,8 +10,11 @@ jobs:
     strategy:
       matrix:
         libc:
-          - glibc
-          - musl
+          - name: glibc
+            x: a
+
+          - name: musl
+            x: b
         platform:
           - linux/arm64
           - linux/amd64
@@ -24,5 +27,5 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            precompile --libc ${{ matrix.libc }} --c-src-dir c_src --plat ${{ matrix.platform }}
+            precompile --libc ${{ matrix.libc.name }} --c-src-dir c_src --plat ${{ matrix.platform }}
             export --path output/ --allowParentDirPath
