@@ -4,7 +4,7 @@ defmodule Pdfium do
   @doc """
   Produces artifact
   """
-  defn precompile(plat: String.t(), libc: String.t(), build_scripts_src_dir: Dagger.Directory.t(), c_src_dir: Dagger.Directory.t()) :: Dagger.File.t() do
+  defn precompile(plat: String.t(), libc: String.t(), c_src_dir: Dagger.Directory.t()) :: Dagger.File.t() do
     out_erl_platform =
       case plat do
         "linux/arm64" -> "aarch64"
@@ -13,7 +13,7 @@ defmodule Pdfium do
 
     pdfium_platform =
       case plat do
-        "linux/arm64" -> "aarch64"
+        "linux/arm64" -> "arm64"
         "linux/amd64" -> "x64"
       end
 
@@ -109,8 +109,8 @@ defmodule Pdfium do
 
   # modify to only accept a path to file to test
   #
-  defn test(plat: String.t(), libc: String.t(), build_scripts_src_dir: Dagger.Directory.t(), c_src_dir: Dagger.Directory.t()) :: Dagger.File.t() do
-    archive = precompile(plat, libc, build_scripts_src_dir, c_src_dir)
+  defn test(plat: String.t(), libc: String.t(), c_src_dir: Dagger.Directory.t()) :: Dagger.File.t() do
+    archive = precompile(plat, libc, c_src_dir)
 
     dag()
     |> Dagger.Client.container(platform: plat)
