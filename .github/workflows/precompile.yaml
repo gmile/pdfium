@@ -30,15 +30,8 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            precompile
-              --abi ${{ matrix.abi }}
-              --platform-name ${{ matrix.platform }}
-              --src-dir c_src
-              --pdfium-tag ${{ matrix.pdfium-tag }}
-
-            export
-              --path output/precompiled.tar
-              --allow-parent-dir-path
+            precompile --abi ${{ matrix.abi }} --platform-name ${{ matrix.platform }} --src-dir c_src --pdfium-tag ${{ matrix.pdfium-tag }}
+            export --path output/precompiled.tar --allow-parent-dir-path
           engine-stop: false
 
       - name: Test
@@ -46,10 +39,7 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            test
-              --abi ${{ matrix.abi }}
-              --platform-name ${{ matrix.platform }}
-              --precompiled output/precompiled.tar
+            test --abi ${{ matrix.abi }} --platform-name ${{ matrix.platform }} --precompiled output/precompiled.tar
 
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
