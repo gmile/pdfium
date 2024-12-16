@@ -1,128 +1,93 @@
 defmodule Pdfium do
   use Dagger.Mod.Object, name: "Pdfium"
 
-  @doc """
-  Produces artifact
-  """
-  defn precompile(plat: String.t(), libc: String.t(), c_src_dir: Dagger.Directory.t()) :: Dagger.File.t() do
-    out_erl_platform =
-      case plat do
-        "linux/arm64" -> "aarch64"
-        "linux/amd64" -> "x86_64"
+  defn precompile(platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.Container.t() do
+    {erlang_platform_name, pdfium_platform_name} =
+      case platform_name do
+        "linux/arm64" -> {"aarch64", "arm64"}
+        "linux/amd64" -> {"x86_64", "x64"}
       end
 
-    pdfium_platform =
-      case plat do
-        "linux/arm64" -> "arm64"
-        "linux/amd64" -> "x64"
+    {erlang_abi_name, pdfium_abi_name} =
+      case abi do
+        "glibc" -> {"linux-gnu", "linux"}
+        "musl" -> {"linux-musl", "linux-musl"}
       end
 
-    base =
-      case libc do
-        "glibc" ->
-          dag()
-          |> Dagger.Client.container(platform: plat)
-          |> Dagger.Container.from("hexpm/elixir:1.17.3-erlang-27.2-ubuntu-noble-20241015")
-          |> Dagger.Container.with_exec(~w"apt update")
-          |> Dagger.Container.with_exec(~w"apt install build-essential tar jq wget --yes")
-        
-        "musl" ->
-          dag()
-          |> Dagger.Client.container(platform: plat)
-          |> Dagger.Container.from("hexpm/elixir:1.17.3-erlang-27.2-alpine-3.20.3")
-          |> Dagger.Container.with_exec(~w"apk add build-base tar jq coreutils")
-      end
+    pdfium_tag = URI.encode_www_form(pdfium_tag)
+    pdfium_download_url = "https://github.com/bblanchon/pdfium-binaries/releases/download/#{pdfium_tag}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
 
-    out_name =
-      case libc do
-        "glibc" -> "gnu"
-        "musl" -> "musl"
-      end
-
-    pdfium_libc =
-      case libc do
-        "glibc" -> "linux"
-        "musl" -> "linux-musl"
-      end
-
-    src = Dagger.Directory.file(c_src_dir, "pdfium_nif.c")
-
-    # TODO: implement sha256 check for this file
-    pdfium = Dagger.Client.http(dag(), "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-#{pdfium_libc}-#{pdfium_platform}.tgz")
-
-    otp_directory_name="/usr/local/lib/erlang/"
+    otp_directory_name="/usr/local/lib/erlang"
     pdfium_directory_name="/pdfium"
 
     compile = ~w(
       gcc
-        -march=native
-        -Wall
-        -Wextra
-        -Werror
-        -Wno-unused-parameter
-        -Wmissing-prototypes
-        --pic
-        --optimize=2
-        --std c11
-        --include-directory #{otp_directory_name}/usr/include
-        --include-directory #{pdfium_directory_name}/include
-        --compile
-        --output pdfium_nif.o
-        pdfium_nif.c
+      -march=native
+      -Wall
+      -Wextra
+      -Werror
+      -Wno-unused-parameter
+      -Wmissing-prototypes
+      --pic
+      --optimize=2
+      --std c11
+      --include-directory #{otp_directory_name}/usr/include
+      --include-directory #{pdfium_directory_name}/include
+      --compile
+      --output=pdfium_nif.o
+      pdfium_nif.c
     )
 
     link = ~w(
       gcc
-        pdfium_nif.o
-        --shared
-        --output=pdfium_nif.so
-        --library-directory=#{otp_directory_name}/usr/lib
-        --library-directory=#{pdfium_directory_name}/lib
-        -Wl,-s
-        -Wl,--disable-new-dtags
-        -Wl,-rpath='$ORIGIN'
-        -l:libpdfium.so
+      pdfium_nif.o
+      --shared
+      --output=pdfium_nif.so
+      --library-directory=#{otp_directory_name}/usr/lib
+      --library-directory=#{pdfium_directory_name}/lib
+      -Wl,-s
+      -Wl,--disable-new-dtags
+      -Wl,-rpath=$ORIGIN
+      -l:libpdfium.so
     )
 
-    output = "/build/pdfium-nif-2.17-#{out_erl_platform}-linux-#{out_name}-0.1.0.tar.gz"
+    output = "/build/pdfium-nif-2.17-#{erlang_platform_name}-#{erlang_abi_name}-0.1.0.tar.gz"
 
     pack = ~w(
       tar
-        --create
-        --verbose
-        --file=#{output}
-        --directory /build pdfium_nif.so
-        --directory #{pdfium_directory_name}/lib libpdfium.so
+      --create
+      --verbose
+      --file=#{output}
+      --directory /build pdfium_nif.so
+      --directory #{pdfium_directory_name}/lib libpdfium.so
     )
 
-    base
+    dag()
+    |> Dagger.Client.container(platform: platform_name)
+    |> with_base_image(abi)
+    |> with_tools(abi)
     |> Dagger.Container.with_workdir("/build")
-    |> Dagger.Container.with_file("/build/pdfium_nif.c", src)
-    |> Dagger.Container.with_file("/build/pdfium.tar", pdfium)
+    |> Dagger.Container.with_file("/build/pdfium_nif.c", Dagger.Directory.file(src_dir, "pdfium_nif.c"))
+    |> Dagger.Container.with_file("/build/pdfium.tar", Dagger.Client.http(dag(), pdfium_download_url))
     |> Dagger.Container.with_exec(~w"mkdir #{pdfium_directory_name}")
     |> Dagger.Container.with_exec(~w"tar --extract --gunzip --directory=#{pdfium_directory_name} --file=/build/pdfium.tar")
     |> Dagger.Container.with_exec(compile)
     |> Dagger.Container.with_exec(link)
     |> Dagger.Container.with_exec(pack)
-    |> Dagger.Container.file(output)
   end
 
-  # modify to only accept a path to file to test
-  #
-  defn test(plat: String.t(), libc: String.t(), c_src_dir: Dagger.Directory.t()) :: Dagger.File.t() do
-    archive = precompile(plat, libc, c_src_dir)
-
+  # TODO: how to chain it with previous?
+  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.Container.t() do
     dag()
-    |> Dagger.Client.container(platform: plat)
-    |> Dagger.Container.from("hexpm/elixir:1.17.3-erlang-27.2-alpine-3.20.3")
+    |> Dagger.Client.container(platform: platform_name)
+    |> with_base_image(abi)
     |> Dagger.Container.with_exec(~w"apk add tar")
     |> Dagger.Container.with_workdir("/test")
-    |> Dagger.Container.with_file("/test/archive.tar", archive)
-    |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=/test/archive.tar")
+    |> Dagger.Container.with_file("/test/precompiled.tar", precompiled)
+    |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=/test/precompiled.tar")
     |> Dagger.Container.with_new_file("/test/test.exs", test_script())
     |> Dagger.Container.with_new_file("/test/test.pdf", test_pdf())
     |> Dagger.Container.with_exec(~w"elixir test.exs")
-    |> Dagger.Container.stdout()
   end
 
   def test_script do
@@ -151,19 +116,40 @@ defmodule Pdfium do
     %PDF-1.0
     1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
     2 0 obj<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>endobj
-    3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj
-    4 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj
+    3 0 obj<</Type/Page/Parent 2 0 R>>endobj
+    4 0 obj<</Type/Page/Parent 2 0 R>>endobj
     xref
     0 5
     0000000000 65535 f
     0000000009 00000 n
     0000000053 00000 n
     0000000102 00000 n
-    0000000165 00000 n
+    0000000148 00000 n
     trailer<</Size 5/Root 1 0 R>>
     startxref
-    228
+    194
     %%EOF
     """
+  end
+
+  defp with_base_image(container, "glibc") do
+    container
+    |> Dagger.Container.from("hexpm/elixir:1.17.3-erlang-27.2-ubuntu-noble-20241015")
+  end
+
+  defp with_base_image(container, "musl") do
+    container
+    |> Dagger.Container.from("hexpm/elixir:1.17.3-erlang-27.2-alpine-3.20.3")
+  end
+
+  defp with_tools(container, "glibc") do
+    container
+    |> Dagger.Container.with_exec(~w"apt update")
+    |> Dagger.Container.with_exec(~w"apt install build-essential tar jq wget --yes")
+  end
+
+  defp with_tools(container, "musl") do
+    container
+    |> Dagger.Container.with_exec(~w"apk add build-base tar jq coreutils")
   end
 end

@@ -9,16 +9,14 @@ jobs:
 
     strategy:
       matrix:
-        libc:
-          - name: glibc
-            x: a
-
-          - name: musl
-            x: b
+        abi:
+          - glibc
+          - musl
         platform:
           - linux/arm64
           - linux/amd64
 
+    # TODO: would be nice to chain the "test" here before export
     steps:
       - uses: actions/checkout@v3
       - run: mkdir output
@@ -27,5 +25,10 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            precompile --libc ${{ matrix.libc.name }} --c-src-dir c_src --plat ${{ matrix.platform }}
+            precompile --abi ${{ matrix.abi }} --src-dir c_src --platform-name ${{ matrix.platform }}
             export --path output/ --allowParentDirPath
+      # If this is about a tag - upload
+      - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: output/*.tar.gz
