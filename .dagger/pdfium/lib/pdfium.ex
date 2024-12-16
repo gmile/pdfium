@@ -1,7 +1,7 @@
 defmodule Pdfium do
   use Dagger.Mod.Object, name: "Pdfium"
 
-  defn precompile(platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.Container.t() do
+  defn precompile(platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
     {erlang_platform_name, pdfium_platform_name} =
       case platform_name do
         "linux/arm64" -> {"aarch64", "arm64"}
@@ -74,9 +74,9 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(compile)
     |> Dagger.Container.with_exec(link)
     |> Dagger.Container.with_exec(pack)
+    |> Dagger.Container.file(output)
   end
 
-  # TODO: how to chain it with previous?
   defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container(platform: platform_name)
