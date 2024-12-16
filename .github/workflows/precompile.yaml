@@ -11,6 +11,8 @@ jobs:
 
     strategy:
       matrix:
+        pdfium-tag:
+          - chromium/6886
         abi:
           - glibc
           - musl
@@ -27,7 +29,7 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            precompile --abi ${{ matrix.abi }} --src-dir c_src --platform-name ${{ matrix.platform }}
+            precompile --abi ${{ matrix.abi }} --src-dir c_src --platform-name ${{ matrix.platform }} --pdfium-tag  ${{ matrix.pdfium-tag }}
             export --path output/ --allowParentDirPath
       # If this is about a tag - upload
       - uses: softprops/action-gh-release@v1
