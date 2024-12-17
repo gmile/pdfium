@@ -6,6 +6,19 @@ name: precompile
 #
 # TODO: have custom cc_precompiler according to rules here:
 #
+# TODO: rename pdfium-tag -> libpdfium-tag
+#
+# TODO: add hexpm release here
+#
+#       mix hex.publish package
+#       mix hex.user auth
+#       mix hex.publish package --yes --replace ???
+#
+# TODO: pack all of the above into a dagger script
+#
+# TODO: use build naming, e.g. 0.1.0+libpdfium.6889
+#
+# TODO: add tailscale to GH runners
 
 on:
   push:
@@ -26,7 +39,6 @@ jobs:
         with:
           version: 0.15.1
           args: create-release --tag ${{ github.ref_name }} --draft=true --github-token GITHUB_TOKEN sync
-          engine-stop: false
 
   linux:
     runs-on: ubuntu-24.04
@@ -63,8 +75,6 @@ jobs:
               --github-token GITHUB_TOKEN \
               sync
 
-# rename pdfium-tag -> libpdfium-tag
-
   publish-release-draft:
     runs-on: ubuntu-24.04
 
@@ -82,9 +92,3 @@ jobs:
           version: 0.15.1
           args: edit-release --tag ${{ github.ref_name }} --draft=false --github-token GITHUB_TOKEN sync
           engine-stop: false
-
-# TODO: add hexpm release here
-#
-#       mix hex.publish package
-#       mix hex.user auth
-#       mix hex.publish package --yes --replace ???

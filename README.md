@@ -76,6 +76,19 @@ Using local computer:
 4. Push new tag
 
 TODO: pack all of the above into a dagger script
+TODO: use build naming, e.g. 0.1.0+libpdfium.6889
+TODO: add tailscale to GH runners
+    https://github.com/PostHog/posthog/blob/9cbcf09f7032498874614086f2a0bd4c23bbe815/.github/workflows/pr-deploy.yml#L45
+
+- name: connect to tailscale
+  uses: tailscale/github-action@8b804aa882ac3429b804a2a22f9803a2101a0db9
+  env:
+      TS_EXPERIMENT_OAUTH_AUTHKEY: true
+  with:
+      version: 1.42.0
+      authkey: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+      args: --advertise-tags tag:github-runner
+
 
 ## Precompiling
 
