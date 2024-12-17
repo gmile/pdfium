@@ -90,6 +90,29 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"elixir test.exs")
   end
 
+  defn build_test_and_publish(
+    platform_name: String.t(),
+    abi: String.t(),
+    src_dir: Dagger.Directory.t(),
+    tag: String.t(),
+    pdfium_tag: String.t(),
+    github_token: Dagger.Secret.t()
+  ) :: Dagger.Container.t() do
+    file = precompile(platform_name, abi, src_dir, pdfium_tag)
+    {:ok, filename} = Dagger.File.name(file)
+
+    test(file, platform_name, abi)
+    |> Dagger.Container.sync()
+
+    dag()
+    |> Dagger.Client.container()
+    |> Dagger.Container.from("alpine:3.21")
+    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
+    |> Dagger.Container.with_file("#{filename}", file)
+    |> Dagger.Container.with_exec(~w"apk add github-cli")
+    |> Dagger.Container.with_exec(~w"gh release upload #{tag} #{filename} --repo gmile/pdfium")
+  end
+
   def test_script do
     """
     defmodule PDFium do

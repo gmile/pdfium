@@ -30,19 +30,12 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            precompile --abi ${{ matrix.abi }} --platform-name ${{ matrix.platform }} --src-dir c_src --pdfium-tag ${{ matrix.pdfium-tag }}
-            export --path output/precompiled.tar --allow-parent-dir-path
+            build-test-and-publish
+              --tag v0.1.0
+              --abi ${{ matrix.abi }}
+              --src-dir c_src
+              --platform-name ${{ matrix.platform }}
+              --pdfium-tag chromium/6886
+              --github-token env:GITHUB_TOKEN
+              sync
           engine-stop: false
-
-      - name: Test
-        uses: dagger/dagger-for-github@v7.0.3
-        with:
-          version: 0.15.1
-          args: >-
-            test --abi ${{ matrix.abi }} --platform-name ${{ matrix.platform }} --precompiled output/precompiled.tar
-            stdout
-
-      - uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: output/*.tar.gz
