@@ -58,6 +58,25 @@ dagger call \
   export --path output/ --allowParentDirPath
 ```
 
+## Releasing
+
+Using local computer:
+
+1. Update package version in `VERSION`
+
+2. Update libpdfium version in `LIBPDFIUM_VERSION`
+
+3. Tag release
+
+   ```sh
+   git tag v0.1.7
+   git push origin v0.1.7
+   ```
+
+4. Push new tag
+
+TODO: pack all of the above into a dagger script
+
 ## Precompiling
 
 Run:
