@@ -1,13 +1,37 @@
 name: precompile
 
+# Call workflow manually
+
+# TODO: make release verified
+#
+# TODO: have custom cc_precompiler according to rules here:
+#
+
 on:
   push:
     tags:
       - 'v*'
 
 jobs:
+  create-release-draft:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Create release draft
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: 0.15.1
+          args: create-release --tag ${{ github.ref_name }} --draft=true --github-token GITHUB_TOKEN sync
+          engine-stop: false
+
   linux:
     runs-on: ubuntu-24.04
+
+    needs: prepare-draft
 
     strategy:
       matrix:
@@ -22,15 +46,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-
-      - name: Create release draft
-        uses: dagger/dagger-for-github@v7.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          version: 0.15.1
-          args: create-release --tag ${{ github.ref_name }} --draft=true --github-token GITHUB_TOKEN sync
-          engine-stop: false
 
       - name: Precompile
         uses: dagger/dagger-for-github@v7.0.3
@@ -48,6 +63,14 @@ jobs:
               --github-token GITHUB_TOKEN \
               sync
 
+  publish-release-draft:
+    runs-on: ubuntu-24.04
+
+    needs: prepare-draft
+
+    steps:
+      - uses: actions/checkout@v3
+
       - name: Publish release draft
         uses: dagger/dagger-for-github@v7.0.3
         env:
@@ -57,8 +80,8 @@ jobs:
           args: edit-release --tag ${{ github.ref_name }} --draft=false --github-token GITHUB_TOKEN sync
           engine-stop: false
 
-      # TODO: add hexpm release here
-      #
-      #       mix hex.publish package
-      #       mix hex.user auth
-      #       mix hex.publish package --yes --replace ???
+# TODO: add hexpm release here
+#
+#       mix hex.publish package
+#       mix hex.user auth
+#       mix hex.publish package --yes --replace ???
