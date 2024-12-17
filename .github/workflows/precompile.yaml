@@ -30,12 +30,12 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            build-test-and-publish
-              --tag v0.1.0
-              --abi ${{ matrix.abi }}
-              --src-dir c_src
-              --platform-name ${{ matrix.platform }}
-              --pdfium-tag chromium/6886
-              --github-token env:GITHUB_TOKEN
+            build-test-and-publish \
+              --tag v0.1.0 \
+              --abi ${{ matrix.abi }} \
+              --src-dir c_src \
+              --platform-name ${{ matrix.platform }} \
+              --pdfium-tag chromium/6886 \
+              --github-token env:GITHUB_TOKEN \
               sync
           engine-stop: false
