@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        pdfium-tag:
+        pdfium_tag:
           - chromium/6886
         abi:
           - glibc
@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - run: mkdir output
+      # TODO: add create create (pre-release) here
 
       - name: Precompile
         uses: dagger/dagger-for-github@v7.0.3
@@ -33,11 +33,18 @@ jobs:
           version: 0.15.1
           args: >-
             build-test-and-publish \
-              --tag v0.1.0 \
+              --tag ${{ github.ref_name }} \
               --abi ${{ matrix.abi }} \
               --src-dir c_src \
               --platform-name ${{ matrix.platform }} \
-              --pdfium-tag chromium/6886 \
+              --pdfium-tag ${{ matrix.pdfium_tag }} \
               --github-token GITHUB_TOKEN \
               sync
-          engine-stop: false
+
+      # TODO: update pre-release to release
+
+      # TODO: add hexpm release here
+      #
+      #       mix hex.publish package
+      #       mix hex.user auth
+      #       mix hex.publish package --yes --replace ???

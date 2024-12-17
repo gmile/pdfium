@@ -113,6 +113,15 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"gh release upload #{tag} #{filename} --repo gmile/pdfium")
   end
 
+  defn create_release(tag: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
+    dag()
+    |> Dagger.Client.container()
+    |> Dagger.Container.from("alpine:3.21")
+    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
+    |> Dagger.Container.with_exec(~w"apk add github-cli")
+    |> Dagger.Container.with_exec(~w"gh release create #{tag} --title #{tag} --repo gmile/pdfium --prerelease")
+  end
+
   def test_script do
     """
     defmodule PDFium do
