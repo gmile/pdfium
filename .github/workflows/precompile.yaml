@@ -23,7 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # TODO: add create create (pre-release) here
+      - name: Create release draft
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: 0.15.1
+          args: create-release --tag ${{ github.ref_name }} --draft=true --github-token GITHUB_TOKEN sync
+          engine-stop: false
 
       - name: Precompile
         uses: dagger/dagger-for-github@v7.0.3
@@ -41,7 +48,14 @@ jobs:
               --github-token GITHUB_TOKEN \
               sync
 
-      # TODO: update pre-release to release
+      - name: Publish release draft
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: 0.15.1
+          args: edit-release --tag ${{ github.ref_name }} --draft=false --github-token GITHUB_TOKEN sync
+          engine-stop: false
 
       # TODO: add hexpm release here
       #
