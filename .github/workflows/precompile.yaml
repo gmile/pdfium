@@ -27,6 +27,8 @@ jobs:
 
       - name: Precompile
         uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: 0.15.1
           args: >-
@@ -36,6 +38,6 @@ jobs:
               --src-dir c_src \
               --platform-name ${{ matrix.platform }} \
               --pdfium-tag chromium/6886 \
-              --github-token ${{ secrets.GITHUB_TOKEN }} \
+              --github-token GITHUB_TOKEN \
               sync
           engine-stop: false
