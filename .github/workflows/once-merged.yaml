@@ -1,8 +1,9 @@
 name: Post Merge Actions
 
 on:
-  pull_request:
-    types: [closed]
+  push:
+    branches:
+      - main
 
 jobs:
   post_merge:
