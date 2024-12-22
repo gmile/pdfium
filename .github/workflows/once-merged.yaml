@@ -7,8 +7,6 @@ on:
 
 jobs:
   post_merge:
-    # Only run if the PR was merged (not just closed)
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
