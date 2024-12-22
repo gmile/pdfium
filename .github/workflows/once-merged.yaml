@@ -44,4 +44,5 @@ jobs:
             "release-${{ github.event.pull_request.number }}-${{ github.run_number }}" \
             --title "Release $(date +'%Y-%m-%d')" \
             --notes "Automated release from PR #${{ github.event.pull_request.number }}" \
+            --repo gmile/pdfium \
             release-artifacts/**/*
