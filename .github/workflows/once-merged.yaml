@@ -24,7 +24,7 @@ jobs:
             --jq '.[0].databaseId')
 
           # Download all artifacts from that run
-          gh run download $RUN_ID --dir artifacts --repo gmile/pdfium
+          gh run download $RUN_ID --repo gmile/pdfium
 
       - name: Create Release with Artifacts
         env:
@@ -35,4 +35,4 @@ jobs:
             --title "Release $(date +'%Y-%m-%d')" \
             --repo gmile/pdfium \
             --notes "Automated release from PR #${{ github.event.pull_request.number }}" \
-            artifacts/*
+            random-files/*
