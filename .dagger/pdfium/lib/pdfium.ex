@@ -1,7 +1,14 @@
 defmodule Pdfium do
   use Dagger.Mod.Object, name: "Pdfium"
 
-  defn precompile(platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
+  # read bare app version, e.g. 0.1.1
+
+  # produce artefacts, e.g. 0.1.1+libpdfium.1234 (e.g. with new tag)
+
+  defn precompile(cur_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
+    version = Dagger.Directory.file(cur_dir, "VERSION")
+    [_, pdfium_version] = String.split(pdfium_tag, "/")
+
     {erlang_platform_name, pdfium_platform_name} =
       case platform_name do
         "linux/arm64" -> {"aarch64", "arm64"}
@@ -51,7 +58,7 @@ defmodule Pdfium do
       -l:libpdfium.so
     )
 
-    output = "/build/pdfium-nif-2.17-#{erlang_platform_name}-#{erlang_abi_name}-0.1.0.tar.gz"
+    output = "/build/pdfium-nif-2.17-#{erlang_platform_name}-#{erlang_abi_name}-#{version}+libpdfium.#{pdfium_version}.tar.gz"
 
     pack = ~w(
       tar
@@ -106,29 +113,33 @@ defmodule Pdfium do
 
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("alpine:3.21")
-    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
-    |> Dagger.Container.with_file("#{filename}", file)
-    |> Dagger.Container.with_exec(~w"apk add github-cli")
+    |> with_github_cli(github_token)
     |> Dagger.Container.with_exec(~w"gh release upload #{tag} #{filename} --repo gmile/pdfium")
   end
 
   defn create_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("alpine:3.21")
-    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
-    |> Dagger.Container.with_exec(~w"apk add github-cli")
+    |> with_github_cli(github_token)
     |> Dagger.Container.with_exec(~w"gh release create #{tag} --repo gmile/pdfium --draft=#{draft}")
   end
 
   defn edit_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("alpine:3.21")
-    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
-    |> Dagger.Container.with_exec(~w"apk add github-cli")
+    |> with_github_cli(github_token)
     |> Dagger.Container.with_exec(~w"gh release edit #{tag} --repo gmile/pdfium --draft=#{draft}")
+  end
+
+  defn publish_to_hex(src_dir: Dagger.Directory.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
+    dag()
+    |> Dagger.Client.container()
+    |> Dagger.Container.from("hexpm/elixir:1.18-erlang-27.2-alpine-3.21")
+    |> Dagger.Container.with_exec(~w"mix local.hex --force")
+    |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
+    |> Dagger.Container.with_workdir("/pdfium")
+    |> Dagger.Container.with_directory("/pdfium", src_dir)
+    |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
   end
 
   # gh release edit v1.0 --draft=false
@@ -177,12 +188,12 @@ defmodule Pdfium do
 
   defp with_base_image(container, "glibc") do
     container
-    |> Dagger.Container.from("hexpm/elixir:1.17.3-erlang-27.2-ubuntu-noble-20241015")
+    |> Dagger.Container.from("hexpm/elixir:1.18-erlang-27.2-ubuntu-noble-20241015")
   end
 
   defp with_base_image(container, "musl") do
     container
-    |> Dagger.Container.from("hexpm/elixir:1.17.3-erlang-27.2-alpine-3.20.3")
+    |> Dagger.Container.from("hexpm/elixir:1.18-erlang-27.2-alpine-3.21")
   end
 
   defp with_tools(container, "glibc") do
@@ -194,5 +205,12 @@ defmodule Pdfium do
   defp with_tools(container, "musl") do
     container
     |> Dagger.Container.with_exec(~w"apk add build-base tar jq coreutils")
+  end
+
+  def with_github_cli(container, github_token) do
+    container
+    |> Dagger.Container.from("alpine:3.21")
+    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
+    |> Dagger.Container.with_exec(~w"apk add github-cli")
   end
 end

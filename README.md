@@ -89,6 +89,12 @@ TODO: add tailscale to GH runners
       authkey: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
       args: --advertise-tags tag:github-runner
 
+## github / hexpm configuration
+
+```sh
+mix hex.user key generate --permission package:pdfium --key-name pdfium
+gh secret set HEX_API_KEY --app actions --body value-from-previous-step
+```
 
 ## Precompiling
 

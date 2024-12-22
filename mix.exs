@@ -1,7 +1,7 @@
 defmodule PDFium.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version File.read!("VERSION")
 
   def project do
     [
@@ -61,7 +61,11 @@ defmodule PDFium.MixProject do
         README.md
         c_src/pdfium_nif.c
         Makefile
-      "
+      ",
+      licenses: ~w"MIT",
+      links: %{
+        "GitHub" => "https://github.com/gmile/pdfium"
+      }
     ]
   end
 end

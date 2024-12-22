@@ -2,6 +2,9 @@ name: precompile
 
 # Call workflow manually
 
+# TODO: automatic workflow that makes a releases after
+#       a new libpdfium release is out
+#
 # TODO: make release verified
 #
 # TODO: have custom cc_precompiler according to rules here:
@@ -17,6 +20,7 @@ name: precompile
 # TODO: pack all of the above into a dagger script
 #
 # TODO: use build naming, e.g. 0.1.0+libpdfium.6889
+#       https://hexdocs.pm/elixir/1.17.3/Version.html#
 #
 # TODO: add tailscale to GH runners
 
@@ -24,6 +28,9 @@ on:
   push:
     tags:
       - 'v*'
+
+# TODO: maybe provide tag to which to upload these artifacts for?
+#       but - release should already exist
 
 jobs:
   create-release-draft:
@@ -47,7 +54,7 @@ jobs:
 
     strategy:
       matrix:
-        pdfium_tag:
+        libpdfium_tag:
           - chromium/6886
         abi:
           - glibc
@@ -71,7 +78,7 @@ jobs:
               --abi ${{ matrix.abi }} \
               --src-dir c_src \
               --platform-name ${{ matrix.platform }} \
-              --pdfium-tag ${{ matrix.pdfium_tag }} \
+              --libpdfium-tag ${{ matrix.libpdfium_tag }} \
               --github-token GITHUB_TOKEN \
               sync
 
