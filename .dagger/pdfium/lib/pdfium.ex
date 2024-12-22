@@ -1,14 +1,67 @@
 defmodule Pdfium do
   use Dagger.Mod.Object, name: "Pdfium"
 
-  # read bare app version, e.g. 0.1.1
-
-  # produce artefacts, e.g. 0.1.1+libpdfium.1234 (e.g. with new tag)
+  # == Automatic deployment scenario ==
+  #
+  # 1. create & checkout a branch called "release_libpdfium_#{LIBPDFIUM_TAG}" from "stable" branch
+  #
+  # 2. in the new branch:
+  #
+  #   1. update contents of LIBPDFIUM_TAG file and commit
+  #
+  #   2. update contents of VERSION (always just bump patch version, for example 0.1.0 -> v0.1.1) file, commit
+  #
+  # 3. push branch to GH and open a PR from the branch against "stable" and run "gh pr merge --auto --delete-branch"
+  #
+  # 4. wait for PR checks to be green:
+  #
+  #   1. precompile artifacts
+  #
+  #   2. test artifacts and test the lib itself
+  #
+  #   3. if all good, upload the artifacts to GitHub
+  #
+  # 5. once PR is merged:
+  #
+  #   1. download files from GH artifacts from merged PR
+  #
+  #   2. create a release called "v#{VERSION}" (this will automatically create a tag) with all files
+  #
+  #   3. release new lib version on hex
+  #
+  # NOTE: only file expected to change during automatic process is LIBPDFIUM_TAG, so it should not cause
+  #       conflicts later when main is rebased against stable
+  #
+  # == Manual deployment scenario ==
+  #
+  # 1. create & checkout a branch called "release_#{VERSION}" from "main" branch
+  #
+  # 2. in the new branch:
+  #
+  #   1. update contents of VERSION file & commit
+  #
+  # 3. push branch to GH and open a PR from the branch against "main" and run "gh pr merge --auto --delete-branch"
+  #
+  # 4. wait for PR checks to be green:
+  #
+  #   1. precompile artifacts
+  #
+  #   2. test artifacts and test the lib itself
+  #
+  #   3. if all good, upload all artifacts to GitHub
+  #
+  # 5. once PR is merged:
+  #
+  #   1. download files from GH artifacts from merged PR
+  #
+  #   2. create a release called "v#{VERSION}" (this will automatically create a tag) with all files
+  #
+  #   3. release new lib version on hex
+  #
+  #   4. (additionally) merge main to stable
+  #
 
   defn precompile(cur_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
-    version = Dagger.Directory.file(cur_dir, "VERSION")
-    [_, pdfium_version] = String.split(pdfium_tag, "/")
-
     {erlang_platform_name, pdfium_platform_name} =
       case platform_name do
         "linux/arm64" -> {"aarch64", "arm64"}
@@ -58,7 +111,7 @@ defmodule Pdfium do
       -l:libpdfium.so
     )
 
-    output = "/build/pdfium-nif-2.17-#{erlang_platform_name}-#{erlang_abi_name}-#{version}+libpdfium.#{pdfium_version}.tar.gz"
+    output = "/build/pdfium-nif-2.17-#{erlang_platform_name}-#{erlang_abi_name}-0.1.0.tar.gz"
 
     pack = ~w(
       tar
@@ -98,6 +151,7 @@ defmodule Pdfium do
   end
 
   defn build_test_and_publish(
+    cur_dir: Dagger.Directory.t(),
     platform_name: String.t(),
     abi: String.t(),
     src_dir: Dagger.Directory.t(),
@@ -105,7 +159,7 @@ defmodule Pdfium do
     pdfium_tag: String.t(),
     github_token: Dagger.Secret.t()
   ) :: Dagger.Container.t() do
-    file = precompile(platform_name, abi, src_dir, pdfium_tag)
+    file = precompile(cur_dir, platform_name, abi, src_dir, pdfium_tag)
     {:ok, filename} = Dagger.File.name(file)
 
     test(file, platform_name, abi)
@@ -114,6 +168,7 @@ defmodule Pdfium do
     dag()
     |> Dagger.Client.container()
     |> with_github_cli(github_token)
+    |> Dagger.Container.with_file(filename, file)
     |> Dagger.Container.with_exec(~w"gh release upload #{tag} #{filename} --repo gmile/pdfium")
   end
 
@@ -134,7 +189,7 @@ defmodule Pdfium do
   defn publish_to_hex(src_dir: Dagger.Directory.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("hexpm/elixir:1.18-erlang-27.2-alpine-3.21")
+    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
     |> Dagger.Container.with_exec(~w"mix local.hex --force")
     |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
     |> Dagger.Container.with_workdir("/pdfium")
@@ -188,12 +243,12 @@ defmodule Pdfium do
 
   defp with_base_image(container, "glibc") do
     container
-    |> Dagger.Container.from("hexpm/elixir:1.18-erlang-27.2-ubuntu-noble-20241015")
+    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-ubuntu-noble-20241015")
   end
 
   defp with_base_image(container, "musl") do
     container
-    |> Dagger.Container.from("hexpm/elixir:1.18-erlang-27.2-alpine-3.21")
+    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
   end
 
   defp with_tools(container, "glibc") do
