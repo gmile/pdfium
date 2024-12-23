@@ -18,7 +18,7 @@ jobs:
 
       - name: Check new tag
         if: ${{ fromJSON(steps.fetch-and-check-latest-tag.outputs.output).new_tag_available }}
-        run: echo "New tag available: ${{ fromJSON(steps.fetch-and-check-latest-tag.outputs.output).new_tag }}"
+        run: echo New tag is ${{ fromJSON(steps.fetch-and-check-latest-tag.outputs.output).new_tag }}
 
       - name: Run Dagger pipeline
         run: echo ${{ steps.fetch-and-check-latest-tag.outputs.output }}
