@@ -3,7 +3,7 @@ defmodule Pdfium do
 
   # == Automatic deployment scenario ==
   #
-  # 1. create & checkout a branch called "release_libpdfium_#{LIBPDFIUM_TAG}" from "stable" branch
+  # 1. create & checkout a branch called "release-libpdfium-#{LIBPDFIUM_TAG}" from "stable" branch
   #
   # 2. in the new branch:
   #
@@ -34,7 +34,7 @@ defmodule Pdfium do
   #
   # == Manual deployment scenario ==
   #
-  # 1. create & checkout a branch called "release_#{VERSION}" from "main" branch
+  # 1. create & checkout a branch called "release-#{VERSION}" from "main" branch
   #
   # 2. in the new branch:
   #
@@ -44,7 +44,7 @@ defmodule Pdfium do
   #
   # 4. wait for PR checks to be green:
   #
-  #   1. precompile artifacts
+  #   1. precompile artifacts, linux and macos
   #
   #   2. test artifacts and test the lib itself
   #
@@ -60,6 +60,12 @@ defmodule Pdfium do
   #
   #   4. (additionally) merge main to stable
   #
+
+  defn hello_world() :: String.t() do
+    ~s"""
+    {"new_tag":"world","new_tag_available":true}
+    """
+  end
 
   defn precompile(cur_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
     {erlang_platform_name, pdfium_platform_name} =
@@ -150,6 +156,7 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"elixir test.exs")
   end
 
+  # update to build_and_test
   defn build_test_and_publish(
     cur_dir: Dagger.Directory.t(),
     platform_name: String.t(),

@@ -1,0 +1,24 @@
+name: Check latest libpdfium tag
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-latest:
+    runs-on: ubuntu-24.04
+    steps:
+      - id: fetch-and-check-latest-tag
+        name: Compare last known libpdfium tag with latest available tag
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: 0.15.1
+          args: hello-world
+
+      - name: Check new tag
+        if: ${{ fromJSON(steps.fetch-and-check-latest-tag.outputs.output).new_tag_available }}
+        run: echo "New tag available: ${{ fromJSON(steps.fetch-and-check-latest-tag.outputs.output).new_tag }}"
+
+      - name: Run Dagger pipeline
+        run: echo ${{ steps.fetch-and-check-latest-tag.outputs.output }}
