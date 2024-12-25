@@ -83,36 +83,36 @@ defmodule Pdfium do
       |> Dagger.Container.with_exec(~w"gh repo clone gmile/pdfium /pdfium")
       |> Dagger.Container.with_workdir("/pdfium")
 
-    # package_version =
-    #   if package_version do
-    #     package_version
-    #   else
-    #     {:ok, package_version} =
-    #       container
-    #       |> Dagger.Container.file("/pdfium/VERSION")
-    #       |> Dagger.File.contents()
+    package_version =
+      if package_version do
+        package_version
+      else
+        {:ok, package_version} =
+          container
+          |> Dagger.Container.file("/pdfium/VERSION")
+          |> Dagger.File.contents()
 
-    #     package_version
-    #     |> String.trim_trailing()
-    #     |> Version.parse!()
-    #     |> Map.update!(:patch, & &1 + 1)
-    #     |> Version.to_string()
-    #   end
+        package_version
+        |> String.trim_trailing()
+        |> Version.parse!()
+        |> Map.update!(:patch, & &1 + 1)
+        |> Version.to_string()
+      end
 
-    # container
-    # |> Dagger.Container.with_exec(~w"gh auth setup-git")
-    # |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
-    # |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
-    # |> Dagger.Container.with_exec(~w"git switch --create update-libpdfium-to-#{libpdfium_tag} origin/#{base}")
-    # |> Dagger.Container.with_new_file("/pdfium/LIBPDFIUM_TAG", libpdfium_tag)
-    # |> Dagger.Container.with_exec(~w"git add LIBPDFIUM_TAG")
-    # |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update libpdfium tag to #{libpdfium_tag}"])
-    # |> Dagger.Container.with_new_file("/pdfium/VERSION", package_version)
-    # |> Dagger.Container.with_exec(~w"git add VERSION")
-    # |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package version #{package_version}"])
-    # |> Dagger.Container.with_exec(~w"git push origin update-libpdfium-to-#{libpdfium_tag}")
-    # |> Dagger.Container.with_exec(~w"gh pr create --base stable --assignee gmile --fill --repo gmile/pdfium" ++ ["--title", "Bump libpdfium to #{libpdfium_tag} tag"])
-    # |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase update-libpdfium-to-#{libpdfium_tag}")
+    container
+    |> Dagger.Container.with_exec(~w"gh auth setup-git")
+    |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
+    |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
+    |> Dagger.Container.with_exec(~w"git switch --create update-libpdfium-to-#{libpdfium_tag} origin/#{base}")
+    |> Dagger.Container.with_new_file("/pdfium/LIBPDFIUM_TAG", libpdfium_tag)
+    |> Dagger.Container.with_exec(~w"git add LIBPDFIUM_TAG")
+    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update libpdfium tag to #{libpdfium_tag}"])
+    |> Dagger.Container.with_new_file("/pdfium/VERSION", package_version)
+    |> Dagger.Container.with_exec(~w"git add VERSION")
+    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package version #{package_version}"])
+    |> Dagger.Container.with_exec(~w"git push origin update-libpdfium-to-#{libpdfium_tag}")
+    |> Dagger.Container.with_exec(~w"gh pr create --base stable --assignee gmile --fill --repo gmile/pdfium" ++ ["--title", "Bump libpdfium to #{libpdfium_tag} tag"])
+    |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase update-libpdfium-to-#{libpdfium_tag}")
   end
 
   defn precompile(cur_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
