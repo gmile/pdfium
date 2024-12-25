@@ -60,11 +60,66 @@ defmodule Pdfium do
   #
   #   4. (additionally) merge main to stable
   #
-
-  defn hello_world() :: String.t() do
+  defn check_for_update() :: String.t() do
     ~s"""
     {"new_tag":"world","new_tag_available":true}
     """
+  end
+
+  defn prepare_release(
+    base: String.t(),
+    src: Dagger.Directory.t(),
+    package_version: String.t() | nil,
+    libpdfium_tag: String.t(),
+    github_token: Dagger.Secret.t(),
+    actor: String.t()
+  ) :: Dagger.Container.t() do
+    package_version =
+      if package_version do
+        package_version
+      else
+        {:ok, package_version} =
+          src
+          |> Dagger.Directory.file("VERSION")
+          |> Dagger.File.contents()
+
+        package_version
+        |> String.trim_trailing()
+        |> Version.parse!()
+        |> Map.update!(:patch, & &1 + 1)
+        |> Version.to_string()
+      end
+
+    {:ok, github_token_plaintext} = Dagger.Secret.plaintext(github_token)
+
+    message1 = "Update libpdfium tag to #{libpdfium_tag}"
+    message2 = "Update package version #{package_version}"
+
+    dag()
+    |> Dagger.Client.container()
+    |> Dagger.Container.from("alpine:3.21")
+    |> Dagger.Container.with_exec(~w"apk add git")
+    |> Dagger.Container.with_directory("/pdfium", src) # how can I use "base" straight away here?
+    |> Dagger.Container.with_workdir("/pdfium")
+    |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
+    |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
+    |> Dagger.Container.with_exec(~w"git switch --create release-#{libpdfium_tag} #{base}")
+    |> Dagger.Container.with_new_file("/pdfium/LIBPDFIUM_TAG", libpdfium_tag)
+    |> Dagger.Container.with_exec(~w"git add LIBPDFIUM_TAG")
+    |> Dagger.Container.with_exec(~w"git commit --message" ++ [message1])
+    |> Dagger.Container.with_new_file("/pdfium/VERSION", package_version)
+    |> Dagger.Container.with_exec(~w"git add VERSION")
+    |> Dagger.Container.with_exec(~w"git commit --message" ++ [message2])
+    |> Dagger.Container.with_exec(~w"gh ")
+
+
+
+    # dag()
+    # |> with_github_cli(github_token)
+    # |> Dagger.Container.with_exec(~w"gh pr upload #{tag} #{filename} --repo gmile/pdfium")
+
+
+    # open PR
   end
 
   defn precompile(cur_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
