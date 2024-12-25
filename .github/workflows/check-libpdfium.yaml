@@ -1,3 +1,5 @@
+# Will be called on cron for GH user to submit an update
+
 name: Check latest libpdfium tag
 
 # change to cron
@@ -5,8 +7,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-latest:
+  update-to-latest:
     runs-on: ubuntu-24.04
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -14,8 +18,6 @@ jobs:
       - id: check-latest-tag
         name: Check latest tag
         uses: dagger/dagger-for-github@v7.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: 0.15.1
           args: check-latest-tag
@@ -23,8 +25,11 @@ jobs:
       - name: Publish PR with version update
         if: ${{ fromJSON(steps.check-latest-tag.outputs.output).new_tag_available }}
         uses: dagger/dagger-for-github@v7.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: 0.15.1
-          args: prepare-release --base main --libpdfium-tag ${{ fromJSON(steps.check-latest-tag.outputs.output).tag }} --actor ${{ github.actor }} --github-token GITHUB_TOKEN
+          args: >-
+            prepare-release-pull-request \
+              --base stable \
+              --libpdfium-tag ${{ fromJSON(steps.check-latest-tag.outputs.output).tag }} \
+              --actor ${{ github.actor }} \
+              --github-token GITHUB_TOKEN

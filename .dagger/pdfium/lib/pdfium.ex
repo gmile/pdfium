@@ -70,6 +70,7 @@ defmodule Pdfium do
       |> Dagger.File.contents()
 
     latest_tag =
+      dag()
       |> Dagger.Client.git("https://github.com/bblanchon/pdfium-binaries")
       |> Dagger.GitRepository.tags()
       # TODO: only filter "chromium/*"
