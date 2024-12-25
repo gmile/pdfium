@@ -60,36 +60,55 @@ defmodule Pdfium do
   #
   #   4. (additionally) merge main to stable
   #
-  defn check_for_update() :: String.t() do
-    ~s"""
-    {"new_tag":"world","new_tag_available":true}
-    """
+  defn check_latest_tag() :: String.t() do
+    known_tag =
+      dag()
+      |> Dagger.Client.git("https://github.com/gmile/pdfium")
+      |> Dagger.GitRepository.branch("stable")
+      |> Dagger.GitRef.tree()
+      |> Dagger.Directory.file("LIBPDFIUM_TAG")
+      |> Dagger.File.contents()
+
+    latest_tag =
+      |> Dagger.Client.git("https://github.com/bblanchon/pdfium-binaries")
+      |> Dagger.GitRepository.tags()
+      # TODO: only filter "chromium/*"
+
+    # "chromium/1234 > chromium/1226"
+    if latest_tag > known_tag do
+      Jason.encode!(%{new_tag_available: true, tag: latest}
+    else
+      Jason.encode!(%{new_tag_available: false}
+    end
   end
 
-  defn prepare_release(
+  # Notes:
+  # - here we just mark it as mergable
+  # - we need another GH workflow to run the precompile_and_test_and_upload
+  # - if that WF succeeds, this branch will be merged automatically
+  # - once the branch is merged, another workflow starts, to publish release
+  #
+  defn prepare_release_pull_request(
     base: String.t(),
-    src: Dagger.Directory.t(),
     package_version: String.t() | nil,
     libpdfium_tag: String.t(),
     github_token: Dagger.Secret.t(),
     actor: String.t()
   ) :: Dagger.Container.t() do
-    container =
+    pdfium =
       dag()
-      |> Dagger.Client.container()
-      |> Dagger.Container.from("alpine:3.21")
-      |> Dagger.Container.with_exec(~w"apk add git github-cli")
-      |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
-      |> Dagger.Container.with_exec(~w"gh repo clone gmile/pdfium /pdfium")
-      |> Dagger.Container.with_workdir("/pdfium")
+      |> Dagger.Client.git("https://github.com/gmile/pdfium")
+      |> Dagger.GitRepository.with_auth_token(github_token)
+      |> Dagger.GitRepository.branch(base)
+      |> Dagger.GitRef.tree()
 
     package_version =
       if package_version do
         package_version
       else
         {:ok, package_version} =
-          container
-          |> Dagger.Container.file("/pdfium/VERSION")
+          pdfium
+          |> Dagger.Directory.file("VERSION")
           |> Dagger.File.contents()
 
         package_version
@@ -99,10 +118,17 @@ defmodule Pdfium do
         |> Version.to_string()
       end
 
-    container
+    dag()
+    |> Dagger.Client.container()
+    |> Dagger.Container.from("alpine:3.21")
+    |> Dagger.Container.with_exec(~w"apk add git github-cli")
+    |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
+    |> Dagger.Container.with_directory("/pdfium", pdfium)
+    |> Dagger.Container.with_workdir("/pdfium")
     |> Dagger.Container.with_exec(~w"gh auth setup-git")
     |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
     |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
+    |> Dagger.Container.with_exec(~w"git fetch origin #{base}")
     |> Dagger.Container.with_exec(~w"git switch --create update-libpdfium-to-#{libpdfium_tag} origin/#{base}")
     |> Dagger.Container.with_new_file("/pdfium/LIBPDFIUM_TAG", libpdfium_tag)
     |> Dagger.Container.with_exec(~w"git add LIBPDFIUM_TAG")

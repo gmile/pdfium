@@ -1,5 +1,6 @@
 name: Check latest libpdfium tag
 
+# change to cron
 on:
   workflow_dispatch:
 
@@ -10,18 +11,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - id: fetch-and-check-latest-tag
-        name: Compare last known libpdfium tag with latest available tag
+      - id: check-latest-tag
+        name: Check latest tag
         uses: dagger/dagger-for-github@v7.0.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: 0.15.1
-          args: hello-world
+          args: check-latest-tag
 
-      - name: Check new tag
-        if: ${{ fromJSON(steps.fetch-and-check-latest-tag.outputs.output).new_tag_available }}
-        run: echo New tag is ${{ fromJSON(steps.fetch-and-check-latest-tag.outputs.output).new_tag }}
-
-      - name: Run Dagger pipeline
-        run: echo ${{ steps.fetch-and-check-latest-tag.outputs.output }}
+      - name: Publish PR with version update
+        if: ${{ fromJSON(steps.check-latest-tag.outputs.output).new_tag_available }}
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: 0.15.1
+          args: prepare-release --base main --libpdfium-tag ${{ fromJSON(steps.check-latest-tag.outputs.output).tag }} --actor ${{ github.actor }} --github-token GITHUB_TOKEN
