@@ -292,8 +292,11 @@ defmodule Pdfium do
     |> test(platform_name, abi)
   end
 
-  defn upload(precompiled: Dagger.File.t()) :: String.t() do
-    precompiled
+  # To continue: implement uploading properly
+  defn upload(path: Dagger.Directory.t(), prefix: String.t()) :: String.t() do
+    {:ok, entries} = Dagger.Directory.glob(path, prefix)
+
+    "Will upload contents of dir: #{entries}"
   end
 
   defn create_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
