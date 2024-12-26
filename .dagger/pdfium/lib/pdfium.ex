@@ -154,10 +154,11 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package to version #{package_version}"])
     |> Dagger.Container.with_exec(~w"git push origin #{new_branch_name}")
     |> Dagger.Container.with_exec(~w"gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium" ++ ["--title", "Bump libpdfium to #{libpdfium_tag} tag"])
+    # todo: re-enable and test this
     # |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
   end
 
-  defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
+  defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
     {erlang_platform_name, pdfium_platform_name} =
       case platform_name do
         "linux/arm64" -> {"aarch64", "arm64"}
@@ -170,10 +171,22 @@ defmodule Pdfium do
         "musl" -> {"linux-musl", "linux-musl"}
       end
 
+    {:ok, pdfium_tag} =
+      src_dir
+      |> Dagger.Directory.file("LIBPDFIUM_TAG")
+      |> Dagger.File.contents()
+
+    {:ok, package_version} =
+      src_dir
+      |> Dagger.Directory.file("VERSION")
+      |> Dagger.File.contents()
+
     pdfium_tag = URI.encode_www_form(pdfium_tag)
     pdfium_download_url = "https://github.com/bblanchon/pdfium-binaries/releases/download/#{pdfium_tag}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
 
     otp_directory_name="/usr/local/lib/erlang"
+
+    # rename to libpdfium_extract_path
     pdfium_directory_name="/pdfium"
 
     compile = ~w(
@@ -207,7 +220,7 @@ defmodule Pdfium do
       -l:libpdfium.so
     )
 
-    output = "/build/pdfium-nif-2.17-#{erlang_platform_name}-#{erlang_abi_name}-0.1.0.tar.gz"
+    output = "/build/pdfium-nif-2.17-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
 
     pack = ~w(
       tar
@@ -219,9 +232,9 @@ defmodule Pdfium do
     )
 
     dag()
-    |> with_build_image(abi, platform_name)
+    |> with_build_image(platform_name, abi)
     |> Dagger.Container.with_workdir("/build")
-    |> Dagger.Container.with_file("/build/pdfium_nif.c", Dagger.Directory.file(src_dir, "pdfium_nif.c"))
+    |> Dagger.Container.with_file("/build/pdfium_nif.c", Dagger.Directory.file(src_dir, "c_src/pdfium_nif.c"))
     |> Dagger.Container.with_file("/build/pdfium.tar", Dagger.Client.http(dag(), pdfium_download_url))
     |> Dagger.Container.with_exec(~w"mkdir #{pdfium_directory_name}")
     |> Dagger.Container.with_exec(~w"tar --extract --gunzip --directory=#{pdfium_directory_name} --file=/build/pdfium.tar")
@@ -243,21 +256,13 @@ defmodule Pdfium do
   end
 
   defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
-    source =
-      dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium")
-      |> Dagger.GitRepository.with_auth_token(github_token)
-      |> Dagger.GitRepository.ref(ref)
-      |> Dagger.GitRef.tree()
-
-    {:ok, libpdfium_tag} =
-      source
-      |> Dagger.Directory.file("LIBPDFIUM_TAG")
-      |> Dagger.File.contents()
-
-    source
-    |> Dagger.Directory.directory("c_src")
-    |> precompile(platform_name, abi, libpdfium_tag)
+    # todo: find a way to export a file between precompile and test here? to make precompile return container
+    dag()
+    |> Dagger.Client.git("https://github.com/gmile/pdfium")
+    |> Dagger.GitRepository.with_auth_token(github_token)
+    |> Dagger.GitRepository.ref(ref)
+    |> Dagger.GitRef.tree()
+    |> precompile(platform_name, abi)
     |> test(platform_name, abi)
   end
 
