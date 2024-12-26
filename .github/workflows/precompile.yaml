@@ -46,7 +46,7 @@ jobs:
           version: 0.15.1
           args: >-
             ci \
-              --ref-name ${{ github.ref_name }} \
+              --ref ${{ github.ref_name }} \
               --platform-name ${{ matrix.platform }} \
               --abi ${{ matrix.abi }} \
               --github-token GITHUB_TOKEN
