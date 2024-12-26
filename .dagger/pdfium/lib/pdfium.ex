@@ -237,7 +237,7 @@ defmodule Pdfium do
     dag()
     |> Dagger.Client.container(platform: platform_name)
     |> with_base_image(abi)
-    |> Dagger.Container.with_exec(~w"apk add tar")
+    |> with_tar(abi)
     |> Dagger.Container.with_workdir("/test")
     |> Dagger.Container.with_file("/test/precompiled.tar", precompiled)
     |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=/test/precompiled.tar")
@@ -365,6 +365,17 @@ defmodule Pdfium do
   defp with_base_image(container, "musl") do
     container
     |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
+  end
+
+  defp with_tar(container, "glibc") do
+    container
+    |> Dagger.Container.with_exec(~w"apt update")
+    |> Dagger.Container.with_exec(~w"apt install tar")
+  end
+
+  defp with_tar(container, "musl") do
+    container
+    |> Dagger.Container.with_exec(~w"apk add tar")
   end
 
   defp with_tools(container, "glibc") do
