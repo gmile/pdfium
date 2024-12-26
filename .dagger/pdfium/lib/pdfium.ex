@@ -5,15 +5,15 @@ defmodule Pdfium do
   #
   # 1. create & checkout a branch called "release-libpdfium-#{LIBPDFIUM_TAG}" from "stable" branch
   #
-  # 2. in the new branch:
+  #   In the new branch:
   #
   #   1. update contents of LIBPDFIUM_TAG file and commit
   #
   #   2. update contents of VERSION (always just bump patch version, for example 0.1.0 -> v0.1.1) file, commit
   #
-  # 3. push branch to GH and open a PR from the branch against "stable" and run "gh pr merge --auto --delete-branch"
+  #    push branch to GH and open a PR from the branch against "stable" and run "gh pr merge --auto --delete-branch"
   #
-  # 4. wait for PR checks to be green:
+  # 2. wait for PR checks to be green:
   #
   #   1. precompile artifacts
   #
@@ -21,7 +21,10 @@ defmodule Pdfium do
   #
   #   3. if all good, upload the artifacts to GitHub
   #
-  # 5. once PR is merged:
+  # 3. once PR is merged:
+  #
+  #   0. ??? if the VERSION changed, only then continue? this should prevent situations
+  #      when during manual merge to stable we didn't update the version
   #
   #   1. download files from GH artifacts from merged PR
   #
@@ -34,23 +37,14 @@ defmodule Pdfium do
   #
   # == Manual deployment scenario ==
   #
-  # 1. create & checkout a branch called "release-#{VERSION}" from "main" branch
+  # 1. create a PR from "main" branch to "stable" branch <- do this automatically somehow? with a nice title and all
   #
-  # 2. in the new branch:
+  #     the branch is expected to contain changed VERSION file, ideally as the last change
+  #     note: main must be rebased against stable, otherwise the PR will show up with conflicts, but that's OK?
   #
-  #   1. update contents of VERSION file & commit
+  # 2. wait for PR checks to be green
   #
-  # 3. push branch to GH and open a PR from the branch against "main" and run "gh pr merge --auto --delete-branch"
-  #
-  # 4. wait for PR checks to be green:
-  #
-  #   1. precompile artifacts, linux and macos
-  #
-  #   2. test artifacts and test the lib itself
-  #
-  #   3. if all good, upload all artifacts to GitHub
-  #
-  # 5. once PR is merged:
+  # 3. once PR is merged:
   #
   #   1. download files from GH artifacts from merged PR
   #
@@ -58,12 +52,19 @@ defmodule Pdfium do
   #
   #   3. release new lib version on hex
   #
-  #   4. (additionally) merge main to stable
+  # 1. Auto-open PR (cron)
+  # 2. CI WF
+  # 3. Merge WF
   #
-  defn check_latest_tag() :: String.t() do
+  # 1. Manual-open PR
+  # 2. CI WF
+  # 3. Merge WF
+  #
+  defn check_latest_tag(github_token: Dagger.Secret.t()) :: String.t() do
     known_tag =
       dag()
       |> Dagger.Client.git("https://github.com/gmile/pdfium")
+      |> Dagger.GitRepository.with_auth_token(github_token)
       |> Dagger.GitRepository.branch("stable")
       |> Dagger.GitRef.tree()
       |> Dagger.Directory.file("LIBPDFIUM_TAG")
@@ -156,7 +157,7 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
   end
 
-  defn precompile(cur_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
+  defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
     {erlang_platform_name, pdfium_platform_name} =
       case platform_name do
         "linux/arm64" -> {"aarch64", "arm64"}
@@ -232,6 +233,25 @@ defmodule Pdfium do
     |> Dagger.Container.file(output)
   end
 
+  defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
+    source =
+      dag()
+      |> Dagger.Client.git("https://github.com/gmile/pdfium")
+      |> Dagger.GitRepository.with_auth_token(github_token)
+      |> Dagger.GitRepository.ref(ref)
+      |> Dagger.GitRef.tree()
+
+    {:ok, libpdfium_tag} =
+      source
+      |> Dagger.Directory.file("LIBPDFIUM_TAG")
+      |> Dagger.File.contents()
+
+    source
+    |> Dagger.Directory.directory("c_src")
+    |> precompile(platform_name, abi, libpdfium_tag)
+    |> test(platform_name, abi)
+  end
+
   defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container(platform: platform_name)
@@ -246,27 +266,27 @@ defmodule Pdfium do
   end
 
   # update to build_and_test
-  defn build_test_and_publish(
-    cur_dir: Dagger.Directory.t(),
-    platform_name: String.t(),
-    abi: String.t(),
-    src_dir: Dagger.Directory.t(),
-    tag: String.t(),
-    pdfium_tag: String.t(),
-    github_token: Dagger.Secret.t()
-  ) :: Dagger.Container.t() do
-    file = precompile(cur_dir, platform_name, abi, src_dir, pdfium_tag)
-    {:ok, filename} = Dagger.File.name(file)
+  # defn build_test_and_publish(
+  #   cur_dir: Dagger.Directory.t(),
+  #   platform_name: String.t(),
+  #   abi: String.t(),
+  #   src_dir: Dagger.Directory.t(),
+  #   tag: String.t(),
+  #   pdfium_tag: String.t(),
+  #   github_token: Dagger.Secret.t()
+  # ) :: Dagger.Container.t() do
+  #   file = precompile(cur_dir, platform_name, abi, src_dir, pdfium_tag)
+  #   {:ok, filename} = Dagger.File.name(file)
 
-    test(file, platform_name, abi)
-    |> Dagger.Container.sync()
+  #   test(file, platform_name, abi)
+  #   |> Dagger.Container.sync()
 
-    dag()
-    |> Dagger.Client.container()
-    |> with_github_cli(github_token)
-    |> Dagger.Container.with_file(filename, file)
-    |> Dagger.Container.with_exec(~w"gh release upload #{tag} #{filename} --repo gmile/pdfium")
-  end
+  #   dag()
+  #   |> Dagger.Client.container()
+  #   |> with_github_cli(github_token)
+  #   |> Dagger.Container.with_file(filename, file)
+  #   |> Dagger.Container.with_exec(~w"gh release upload #{tag} #{filename} --repo gmile/pdfium")
+  # end
 
   defn create_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
     dag()

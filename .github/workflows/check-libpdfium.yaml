@@ -1,8 +1,6 @@
-# Will be called on cron for GH user to submit an update
-
 name: Check latest libpdfium tag
 
-# change to cron
+# TODO: change to cron
 on:
   workflow_dispatch:
 
@@ -33,6 +31,3 @@ jobs:
               --libpdfium-tag ${{ fromJSON(steps.check-latest-tag.outputs.output).tag }} \
               --actor 41898282+github-actions[bot] \
               --github-token GITHUB_TOKEN
-
-# git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-# git config --local user.name "github-actions"

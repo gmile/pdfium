@@ -1,9 +1,6 @@
 name: precompile
 
 # Call workflow manually
-
-# TODO: automatic workflow that makes a releases after
-#       a new libpdfium release is out
 #
 # TODO: make release verified
 #
@@ -17,45 +14,20 @@ name: precompile
 #       mix hex.user auth
 #       mix hex.publish package --yes --replace ???
 #
-# TODO: pack all of the above into a dagger script
-#
-# TODO: use build naming, e.g. 0.1.0+libpdfium.6889
-#       https://hexdocs.pm/elixir/1.17.3/Version.html#
-#
 # TODO: add tailscale to GH runners
 
 on:
-  push:
-    tags:
-      - 'v*'
-
-# TODO: maybe provide tag to which to upload these artifacts for?
-#       but - release should already exist
+  pull_request:
+    types:
+      - opened
+      - synchronize
 
 jobs:
-  create-release-draft:
-    runs-on: ubuntu-24.04
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Create release draft
-        uses: dagger/dagger-for-github@v7.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          version: 0.15.1
-          args: create-release --tag ${{ github.ref_name }} --draft=true --github-token GITHUB_TOKEN sync
-
   linux:
     runs-on: ubuntu-24.04
 
-    needs: create-release-draft
-
     strategy:
       matrix:
-        libpdfium_tag:
-          - chromium/6886
         abi:
           - glibc
           - musl
@@ -73,29 +45,8 @@ jobs:
         with:
           version: 0.15.1
           args: >-
-            build-test-and-publish \
-              --tag ${{ github.ref_name }} \
-              --abi ${{ matrix.abi }} \
-              --src-dir c_src \
+            ci \
+              --ref-name ${{ github.ref_name }} \
               --platform-name ${{ matrix.platform }} \
-              --libpdfium-tag ${{ matrix.libpdfium_tag }} \
-              --github-token GITHUB_TOKEN \
-              sync
-
-  publish-release-draft:
-    runs-on: ubuntu-24.04
-
-    needs:
-      - linux
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Publish release draft
-        uses: dagger/dagger-for-github@v7.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          version: 0.15.1
-          args: edit-release --tag ${{ github.ref_name }} --draft=false --github-token GITHUB_TOKEN sync
-          engine-stop: false
+              --abi ${{ matrix.abi }} \
+              --github-token GITHUB_TOKEN
