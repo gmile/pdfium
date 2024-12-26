@@ -219,9 +219,7 @@ defmodule Pdfium do
     )
 
     dag()
-    |> Dagger.Client.container(platform: platform_name)
-    |> with_base_image(abi)
-    |> with_tools(abi)
+    |> with_build_image(abi, platform_name)
     |> Dagger.Container.with_workdir("/build")
     |> Dagger.Container.with_file("/build/pdfium_nif.c", Dagger.Directory.file(src_dir, "pdfium_nif.c"))
     |> Dagger.Container.with_file("/build/pdfium.tar", Dagger.Client.http(dag(), pdfium_download_url))
@@ -235,9 +233,7 @@ defmodule Pdfium do
 
   defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.Container.t() do
     dag()
-    |> Dagger.Client.container(platform: platform_name)
-    |> with_base_image(abi)
-    |> with_tar(abi)
+    |> with_test_image(platform_name, abi)
     |> Dagger.Container.with_workdir("/test")
     |> Dagger.Container.with_file("/test/precompiled.tar", precompiled)
     |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=/test/precompiled.tar")
@@ -265,41 +261,11 @@ defmodule Pdfium do
     |> test(platform_name, abi)
   end
 
-  # update to build_and_test
-  # defn build_test_and_publish(
-  #   cur_dir: Dagger.Directory.t(),
-  #   platform_name: String.t(),
-  #   abi: String.t(),
-  #   src_dir: Dagger.Directory.t(),
-  #   tag: String.t(),
-  #   pdfium_tag: String.t(),
-  #   github_token: Dagger.Secret.t()
-  # ) :: Dagger.Container.t() do
-  #   file = precompile(cur_dir, platform_name, abi, src_dir, pdfium_tag)
-  #   {:ok, filename} = Dagger.File.name(file)
-
-  #   test(file, platform_name, abi)
-  #   |> Dagger.Container.sync()
-
-  #   dag()
-  #   |> Dagger.Client.container()
-  #   |> with_github_cli(github_token)
-  #   |> Dagger.Container.with_file(filename, file)
-  #   |> Dagger.Container.with_exec(~w"gh release upload #{tag} #{filename} --repo gmile/pdfium")
-  # end
-
   defn create_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container()
     |> with_github_cli(github_token)
     |> Dagger.Container.with_exec(~w"gh release create #{tag} --repo gmile/pdfium --draft=#{draft}")
-  end
-
-  defn edit_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
-    dag()
-    |> Dagger.Client.container()
-    |> with_github_cli(github_token)
-    |> Dagger.Container.with_exec(~w"gh release edit #{tag} --repo gmile/pdfium --draft=#{draft}")
   end
 
   defn publish_to_hex(src_dir: Dagger.Directory.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
@@ -357,36 +323,34 @@ defmodule Pdfium do
     """
   end
 
-  defp with_base_image(container, "glibc") do
-    container
+  defp with_build_image(dag, platform_name, "glibc") do
+    dag
+    |> Dagger.Client.container(platform: platform_name)
     |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-ubuntu-noble-20241015")
-  end
-
-  defp with_base_image(container, "musl") do
-    container
-    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
-  end
-
-  defp with_tar(container, "glibc") do
-    container
-    |> Dagger.Container.with_exec(~w"apt update")
-    |> Dagger.Container.with_exec(~w"apt install tar")
-  end
-
-  defp with_tar(container, "musl") do
-    container
-    |> Dagger.Container.with_exec(~w"apk add tar")
-  end
-
-  defp with_tools(container, "glibc") do
-    container
     |> Dagger.Container.with_exec(~w"apt update")
     |> Dagger.Container.with_exec(~w"apt install build-essential tar jq wget --yes")
   end
 
-  defp with_tools(container, "musl") do
-    container
+  defp with_build_image(dag, platform_name, "musl") do
+    dag
+    |> Dagger.Client.container(platform: platform_name)
+    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
     |> Dagger.Container.with_exec(~w"apk add build-base tar jq coreutils")
+  end
+
+  defp with_test_image(dag, platform_name, "glibc") do
+    dag
+    |> Dagger.Client.container(platform: platform_name)
+    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-ubuntu-noble-20241015")
+    |> Dagger.Container.with_exec(~w"apt update")
+    |> Dagger.Container.with_exec(~w"apt install tar")
+  end
+
+  defp with_test_image(dag, platform_name, "musl") do
+    dag
+    |> Dagger.Client.container(platform: platform_name)
+    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
+    |> Dagger.Container.with_exec(~w"apk add tar")
   end
 
   def with_github_cli(container, github_token) do
