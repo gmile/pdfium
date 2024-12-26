@@ -31,5 +31,5 @@ jobs:
             prepare-release-pull-request \
               --base stable \
               --libpdfium-tag ${{ fromJSON(steps.check-latest-tag.outputs.output).tag }} \
-              --actor ${{ github.actor }} \
+              --actor 41898282+github-actions[bot] \
               --github-token GITHUB_TOKEN
