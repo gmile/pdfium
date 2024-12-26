@@ -150,7 +150,7 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update libpdfium tag to #{libpdfium_tag}"])
     |> Dagger.Container.with_new_file("/pdfium/VERSION", package_version)
     |> Dagger.Container.with_exec(~w"git add VERSION")
-    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package version #{package_version}"])
+    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package to version #{package_version}"])
     |> Dagger.Container.with_exec(~w"git push origin #{new_branch_name}")
     |> Dagger.Container.with_exec(~w"gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium" ++ ["--title", "Bump libpdfium to #{libpdfium_tag} tag"])
     |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
