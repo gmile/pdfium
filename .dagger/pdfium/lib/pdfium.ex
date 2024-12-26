@@ -187,37 +187,27 @@ defmodule Pdfium do
         "musl" -> {"hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0", "2.17"}
       end
 
+    pdfium_download_url = "https://github.com/bblanchon/pdfium-binaries/releases/download/#{URI.encode_www_form(pdfium_tag)}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
+    output_filename = "pdfium-nif-#{nif_version}-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
+
     {
       build_image_name,
-      nif_version,
-      pdfium_tag,
-      package_version,
-      erlang_abi_name,
-      pdfium_abi_name,
-      erlang_platform_name,
-      pdfium_platform_name
+      pdfium_download_url,
+      output_filename
     }
   end
 
   defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
     {
       build_image_name,
-      nif_version,
-      pdfium_tag,
-      package_version,
-      erlang_abi_name,
-      pdfium_abi_name,
-      erlang_platform_name,
-      pdfium_platform_name
+      pdfium_download_url,
+      output_filename
     } = collect_build_info(src_dir, platform_name, abi)
-
-    pdfium_tag = URI.encode_www_form(pdfium_tag)
-    pdfium_download_url = "https://github.com/bblanchon/pdfium-binaries/releases/download/#{pdfium_tag}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
 
     otp_directory_name="/usr/local/lib/erlang"
 
     # rename to libpdfium_extract_path
-    pdfium_directory_name="/pdfium"
+    libpdfium_extract_path="/pdfium"
 
     compile = ~w(
       gcc
@@ -231,7 +221,7 @@ defmodule Pdfium do
       --optimize=2
       --std c11
       --include-directory #{otp_directory_name}/usr/include
-      --include-directory #{pdfium_directory_name}/include
+      --include-directory #{libpdfium_extract_path}/include
       --compile
       --output=pdfium_nif.o
       pdfium_nif.c
@@ -243,22 +233,22 @@ defmodule Pdfium do
       --shared
       --output=pdfium_nif.so
       --library-directory=#{otp_directory_name}/usr/lib
-      --library-directory=#{pdfium_directory_name}/lib
+      --library-directory=#{libpdfium_extract_path}/lib
       -Wl,-s
       -Wl,--disable-new-dtags
       -Wl,-rpath=$ORIGIN
       -l:libpdfium.so
     )
 
-    output = "/build/pdfium-nif-#{nif_version}-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
+    output_path = "/build/#{output_filename}"
 
     pack = ~w(
       tar
       --create
       --verbose
-      --file=#{output}
+      --file=#{output_path}
       --directory /build pdfium_nif.so
-      --directory #{pdfium_directory_name}/lib libpdfium.so
+      --directory #{libpdfium_extract_path}/lib libpdfium.so
     )
 
     dag()
@@ -268,37 +258,42 @@ defmodule Pdfium do
     |> Dagger.Container.with_workdir("/build")
     |> Dagger.Container.with_file("/build/pdfium_nif.c", Dagger.Directory.file(src_dir, "c_src/pdfium_nif.c"))
     |> Dagger.Container.with_file("/build/pdfium.tar", Dagger.Client.http(dag(), pdfium_download_url))
-    |> Dagger.Container.with_exec(~w"mkdir #{pdfium_directory_name}")
-    |> Dagger.Container.with_exec(~w"tar --extract --gunzip --directory=#{pdfium_directory_name} --file=/build/pdfium.tar")
+    |> Dagger.Container.with_exec(~w"mkdir #{libpdfium_extract_path}")
+    |> Dagger.Container.with_exec(~w"tar --extract --gunzip --directory=#{libpdfium_extract_path} --file=/build/pdfium.tar")
     |> Dagger.Container.with_exec(compile)
     |> Dagger.Container.with_exec(link)
     |> Dagger.Container.with_exec(pack)
-    |> Dagger.Container.file(output)
+    |> Dagger.Container.file(output_path)
   end
 
-  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.Container.t() do
+  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
+    {:ok, filename} = Dagger.File.name(precompiled)
+    precompiled_path = "/test/#{filename}"
+
     dag()
     |> with_test_image(platform_name, abi)
     |> Dagger.Container.with_workdir("/test")
-    |> Dagger.Container.with_file("/test/precompiled.tar", precompiled)
-    |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=/test/precompiled.tar")
+    |> Dagger.Container.with_file(precompiled_path, precompiled)
+    |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=#{precompiled_path}")
     |> Dagger.Container.with_new_file("/test/test.exs", test_script())
     |> Dagger.Container.with_new_file("/test/test.pdf", test_pdf())
     |> Dagger.Container.with_exec(~w"elixir test.exs")
+    |> Dagger.Container.file(precompiled_path)
   end
 
-  defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
+  defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.File.t() do
     # todo: find a way to export a file between precompile and test here? to make precompile return container
-    source =
-      dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium")
-      |> Dagger.GitRepository.with_auth_token(github_token)
-      |> Dagger.GitRepository.ref(ref)
-      |> Dagger.GitRef.tree()
-
-    source
+    dag()
+    |> Dagger.Client.git("https://github.com/gmile/pdfium")
+    |> Dagger.GitRepository.with_auth_token(github_token)
+    |> Dagger.GitRepository.ref(ref)
+    |> Dagger.GitRef.tree()
     |> precompile(platform_name, abi)
     |> test(platform_name, abi)
+  end
+
+  defn upload(precompiled: Dagger.File.t()) :: String.t() do
+    precompiled
   end
 
   defn create_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
