@@ -154,7 +154,7 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package to version #{package_version}"])
     |> Dagger.Container.with_exec(~w"git push origin #{new_branch_name}")
     |> Dagger.Container.with_exec(~w"gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium" ++ ["--title", "Bump libpdfium to #{libpdfium_tag} tag"])
-    |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
+    # |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
   end
 
   defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
