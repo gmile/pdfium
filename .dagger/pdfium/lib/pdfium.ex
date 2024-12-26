@@ -158,7 +158,7 @@ defmodule Pdfium do
     # |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
   end
 
-  defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
+  def collect_build_info(src_dir, platform_name, abi) do
     {erlang_platform_name, pdfium_platform_name} =
       case platform_name do
         "linux/arm64" -> {"aarch64", "arm64"}
@@ -180,6 +180,36 @@ defmodule Pdfium do
       src_dir
       |> Dagger.Directory.file("VERSION")
       |> Dagger.File.contents()
+
+    {build_image_name, nif_version} =
+      case abi do
+        "glibc" -> {"hexpm/elixir:1.18.0-erlang-27.2-ubuntu-noble-20241015", "2.17"}
+        "musl" -> {"hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0", "2.17"}
+      end
+
+    {
+      build_image_name,
+      nif_version,
+      pdfium_tag,
+      package_version,
+      erlang_abi_name,
+      pdfium_abi_name,
+      erlang_platform_name,
+      pdfium_platform_name
+    }
+  end
+
+  defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
+    {
+      build_image_name,
+      nif_version,
+      pdfium_tag,
+      package_version,
+      erlang_abi_name,
+      pdfium_abi_name,
+      erlang_platform_name,
+      pdfium_platform_name
+    } = collect_build_info(src_dir, platform_name, abi)
 
     pdfium_tag = URI.encode_www_form(pdfium_tag)
     pdfium_download_url = "https://github.com/bblanchon/pdfium-binaries/releases/download/#{pdfium_tag}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
@@ -220,7 +250,7 @@ defmodule Pdfium do
       -l:libpdfium.so
     )
 
-    output = "/build/pdfium-nif-2.17-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
+    output = "/build/pdfium-nif-#{nif_version}-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
 
     pack = ~w(
       tar
@@ -232,7 +262,9 @@ defmodule Pdfium do
     )
 
     dag()
-    |> with_build_image(platform_name, abi)
+    |> Dagger.Client.container(platform: platform_name)
+    |> Dagger.Container.from(build_image_name)
+    |> with_build_tools(abi)
     |> Dagger.Container.with_workdir("/build")
     |> Dagger.Container.with_file("/build/pdfium_nif.c", Dagger.Directory.file(src_dir, "c_src/pdfium_nif.c"))
     |> Dagger.Container.with_file("/build/pdfium.tar", Dagger.Client.http(dag(), pdfium_download_url))
@@ -257,11 +289,14 @@ defmodule Pdfium do
 
   defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
     # todo: find a way to export a file between precompile and test here? to make precompile return container
-    dag()
-    |> Dagger.Client.git("https://github.com/gmile/pdfium")
-    |> Dagger.GitRepository.with_auth_token(github_token)
-    |> Dagger.GitRepository.ref(ref)
-    |> Dagger.GitRef.tree()
+    source =
+      dag()
+      |> Dagger.Client.git("https://github.com/gmile/pdfium")
+      |> Dagger.GitRepository.with_auth_token(github_token)
+      |> Dagger.GitRepository.ref(ref)
+      |> Dagger.GitRef.tree()
+
+    source
     |> precompile(platform_name, abi)
     |> test(platform_name, abi)
   end
@@ -269,7 +304,9 @@ defmodule Pdfium do
   defn create_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container()
-    |> with_github_cli(github_token)
+    |> Dagger.Container.from("alpine:3.21")
+    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
+    |> Dagger.Container.with_exec(~w"apk add github-cli")
     |> Dagger.Container.with_exec(~w"gh release create #{tag} --repo gmile/pdfium --draft=#{draft}")
   end
 
@@ -328,18 +365,17 @@ defmodule Pdfium do
     """
   end
 
-  defp with_build_image(dag, platform_name, "glibc") do
-    dag
-    |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-ubuntu-noble-20241015")
+  # todo: in principle it should be possible to move all file-related operations and utilities
+  #       (tar/wget and tar/coreutils) to a generic busybox so the disappear here
+  #
+  defp with_build_tools(container, "glibc") do
+    container
     |> Dagger.Container.with_exec(~w"apt update")
     |> Dagger.Container.with_exec(~w"apt install build-essential tar jq wget --yes")
   end
 
-  defp with_build_image(dag, platform_name, "musl") do
-    dag
-    |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
+  defp with_build_tools(container, "musl") do
+    container
     |> Dagger.Container.with_exec(~w"apk add build-base tar jq coreutils")
   end
 
@@ -356,12 +392,5 @@ defmodule Pdfium do
     |> Dagger.Client.container(platform: platform_name)
     |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
     |> Dagger.Container.with_exec(~w"apk add tar")
-  end
-
-  def with_github_cli(container, github_token) do
-    container
-    |> Dagger.Container.from("alpine:3.21")
-    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
-    |> Dagger.Container.with_exec(~w"apk add github-cli")
   end
 end
