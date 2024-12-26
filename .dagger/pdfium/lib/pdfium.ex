@@ -69,17 +69,17 @@ defmodule Pdfium do
       |> Dagger.Directory.file("LIBPDFIUM_TAG")
       |> Dagger.File.contents()
 
-    latest_tag =
+    {:ok, all_tags} =
       dag()
       |> Dagger.Client.git("https://github.com/bblanchon/pdfium-binaries")
-      |> Dagger.GitRepository.tags()
-      # TODO: only filter "chromium/*"
+      |> Dagger.GitRepository.tags(patterns: ~w(chromium/*))
 
-    # "chromium/1234 > chromium/1226"
+    [latest_tag | _] = Enum.sort(all_tags, :desc)
+
     if latest_tag > known_tag do
-      Jason.encode!(%{new_tag_available: true, tag: latest}
+      Jason.encode!(%{new_tag_available: true, tag: latest_tag})
     else
-      Jason.encode!(%{new_tag_available: false}
+      Jason.encode!(%{new_tag_available: false})
     end
   end
 
@@ -119,6 +119,20 @@ defmodule Pdfium do
         |> Version.to_string()
       end
 
+    libpdfium_tag =
+      if libpdfium_tag do
+        libpdfium_tag
+      else
+        {:ok, libpdfium_tag} =
+          pdfium
+          |> Dagger.Directory.file("PDFIUM_VERSION")
+          |> Dagger.File.contents()
+
+        libpdfium_tag
+      end
+
+    new_branch_name = "update-libpdfium-to-#{libpdfium_tag}"
+
     dag()
     |> Dagger.Client.container()
     |> Dagger.Container.from("alpine:3.21")
@@ -130,16 +144,16 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
     |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
     |> Dagger.Container.with_exec(~w"git fetch origin #{base}")
-    |> Dagger.Container.with_exec(~w"git switch --create update-libpdfium-to-#{libpdfium_tag} origin/#{base}")
+    |> Dagger.Container.with_exec(~w"git switch --create #{new_branch_name} origin/#{base}")
     |> Dagger.Container.with_new_file("/pdfium/LIBPDFIUM_TAG", libpdfium_tag)
     |> Dagger.Container.with_exec(~w"git add LIBPDFIUM_TAG")
     |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update libpdfium tag to #{libpdfium_tag}"])
     |> Dagger.Container.with_new_file("/pdfium/VERSION", package_version)
     |> Dagger.Container.with_exec(~w"git add VERSION")
     |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package version #{package_version}"])
-    |> Dagger.Container.with_exec(~w"git push origin update-libpdfium-to-#{libpdfium_tag}")
+    |> Dagger.Container.with_exec(~w"git push origin #{new_branch_name}")
     |> Dagger.Container.with_exec(~w"gh pr create --base stable --assignee gmile --fill --repo gmile/pdfium" ++ ["--title", "Bump libpdfium to #{libpdfium_tag} tag"])
-    |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase update-libpdfium-to-#{libpdfium_tag}")
+    |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
   end
 
   defn precompile(cur_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t(), src_dir: Dagger.Directory.t(), pdfium_tag: String.t()) :: Dagger.File.t() do
