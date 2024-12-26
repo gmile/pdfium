@@ -233,6 +233,19 @@ defmodule Pdfium do
     |> Dagger.Container.file(output)
   end
 
+  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.Container.t() do
+    dag()
+    |> Dagger.Client.container(platform: platform_name)
+    |> with_base_image(abi)
+    |> Dagger.Container.with_exec(~w"apk add tar")
+    |> Dagger.Container.with_workdir("/test")
+    |> Dagger.Container.with_file("/test/precompiled.tar", precompiled)
+    |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=/test/precompiled.tar")
+    |> Dagger.Container.with_new_file("/test/test.exs", test_script())
+    |> Dagger.Container.with_new_file("/test/test.pdf", test_pdf())
+    |> Dagger.Container.with_exec(~w"elixir test.exs")
+  end
+
   defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
     source =
       dag()
@@ -250,19 +263,6 @@ defmodule Pdfium do
     |> Dagger.Directory.directory("c_src")
     |> precompile(platform_name, abi, libpdfium_tag)
     |> test(platform_name, abi)
-  end
-
-  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.Container.t() do
-    dag()
-    |> Dagger.Client.container(platform: platform_name)
-    |> with_base_image(abi)
-    |> Dagger.Container.with_exec(~w"apk add tar")
-    |> Dagger.Container.with_workdir("/test")
-    |> Dagger.Container.with_file("/test/precompiled.tar", precompiled)
-    |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=/test/precompiled.tar")
-    |> Dagger.Container.with_new_file("/test/test.exs", test_script())
-    |> Dagger.Container.with_new_file("/test/test.pdf", test_pdf())
-    |> Dagger.Container.with_exec(~w"elixir test.exs")
   end
 
   # update to build_and_test

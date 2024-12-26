@@ -1,4 +1,4 @@
-name: precompile
+name: ci
 
 # Call workflow manually
 #
@@ -8,6 +8,8 @@ name: precompile
 #
 # TODO: rename pdfium-tag -> libpdfium-tag
 #
+# TODO: add macos build
+#
 # TODO: add hexpm release here
 #
 #       mix hex.publish package
@@ -15,6 +17,14 @@ name: precompile
 #       mix hex.publish package --yes --replace ???
 #
 # TODO: add tailscale to GH runners
+
+# Test:
+#
+#   1. push "1" to stable branch
+#
+#   2. run wf to bump pdfium
+#
+#   3. expect it to finish CI as green and get merged automatically
 
 on:
   pull_request:
@@ -38,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Precompile
+      - name: Precompile and test
         uses: dagger/dagger-for-github@v7.0.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
