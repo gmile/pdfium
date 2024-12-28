@@ -46,7 +46,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ matrix.abi }}
           path: pdfium-nif-*
 
   build-for-macos:
@@ -63,7 +62,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         uses: actions/upload-artifact@v4
         with:
-          name: darwin
           path: pdfium-nif-*
 
   create-release-draft:
