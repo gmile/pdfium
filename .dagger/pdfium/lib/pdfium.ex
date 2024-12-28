@@ -292,20 +292,15 @@ defmodule Pdfium do
     |> test(platform_name, abi)
   end
 
-  # To continue: implement uploading properly
-  defn upload(path: Dagger.Directory.t(), prefix: String.t()) :: String.t() do
-    {:ok, entries} = Dagger.Directory.glob(path, prefix)
-
-    "Will upload contents of dir: #{entries}"
-  end
-
-  defn create_release(tag: String.t(), draft: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
+  # Continue here: verify that this function works :)
+  defn create_release(path: Dagger.Directory.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container()
     |> Dagger.Container.from("alpine:3.21")
     |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
+    |> Dagger.Container.with_directory("/artifacts", path)
     |> Dagger.Container.with_exec(~w"apk add github-cli")
-    |> Dagger.Container.with_exec(~w"gh release create #{tag} --repo gmile/pdfium --draft=#{draft}")
+    |> Dagger.Container.with_exec(~w"gh release create #{tag} --repo gmile/pdfium --draft=true /artifacts/*")
   end
 
   defn publish_to_hex(src_dir: Dagger.Directory.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
