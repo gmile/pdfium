@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  build-for-linux:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        abi:
+          - glibc
+          - musl
+        platform:
+          - linux/arm64
+          - linux/amd64
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Precompile and test
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          version: 0.15.1
+          args: >-
+            ci \
+              --ref pull/${{ github.ref_name }} \
+              --platform-name ${{ matrix.platform }} \
+              --abi ${{ matrix.abi }} \
+              --github-token GITHUB_TOKEN \
+            export \
+              --path . \
+              --allowParentDirPath
+
+      - name: Upload files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: random-files
+          path: pdfium-nif-*
