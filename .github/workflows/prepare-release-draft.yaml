@@ -1,0 +1,93 @@
+name: prepare-release
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - stable
+
+jobs:
+  build-for-linux:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        abi:
+          - glibc
+          - musl
+        platform:
+          - linux/arm64
+          - linux/amd64
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Precompile and test
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          version: 0.15.1
+          args: >-
+            ci \
+              --ref pull/${{ github.ref_name }} \
+              --platform-name ${{ matrix.platform }} \
+              --abi ${{ matrix.abi }} \
+              --github-token GITHUB_TOKEN \
+            export \
+              --path . \
+              --allowParentDirPath
+
+      - name: Upload files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.abi }}
+          path: pdfium-nif-*
+
+  build-for-macos:
+    runs-on: macos-14
+
+    # disable for now
+    if: false
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Upload files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: darwin
+          path: pdfium-nif-*
+
+  create-release-draft:
+    runs-on: ubuntu-24.04
+
+    needs:
+      - build-for-linux 
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          version: 0.15.1
+          args: >-
+            create-release-draft \
+              --artifacts-path ./artifacts \
+              --github-token GITHUB_TOKEN
