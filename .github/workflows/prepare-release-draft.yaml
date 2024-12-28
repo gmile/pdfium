@@ -19,8 +19,8 @@ jobs:
           - glibc
           - musl
         platform:
-          - linux/arm64
-          - linux/amd64
+          - arm64
+          - amd64
 
     steps:
       - uses: actions/checkout@v3
@@ -34,7 +34,7 @@ jobs:
           args: >-
             ci \
               --ref pull/${{ github.ref_name }} \
-              --platform-name ${{ matrix.platform }} \
+              --platform-name linux/${{ matrix.platform }} \
               --abi ${{ matrix.abi }} \
               --github-token GITHUB_TOKEN \
             export \
@@ -46,6 +46,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         uses: actions/upload-artifact@v4
         with:
+          name: ${{ matrix.platform }}-${{ matrix.abi }}
           path: pdfium-nif-*
 
   build-for-macos:
