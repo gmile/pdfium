@@ -44,5 +44,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         uses: actions/upload-artifact@v4
         with:
-          name: random-files
+          name: ${{ matrix.platform }}-${{ matrix.abi }}
           path: pdfium-nif-*
