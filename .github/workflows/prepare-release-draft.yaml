@@ -77,18 +77,18 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
+          path: artifacts
           merge-multiple: true
 
       - run: ls -R ./artifacts
 
-      #      - name: Create release
-      #        uses: dagger/dagger-for-github@v7.0.3
-      #        env:
-      #          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-      #        with:
-      #          version: 0.15.1
-      #          args: >-
-      #            create-release-draft \
-      #              --artifacts-path ./artifacts \
-      #              --github-token GITHUB_TOKEN
+      - name: Create release
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          version: 0.15.1
+          args: >-
+            create-release-draft \
+              --path artifacts \
+              --github-token GITHUB_TOKEN
