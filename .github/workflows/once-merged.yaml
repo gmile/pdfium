@@ -7,15 +7,15 @@ on:
 jobs:
   post_merge:
     if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download artifacts from test workflow
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get the run ID of the latest successful test-uploads workflow from this PR's branch
+          # Get the run ID of the latest successful "prepare-release" workflow from this PR's branch
           RUN_ID=$(gh run list \
-            --workflow test-uploads.yaml \
+            --workflow prepare-release.yaml \
             --branch ${{ github.event.pull_request.head.ref }} \
             --status success \
             --limit 1 \
@@ -24,7 +24,7 @@ jobs:
             --jq '.[0].databaseId')
 
           # Download all artifacts from that run
-          gh run download $RUN_ID --repo gmile/pdfium
+          gh run download $RUN_ID --dir artifacts --repo gmile/pdfium
 
       - name: Create Release with Artifacts
         env:
@@ -35,4 +35,4 @@ jobs:
             --title "Release $(date +'%Y-%m-%d')" \
             --repo gmile/pdfium \
             --notes "Automated release from PR #${{ github.event.pull_request.number }}" \
-            random-files/*
+            artifacts/**/.tar.gz
