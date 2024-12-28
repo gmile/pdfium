@@ -90,5 +90,6 @@ jobs:
           version: 0.15.1
           args: >-
             create-release-draft \
-              --path artifacts \
+              --version VERSION \
+              --artifacts artifacts \
               --github-token GITHUB_TOKEN
