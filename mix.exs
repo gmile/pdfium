@@ -7,7 +7,6 @@ defmodule PDFium.MixProject do
     [
       app: :pdfium,
       description: "Elixir interface for pdfium",
-      licenses: ["MIT"],
       link: "https://github.com/gmile/pdfium",
       version: @version,
       elixir: "~> 1.17",
