@@ -1,0 +1,154 @@
+### Other todos
+
+- [ ] sign all commits
+- [ ] document settings enabled, such as "Allow GitHub Actions to create and approve pull requests"
+      https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#preventing-github-actions-from-creating-or-approving-pull-requests
+- [ ] gh secret set HEX_API_KEY --app actions
+- [ ] gh secret set GH_TOKEN --body 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 --repo gmile/pdfium --app actions
+- [ ] gh set rule for checks: https://github.com/gmile/pdfium/settings/branch_protection_rules/58120322
+- [ ] add approval configuration step: https://github.com/gmile/pdfium/settings/rules/3086425
+- [ ] use tailscale
+- [ ] publish docs too
+- [ ] enable macos builds
+- [ ] use GitHub App
+
+# TODO: make release verified
+#
+# TODO: have custom cc_precompiler according to rules here:
+#
+# TODO: rename pdfium-tag -> libpdfium-tag
+#
+# Test:
+#
+#   1. push "1" to stable branch
+#
+#   2. run wf to bump pdfium
+#
+#   3. expect it to finish CI as green and get merged automatically
+#
+
+github workflows
+
+- [x] on cron (LIBPDFIUM_TAG must be specified by cron, e.g. chromium/6886):
+
+  "Check latest libpdfium tag "
+
+  1. run check on latest tag
+  2. create a PR
+
+- [x] on PR open to stable ($PACKAGE_VERSION must be specified by user, e.g. 0.1.1):
+
+    dagger call ci
+
+    # run tests
+    # on success, upload files to draft release. but:
+    #   1. during merge, we must find draft release and update it
+    #   2. draft release must be created with tag
+    #   3. we don't want to create a tag during PR (b/c PR may be closed, incomplete, failing, etc.)
+    #   4. we will create a tag after merge, e.g. during release workflow
+    #   5. after merge, we tag shaX, but we merged shaY (because of no support for fast-forward in GH),
+    #      so strictly speaking we tagged version for which we didn't built
+    #
+    # so we choose from 2 scenarios:
+    #
+    # Scenario 1:
+    #
+    #   1. create an un-tagged release with artifacts
+    #   2. merge
+    #   3. during post-merged workflow
+    #     1. find release <- CAN'T
+    #     2. set release tag
+    #     3. publish release ("un-draft" it)
+    #
+    # Scenario 2: based on just merged PR number
+    # 
+    #   1. wait for PR to be green, then just upload artifacts
+    #   2. merge
+    #   3. during post-merged workflow
+    #
+    #     1. find artifacts like this (this is dagger function):
+    #
+    #         commit_sha = gh pr view ${{ github.event.pull_request.number }} --json headRefOid --jq '.headRefOid'
+    #
+    #         run_id = gh run list --workflow=workflow-a.yaml --commit ${{ github.event.pull_request.head.sha }} --json databaseId --limit 1 --jq '.[0].databaseId'
+    #
+    #     2  download artifacts from run_id
+    #
+    #     3. create a release with artifacts
+    #
+    #       1. create & push tag = gh pr view 45 --json mergeCommit --jq '.mergeCommit.oid'
+    #
+    #       2. create a release
+    #
+    # Scenario 3: based on dagger cache volumes
+    #
+    #   1. update ci / precompile functions to store the cached artifact in cache volume
+    #      cache volume key = sha(c_src, LIBPDFIUM_TAG)
+    #
+    #   2. just run CI on "release PR" and that's all
+    #
+    #   3. later, once PR is merged - perform release
+    #
+    # Scenario 4: release using a PR
+    #
+    #   1. wait for PR to be green, then just upload artifacts
+    #   2. call a new WF with PR# that:
+    #     1. merges the PR to the target branch
+    #     2. create a release with artifacts
+
+- [ ] n PR merged to "stable" branch (by cron, or by human):
+
+    dagger call publish-release --release-pr=$RELEASE_PR_NAME (should use PRs artifacts)
+
+    # create draft release
+    # creates a release an uploads artifacts from PR to release
+    # publish mix release
+
+- [ ] on PR open to main
+
+    dagger call ci
+
+    # run tests
+    # skip uploading artifacts
+
+- [ ] delete draft if PR for stable was not mereged
+
+dagger functions, tier 1:
+
+  1. maybe-update
+
+  2. prepare-release (1, 2 and 3),
+
+    possible inputs:
+
+    - base
+    - libpdfium-tag
+    - package-version
+    - 
+
+
+    1. if LIBPDFIUM_TAG is passed, set contents of LIBPDFIUM_TAG to passed value
+
+    2. if VERSION is passed, set contents of VERSION to passed value
+
+    3. if VERSION is not passed, just update patch in VERSION by 1
+
+    4. continue with how it's described in pdfium.ex...
+
+  3. PR:
+
+    1. precompile (4.1),
+
+    2. test (4.2),
+
+    3. publish all artifacts (4.3),
+
+  4. complete-release (5) - see once-merge.yaml
+
+    1. get latest workflow run for (workflow, branch, status, repo)
+
+    2. download all workflow artifacts
+
+    3. create a release, upload all artifacts to release
+
+    4. create mix hex.publish package + docs
