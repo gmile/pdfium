@@ -32,7 +32,7 @@ mkdir $pdfium_directory_name
 
 # 2. Download Erlang
 wget --quiet $otp_download_link
-echo "$otp_sha256sum $otp_archive_name" | sha256sum --check --status
+shasum -a 256 -c <<< "$otp_sha256sum  $otp_archive_name"
 tar --extract --gunzip --directory=$otp_directory_name < $otp_archive_name
 
 # 3. Download PDFium
