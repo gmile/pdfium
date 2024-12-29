@@ -8,6 +8,7 @@ on:
       - reopened
     branches:
       - main
+      - stable
 
 jobs:
   build-for-linux:
