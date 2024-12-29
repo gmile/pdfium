@@ -26,21 +26,21 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      #- name: Precompile and test
-      #  uses: dagger/dagger-for-github@v7.0.3
-      #  env:
-      #    GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-      #  with:
-      #    version: 0.15.1
-      #    args: >-
-      #      ci \
-      #        --ref pull/${{ github.ref_name }} \
-      #        --platform-name linux/${{ matrix.platform }} \
-      #        --abi ${{ matrix.abi }} \
-      #        --github-token GITHUB_TOKEN \
-      #      export \
-      #        --path . \
-      #        --allowParentDirPath
+      - name: Precompile and test
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          version: 0.15.1
+          args: >-
+            ci \
+              --ref pull/${{ github.ref_name }} \
+              --platform-name linux/${{ matrix.platform }} \
+              --abi ${{ matrix.abi }} \
+              --github-token GITHUB_TOKEN \
+            export \
+              --path . \
+              --allowParentDirPath
 
       - name: Fake generate files
         run: |
