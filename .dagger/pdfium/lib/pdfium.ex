@@ -294,17 +294,60 @@ defmodule Pdfium do
 
   # we must
 
-  # creates a tag & release based on:
+  # creates a tag & release based on a merged PR
   #
-  # - from a tip of given remote
-  # - sha of the commit of a run, which has the artifacts built, to be packed in release
-  #
-  defn create_release(branch: String.t(), sha: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
+  defn create_release(pr: String.t(), github_token: Dagger.Secret.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
+    # continue here - make below code example - alive:
+    #
+    #   gh pr view ${{ pr }} --json headRefOid,mergeCommit --jq '.headRefOid,.mergeCommit.oid'
+    #
+    #   returns:
+    #
+    #   head_ref = 2b1dc283146d7236ad91ba0b7d6fb5e82410d066
+    #   merge_commit_ref = 51b06ea225b94f05b6bf43c1ed79035ba069f4ad
+
+    gh =
+      dag()
+      |> Dagger.Client.container()
+      |> Dagger.Container.from("alpine:3.21")
+      |> Dagger.Container.with_exec(~w"apk add github-cli")
+      |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
+
+    {:ok, <<head_ref::binary-size(40), "\n", merge_commit_ref::binary-size(40), "\n">>} =
+      gh
+      |> Dagger.Container.with_exec(~w"gh pr view #{pr} --json headRefOid,mergeCommit --jq .headRefOid,.mergeCommit.oid --repo gmile/pdfium")
+      |> Dagger.Container.stdout()
+
+    run_id = ~w"
+      gh run list
+        --workflow prepare-release.yaml
+        --commit #{head_ref}
+        --status success
+        --limit 1
+        --json databaseId
+        --repo gmile/pdfium
+        --jq .[0].databaseId
+    "
+
+    {:ok, run_id} =
+      gh
+      |> Dagger.Container.with_exec(run_id)
+      |> Dagger.Container.stdout()
+
+    artifacts =
+      gh
+      |> Dagger.Container.with_exec(~w"gh run download #{run_id} --dir /artifacts --repo gmile/pdfium")
+      |> Dagger.Container.directory("/artifacts")
+
+
+    {:ok, entries} = Dagger.Directory.glob(artifacts, "*")
+    entries = Enum.map_join(entries, " ", &"/artifacts/#{&1}")
+
     pdfium =
       dag()
       |> Dagger.Client.git("https://github.com/gmile/pdfium")
       |> Dagger.GitRepository.with_auth_token(github_token)
-      |> Dagger.GitRepository.branch(branch)
+      |> Dagger.GitRepository.ref(merge_commit_ref)
       |> Dagger.GitRef.tree()
 
     {:ok, package_version} =
@@ -312,53 +355,21 @@ defmodule Pdfium do
       |> Dagger.Directory.file("VERSION")
       |> Dagger.File.contents()
 
-    # {:ok, entries} = Dagger.Directory.glob(artifacts, "*")
-    # entries = Enum.map_join(entries, " ", &"/artifacts/#{&1}")
-
-    run_id = ~w"
-      gh run list
-        --workflow prepare-release.yaml
-        --commit #{release_branch}
-        --status success
-        --limit 1
-        --json databaseId
-        --repo gmile/pdfium
-        --jq '.[0].databaseId'
-    "
-
-    gh =
-      dag()
-      |> Dagger.Client.container()
-      |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
-      |> Dagger.Container.with_exec(~w"apk add git github-cli")
-      |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
-
-    {:ok, run_id} =
-      gh
-      |> Dagger.Container.with_exec(run_id)
-      |> Dagger.Container.stdout()
-
-    gh
-    |> Dagger.Container.with_directory("/pdfium", pdfium)
-    |> Dagger.Container.with_directory("/artifacts", artifacts)
-    |> Dagger.Container.with_exec(~w"gh run download #{run_id} --dir /artifacts --repo gmile/pdfium")
-    |> Dagger.Container.with_exec(~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"])
-    |> Dagger.Container.with_exec(~w"gh release create v#{package_version} --repo gmile/pdfium #{entries}")
-    # |> Dagger.Container.with_exec(mix release)
-  end
-
-  defn publish_to_hex(src_dir: Dagger.Directory.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
     dag()
     |> Dagger.Client.container()
     |> Dagger.Container.from("hexpm/elixir:1.18.0-erlang-27.2-alpine-3.21.0")
+    |> Dagger.Container.with_exec(~w"apk add git github-cli")
+    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
+    |> Dagger.Container.with_directory("/pdfium", pdfium)
+    |> Dagger.Container.with_workdir("/pdfium")
+    |> Dagger.Container.with_directory("/artifacts", artifacts)
+    |> Dagger.Container.with_exec(~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"])
+    |> Dagger.Container.with_exec(~w"git push origin v#{package_version}")
+    |> Dagger.Container.with_exec(~w"gh release create v#{package_version} --repo gmile/pdfium #{entries}")
     |> Dagger.Container.with_exec(~w"mix local.hex --force")
     |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
-    |> Dagger.Container.with_workdir("/pdfium")
-    |> Dagger.Container.with_directory("/pdfium", src_dir)
     |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
   end
-
-  # gh release edit v1.0 --draft=false
 
   def test_script do
     """
