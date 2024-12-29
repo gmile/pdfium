@@ -1,4 +1,4 @@
-name: Check & update to latest libpdfium tag
+name: Update to latest libpdfium
 
 on:
   workflow_dispatch:
