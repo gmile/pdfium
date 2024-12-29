@@ -3,8 +3,8 @@
 - [ ] sign all commits
 - [ ] document settings enabled, such as "Allow GitHub Actions to create and approve pull requests"
       https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#preventing-github-actions-from-creating-or-approving-pull-requests
-- [ ] gh secret set HEX_API_KEY --app actions
-- [ ] gh secret set GH_TOKEN --body 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 --repo gmile/pdfium --app actions
+- [ ] gh secret set HEX_API_KEY --body xxxx --repo gmile/pdfium --app actions
+- [ ] gh secret set GH_TOKEN --body github_pat_xxx --repo gmile/pdfium --app actions
 - [ ] gh set rule for checks: https://github.com/gmile/pdfium/settings/branch_protection_rules/58120322
 - [ ] add approval configuration step: https://github.com/gmile/pdfium/settings/rules/3086425
 - [ ] use tailscale
