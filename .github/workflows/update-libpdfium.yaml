@@ -1,8 +1,9 @@
 name: Check & update to latest libpdfium tag
 
-# TODO: change to cron
 on:
   workflow_dispatch:
+  schedule:
+    - cron: 0 13 * * 1
 
 jobs:
   update-to-latest:
