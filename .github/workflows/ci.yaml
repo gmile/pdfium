@@ -70,5 +70,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ matrix.abi }}
+          name: macOS-builds
           path: custom/pdfium-nif-*
