@@ -315,12 +315,13 @@ defmodule Pdfium do
 
     {:ok, <<head_ref::binary-size(40), "\n", merge_commit_ref::binary-size(40), "\n">>} =
       gh
+      |> Dagger.Container.with_exec(~w"echo #{DateTime.utc_now()}")
       |> Dagger.Container.with_exec(~w"gh pr view #{pr} --json headRefOid,mergeCommit --jq .headRefOid,.mergeCommit.oid --repo gmile/pdfium")
       |> Dagger.Container.stdout()
 
     run_id = ~w"
       gh run list
-        --workflow prepare-release.yaml
+        --workflow ci.yaml
         --commit #{head_ref}
         --status success
         --limit 1

@@ -37,6 +37,17 @@ jobs:
               --platform-name ${{ matrix.platform }} \
               --abi ${{ matrix.abi }} \
               --github-token GITHUB_TOKEN
+            export \
+              --path . \
+              --allowParentDirPath
+
+      - name: Upload files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.abi }}
+          path: pdfium-nif-*
 
   build-for-macos:
     runs-on: macos-14
