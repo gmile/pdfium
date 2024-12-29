@@ -60,10 +60,10 @@ jobs:
 
       - name: Build
         run: |
-          push custom
+          pushd custom
           ./build-for-mac.sh macos arm64 27.2
           ./build-for-mac.sh macos x86_64 27.2
-          pop
+          popd
 
       - name: Upload files
         env:
