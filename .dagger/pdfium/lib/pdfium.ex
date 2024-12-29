@@ -89,8 +89,7 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package to version #{package_version}"])
     |> Dagger.Container.with_exec(~w"git push origin #{new_branch_name}")
     |> Dagger.Container.with_exec(~w"gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium" ++ ["--title", "Bump libpdfium to #{libpdfium_tag} tag"])
-    # todo: re-enable and test this
-    # |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
+    |> Dagger.Container.with_exec(~w"gh pr merge --auto --delete-branch --rebase #{new_branch_name}")
   end
 
   def collect_build_info(src_dir, platform_name, abi) do
