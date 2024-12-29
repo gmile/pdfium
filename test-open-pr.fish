@@ -1,6 +1,7 @@
 #!/usr/bin/env fish
 
 git checkout main
+git pull origin main
 git push origin main
 set value (date +%s)
 git checkout -b branch-$value
