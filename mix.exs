@@ -11,7 +11,7 @@ defmodule PDFium.MixProject do
       link: "https://github.com/gmile/pdfium",
       version: @version,
       elixir: "~> 1.17",
-      compilers: [:elixir_make] ++ Mix.compilers(),
+      compilers: Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
@@ -47,8 +47,6 @@ defmodule PDFium.MixProject do
 
   defp deps do
     [
-      {:cc_precompiler, "~> 0.1", runtime: false},
-      {:elixir_make, "~> 0.1", runtime: false}
     ]
   end
 

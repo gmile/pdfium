@@ -296,7 +296,7 @@ defmodule Pdfium do
 
   # creates a tag & release based on a merged PR
   #
-  defn create_release(pr: String.t(), github_token: Dagger.Secret.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
+  defn create_release(pr: String.t(), actor: String.t(), github_token: Dagger.Secret.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
     # continue here - make below code example - alive:
     #
     #   gh pr view ${{ pr }} --json headRefOid,mergeCommit --jq '.headRefOid,.mergeCommit.oid'
@@ -341,7 +341,7 @@ defmodule Pdfium do
       |> Dagger.Container.directory("/artifacts")
 
 
-    {:ok, entries} = Dagger.Directory.glob(artifacts, "*")
+    {:ok, entries} = Dagger.Directory.glob(artifacts, "**/*.tar.gz")
     entries = Enum.map_join(entries, " ", &"/artifacts/#{&1}")
 
     pdfium =
@@ -364,6 +364,9 @@ defmodule Pdfium do
     |> Dagger.Container.with_directory("/pdfium", pdfium)
     |> Dagger.Container.with_workdir("/pdfium")
     |> Dagger.Container.with_directory("/artifacts", artifacts)
+    |> Dagger.Container.with_exec(~w"gh auth setup-git")
+    |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
+    |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
     |> Dagger.Container.with_exec(~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"])
     |> Dagger.Container.with_exec(~w"git push origin v#{package_version}")
     |> Dagger.Container.with_exec(~w"gh release create v#{package_version} --repo gmile/pdfium #{entries}")
