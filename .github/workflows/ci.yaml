@@ -36,7 +36,7 @@ jobs:
               --ref pull/${{ github.ref_name }} \
               --platform-name ${{ matrix.platform }} \
               --abi ${{ matrix.abi }} \
-              --github-token GITHUB_TOKEN
+              --github-token GITHUB_TOKEN \
             export \
               --path . \
               --allowParentDirPath
