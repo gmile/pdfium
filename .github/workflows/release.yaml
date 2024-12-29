@@ -1,5 +1,5 @@
 # This workflow is used to release a new mix package
-name: release
+name: Release
 
 on:
   pull_request:
@@ -13,15 +13,6 @@ on:
 jobs:
   release:
     runs-on: ubuntu-24.04
-
-    strategy:
-      matrix:
-        abi:
-          - glibc
-          - musl
-        platform:
-          - arm64
-          - amd64
 
     steps:
       - uses: actions/checkout@v3
