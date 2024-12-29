@@ -1,0 +1,29 @@
+name: CI (macos)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-for-macos:
+    runs-on: macos-14
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          push custom
+          ./build-for-mac.sh macos arm64 27.2
+          ./build-for-mac.sh macos x86_64 27.2
+          pop
+
+      - name: Upload files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.abi }}
+          path: custom/pdfium-nif-*
+

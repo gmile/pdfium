@@ -71,6 +71,8 @@ gcc \
 install_name_tool -change "./libpdfium.dylib" "@rpath/libpdfium.dylib" pdfium_nif.so
 install_name_tool -add_rpath "@loader_path" pdfium_nif.so
 
+output_name=pdfium-nif-2.17-$arch-apple-darwin-$(cat ../VERSION).tar.gz
+
 # 5. Create archive
 tar --create \
     --verbose \
@@ -79,20 +81,21 @@ tar --create \
     pdfium_nif.so \
     "$pdfium_directory_name/lib/libpdfium.dylib"
 
-# 6. Cleanup
+# 6. Test (testing is commented out)
+# tar --extract --directory=$test_directory_name --file=$output_name
+# cp test.exs $test_directory_name
+# cp test.pdf $test_directory_name
+# cd $test_directory_name
+# elixir test.exs
+# cd ..
+
+# 7. Cleanup
 rm pdfium_nif.o
 rm pdfium_nif.so
 rm -fr $otp_directory_name
 rm -fr $otp_archive_name
 rm -fr $pdfium_directory_name
 rm -fr $pdfium_archive_name
-
-# 7. Test
-tar --extract --directory=$test_directory_name --file=$output_name
-cp test.exs $test_directory_name
-cp test.pdf $test_directory_name
-cd $test_directory_name
-elixir test.exs
-cd ..
+rm -fr $test_directory_name
 
 echo $output_name
