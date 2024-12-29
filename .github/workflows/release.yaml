@@ -1,1 +1,41 @@
 # This workflow is used to release a new mix package
+name: release
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - stable
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        abi:
+          - glibc
+          - musl
+        platform:
+          - arm64
+          - amd64
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Release
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        with:
+          version: 0.15.1
+          args: >-
+            create-release \
+              --pr ${{ github.event.pull_request.number }} \
+              --actor ${{ github.actor }} \
+              --github-token GITHUB_TOKEN \
+              --hex-api-key HEX_API_KEY
