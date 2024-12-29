@@ -1,7 +1,5 @@
 #!/usr/bin/env fish
 
-# make sure remotely there's no branches called
-
 git fetch --all
 git branch -r | grep 'update-libpdfium-to-chromium' | sed 's/origin\///' | xargs -I {} git push origin --delete {}
 git checkout stable

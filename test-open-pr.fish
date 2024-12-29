@@ -1,9 +1,11 @@
 #!/usr/bin/env fish
 
-set date (date +%s)
-git co -b branch-$date
-echo branch-$date >> README.md 
+git checkout main
+git push origin main
+set value (date +%s)
+git checkout -b branch-$value
+echo "New value: $value\n" >> README.md
 git add README.md 
-git commit -m "testing $date" 
+git commit -m "Testing $value"
 gh pr create --fill
-gh pr merge branch-$date --auto --delete-branch --rebase
+# gh pr merge branch-$value --auto --delete-branch --rebase
