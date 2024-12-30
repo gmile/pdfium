@@ -71,7 +71,13 @@ gcc \
 install_name_tool -change "./libpdfium.dylib" "@rpath/libpdfium.dylib" pdfium_nif.so
 install_name_tool -add_rpath "@loader_path" pdfium_nif.so
 
-output_name=pdfium-nif-2.17-$arch-apple-darwin-$(cat ../VERSION).tar.gz
+if [ "$arch" = "arm64" ]; then
+   otp_arch="aarch64"
+elif [ "$arch" = "x86_64" ]; then
+   otp_arch="x86_64"
+fi
+
+output_name="pdfium-nif-2.17-${otp_arch}-apple-darwin-$(cat ../VERSION).tar.gz"
 
 # 5. Create archive
 tar --create \
