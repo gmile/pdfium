@@ -10,7 +10,7 @@ on:
       - main
       - stable
     paths-ignore:
-     - checksum.exs
+      - checksum.exs
 
 jobs:
   build-for-linux:
