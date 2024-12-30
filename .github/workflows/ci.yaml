@@ -76,7 +76,7 @@ jobs:
   update-checksums:
     runs-on: ubuntu-24.04
 
-    requires:
+    needs:
       - build-for-linux
       - build-for-macos
 
@@ -91,6 +91,6 @@ jobs:
           version: 0.15.1
           args: >-
             update-checksums \
-              --ref pull/${{ github.ref_name }} \
+              --pr ${{ github.event.pull_request.number }} \
               --actor ${{ github.actor }} \
               --github-token GITHUB_TOKEN
