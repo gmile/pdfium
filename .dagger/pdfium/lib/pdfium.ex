@@ -131,14 +131,13 @@ defmodule Pdfium do
     }
   end
 
-  defn precompile(
-    src_dir: Dagger.Directory.t(),
-    abi: String.t(),
-    platform_name: String.t(),
-    build_image_name: String.t(),
-    pdfium_download_url: String.t(),
-    output_filename: String.t()
-  ) :: Dagger.Container.t() do
+  defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
+    {
+      build_image_name,
+      pdfium_download_url,
+      output_filename
+    } = collect_build_info(src_dir, platform_name, abi)
+
     otp_directory_name="/usr/local/lib/erlang"
 
     # rename to libpdfium_extract_path
@@ -198,9 +197,10 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(compile)
     |> Dagger.Container.with_exec(link)
     |> Dagger.Container.with_exec(pack)
+    |> Dagger.Container.file(output_path)
   end
 
-  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.Container.t() do
+  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
     {:ok, filename} = Dagger.File.name(precompiled)
     precompiled_path = "/test/#{filename}"
 
@@ -212,27 +212,17 @@ defmodule Pdfium do
     |> Dagger.Container.with_new_file("/test/test.exs", test_script())
     |> Dagger.Container.with_new_file("/test/test.pdf", test_pdf())
     |> Dagger.Container.with_exec(~w"elixir test.exs")
+    |> Dagger.Container.file(precompiled_path)
   end
 
   defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.File.t() do
-    src_dir =
-      dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium")
-      |> Dagger.GitRepository.with_auth_token(github_token)
-      |> Dagger.GitRepository.ref(ref)
-      |> Dagger.GitRef.tree()
-
-    {
-      build_image_name,
-      pdfium_download_url,
-      output_filename
-    } = collect_build_info(src_dir, platform_name, abi)
-
-    src_dir
-    |> precompile(abi, platform_name, build_image_name, pdfium_download_url, output_filename)
-    |> Dagger.Container.file("/build/#{output_filename}")
+    dag()
+    |> Dagger.Client.git("https://github.com/gmile/pdfium")
+    |> Dagger.GitRepository.with_auth_token(github_token)
+    |> Dagger.GitRepository.ref(ref)
+    |> Dagger.GitRef.tree()
+    |> precompile(platform_name, abi)
     |> test(platform_name, abi)
-    |> Dagger.Container.file("/test/#{output_filename}")
   end
 
   defn create_release(pr: String.t(), actor: String.t(), github_token: Dagger.Secret.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
