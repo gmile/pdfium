@@ -13,6 +13,7 @@
 - [ ] publish docs too
 - [ ] enable macos builds
 - [ ] use GitHub App
+- [ ] document use of "mix elixir_make.checksum --all"
 
 # TODO: make release verified
 #
