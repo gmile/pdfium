@@ -355,7 +355,7 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"git checkout #{head_ref_name}")
     |> Dagger.Container.with_new_file("/pdfium/checksum.exs", inspect(checksums, pretty: true))
     |> Dagger.Container.with_exec(~w"git add checksum.exs")
-    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update checksums"])
+    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update checksums\n\n[skip ci]"])
     |> Dagger.Container.with_exec(~w"git push origin HEAD:#{head_ref_name}")
   end
 
