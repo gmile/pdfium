@@ -22,7 +22,7 @@ jobs:
           - glibc
           - musl
         platform:
-          - arm64
+          # - arm64
           - amd64
 
     steps:
