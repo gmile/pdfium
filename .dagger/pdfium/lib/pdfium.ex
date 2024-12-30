@@ -235,7 +235,7 @@ defmodule Pdfium do
 
     # continue here: {:ok, "b2e3b4ced3b6dc716718b87252e09ad9f6bf8d0c\n\nbranch-1735576346\n"}
     # to fix this issue: https://github.com/gmile/pdfium/actions/runs/12549255650/job/34990209520?pr=77#step:3:1534
-    {:ok, <<head_ref::binary-size(40), "\n", merge_commit_ref::binary-size(40), "\n", base_ref_name::binary >>} =
+    {:ok, <<head_ref::binary-size(40), "\n",  base_ref_name::binary >>} =
       gh
       |> Dagger.Container.with_exec(~w"echo #{DateTime.utc_now()}")
       |> Dagger.Container.with_exec(~w"gh pr view #{pr} --json headRefOid,mergeCommit,baseRefName --jq .headRefOid,.mergeCommit.oid,.baseRefName --repo gmile/pdfium")
