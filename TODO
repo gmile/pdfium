@@ -15,39 +15,6 @@
 - [ ] use GitHub App
 - [ ] document use of "mix elixir_make.checksum --all"
 
-# How to download pre-compiled artifacts during the compilation?
-#
-# 1. elixir_make way - checksums.exs
-#
-# ideally:
-#
-#   1. precompile everything
-#   2. generate & commit checksums.exs
-#   3. tag commit & create a release with precompiled artifacts
-#
-# in practice - use untagged release as artifacts storage
-#
-#   1. create a release draft
-#   2. compile artifacts
-#   3. upload artifacts
-#   3. for artifacts: generate & commit checksums.exs
-#   4. tag commit with checksums (or VERSION, etc.),
-#   5. modify release: set tag, un-sert "draft"
-#
-# 2. non-elixir_make way - add custom compiler dependency, that will only download the at compilation time
-#
-#   pros:
-#
-#   1. subjectively not as invasive as cc_precompiler config-wise?
-#
-#   cons:
-#
-#   1. needs a separate lib
-#   2. needs to be implemented from scratch
-#   3. needs to follow "precompiler" protocol
-#   4. needs to invent a way of checking checksums
-#
-
 # TODO: make release verified
 #
 # TODO: have custom cc_precompiler according to rules here:
