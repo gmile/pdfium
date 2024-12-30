@@ -72,3 +72,25 @@ jobs:
         with:
           name: macOS-builds
           path: custom/pdfium-nif-*
+
+  update-checksums:
+    runs-on: ubuntu-24.04
+
+    requires:
+      - build-for-linux
+      - build-for-macos
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Precompile and test
+        uses: dagger/dagger-for-github@v7.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          version: 0.15.1
+          args: >-
+            update-checksums \
+              --ref pull/${{ github.ref_name }} \
+              --actor ${{ github.actor }} \
+              --github-token GITHUB_TOKEN
