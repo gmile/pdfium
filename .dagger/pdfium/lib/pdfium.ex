@@ -260,7 +260,6 @@ defmodule Pdfium do
       |> Dagger.Container.with_exec(~w"gh run download #{run_id} --dir /artifacts --repo gmile/pdfium")
       |> Dagger.Container.directory("/artifacts")
 
-
     {:ok, entries} = Dagger.Directory.glob(artifacts, "**/*.tar.gz")
     entries = Enum.map_join(entries, " ", &"/artifacts/#{&1}")
 
