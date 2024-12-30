@@ -261,21 +261,7 @@ defmodule Pdfium do
       |> Dagger.Container.directory("/artifacts")
 
     {:ok, entries} = Dagger.Directory.glob(artifacts, "**/*.tar.gz")
-
-    checksums =
-      Enum.reduce(entries, %{}, fn entry, acc ->
-        {:ok, contents} =
-          artifacts
-          |> Dagger.Directory.file(entry)
-          |> Dagger.File.contents()
-
-        sha256 =
-          :crypto.hash(:sha256, contents)
-          |> Base.encode16()
-          |> String.downcase()
-
-        Map.put_new(acc, Path.basename(entry), "sha256:#{sha256}")
-      end)
+    entries = Enum.map_join(entries, " ", &"/artifacts/#{&1}")
 
     pdfium =
       dag()
@@ -289,36 +275,23 @@ defmodule Pdfium do
       |> Dagger.Directory.file("VERSION")
       |> Dagger.File.contents()
 
-  # "pdfium-nif-2.17-aarch64-linux-gnu-0.1.14.tar.gz" => "sha256:f3dce0be15b2ff34aa636db0471546310b1dcca6e875f3fafa4a4ce005e7e5d5",
-  # "pdfium-nif-2.17-aarch64-linux-musl-0.1.14.tar.gz" => "sha256:f9af50754e6ee3130dff6c756804c89e2cb38c7ef3b05dca13c09d55298e0aac",
-  # "pdfium-nif-2.17-x86_64-apple-darwin-0.1.14.tar.gz" => "sha256:5fe82fb504a9fbf1c7034d1ee406c87bd5b34e28a03bccd5e1bcd324b32ff168",
-  # "pdfium-nif-2.17-x86_64-linux-gnu-0.1.14.tar.gz" => "sha256:c2179e91eb6254973b5677a0783d899841e8225b3f865eb12d27a2a588e6483b",
-  # "pdfium-nif-2.17-x86_64-linux-musl-0.1.14.tar.gz" => "sha256:05f9c395618905d96401a3814b9fe581d1fb71c7b60e90874a16970a3d95bed2",
-
-    container =
-      dag()
-      |> Dagger.Client.container()
-      |> Dagger.Container.from("hexpm/elixir:1.18.1-erlang-27.2-alpine-3.21.0")
-      |> Dagger.Container.with_exec(~w"apk add git github-cli")
-      |> Dagger.Container.with_directory("/artifacts", artifacts)
-
-    container
-    |> Dagger.Container.with_exec(~w"apk add perl-utils")
-    |> Dagger.Container.with_workdir("/artifacts")
-    |> Dagger.Container.with_files("/artifacts", entries)
+    dag()
+    |> Dagger.Client.container()
+    |> Dagger.Container.from("hexpm/elixir:1.18.1-erlang-27.2-alpine-3.21.0")
+    |> Dagger.Container.with_exec(~w"apk add git github-cli")
     |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
     |> Dagger.Container.with_directory("/pdfium", pdfium)
+    |> Dagger.Container.with_directory("/artifacts", artifacts)
     |> Dagger.Container.with_workdir("/pdfium")
-    # |> Dagger.Container.with_new_file("/pdfium/checksums.exs", IO.inspect(checksums))
-    # |> Dagger.Container.with_exec(~w"gh auth setup-git")
-    # |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
-    # |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
-    # |> Dagger.Container.with_exec(~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"])
-    # |> Dagger.Container.with_exec(~w"git push origin v#{package_version}")
-    # |> Dagger.Container.with_exec(~w"gh release create v#{package_version} --repo gmile/pdfium #{Enum.map_join(entries, " ", &"/artifacts/#{&1}")}")
-    # |> Dagger.Container.with_exec(~w"mix local.hex --force")
-    # |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
-    # |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
+    |> Dagger.Container.with_exec(~w"gh auth setup-git")
+    |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
+    |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
+    |> Dagger.Container.with_exec(~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"])
+    |> Dagger.Container.with_exec(~w"git push origin v#{package_version}")
+    |> Dagger.Container.with_exec(~w"gh release create v#{package_version} --repo gmile/pdfium #{entries}")
+    |> Dagger.Container.with_exec(~w"mix local.hex --force")
+    |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
+    |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
   end
 
   def test_script do
