@@ -9,6 +9,8 @@ on:
     branches:
       - main
       - stable
+    paths-ignore:
+     - checksum.exs
 
 jobs:
   build-for-linux:
@@ -92,5 +94,6 @@ jobs:
           args: >-
             update-checksums \
               --pr ${{ github.event.pull_request.number }} \
+              --run-id ${{ github.run_id }} \
               --actor ${{ github.actor }} \
               --github-token GITHUB_TOKEN
