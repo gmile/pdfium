@@ -61,6 +61,7 @@ defmodule PDFium.MixProject do
         c_src/pdfium_nif.c
         Makefile
         VERSION
+        checksum.exs
       ",
       licenses: ~w"MIT",
       links: %{
