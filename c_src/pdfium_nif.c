@@ -98,9 +98,83 @@ static ERL_NIF_TERM get_page_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
         enif_make_int(env, page_count));
 }
 
+static ERL_NIF_TERM get_page_bitmap(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    if (argc != 3) return enif_make_badarg(env);
+
+    PDFDocResource* doc_res;
+    int page_index;
+    int dpi;
+
+    if (!enif_get_resource(env, argv[0], PDF_DOCUMENT_RESOURCE, (void**)&doc_res) ||
+        !enif_get_int(env, argv[1], &page_index) ||
+        !enif_get_int(env, argv[2], &dpi)) {
+        return enif_make_badarg(env);
+    }
+
+    if (!doc_res->document) {
+        return enif_make_tuple2(env, enif_make_atom(env, "error"),
+            enif_make_atom(env, "document_closed"));
+    }
+
+    FPDF_PAGE page = FPDF_LoadPage(doc_res->document, page_index);
+    if (!page) {
+        return enif_make_tuple2(env, enif_make_atom(env, "error"),
+            enif_make_atom(env, "page_load_failed"));
+    }
+
+    double page_width = FPDF_GetPageWidth(page);
+    double page_height = FPDF_GetPageHeight(page);
+
+    int width = (int)((page_width * dpi) / 72.0);
+    int height = (int)((page_height * dpi) / 72.0);
+
+    FPDF_BITMAP bitmap = FPDFBitmap_Create(width, height, 0);
+    if (!bitmap) {
+        FPDF_ClosePage(page);
+        return enif_make_tuple2(env, enif_make_atom(env, "error"),
+            enif_make_atom(env, "bitmap_creation_failed"));
+    }
+
+    FPDFBitmap_FillRect(bitmap, 0, 0, width, height, 0xFFFFFFFF);
+    FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, 0);
+
+    unsigned char* buffer = FPDFBitmap_GetBuffer(bitmap);
+    int stride = FPDFBitmap_GetStride(bitmap);
+
+    ErlNifBinary result_binary;
+    if (!enif_alloc_binary(width * height * 4, &result_binary)) {
+        FPDFBitmap_Destroy(bitmap);
+        FPDF_ClosePage(page);
+        return enif_make_tuple2(env, enif_make_atom(env, "error"),
+            enif_make_atom(env, "memory_allocation_failed"));
+    }
+
+    // Convert BGRA to RGBA
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            unsigned char* bgra = buffer + y * stride + x * 4;
+            unsigned char* rgba = result_binary.data + (y * width + x) * 4;
+            rgba[0] = bgra[2]; // R
+            rgba[1] = bgra[1]; // G
+            rgba[2] = bgra[0]; // B
+            rgba[3] = bgra[3]; // A
+        }
+    }
+
+    FPDFBitmap_Destroy(bitmap);
+    FPDF_ClosePage(page);
+
+    return enif_make_tuple4(env,
+        enif_make_atom(env, "ok"),
+        enif_make_binary(env, &result_binary),
+        enif_make_int(env, width),
+        enif_make_int(env, height));
+}
+
 static ErlNifFunc nif_funcs[] = {
-    {"load_document", 1, load_pdf_document, 0},  // Added 0 for flags
-    {"get_page_count", 1, get_page_count, 0}     // Added 0 for flags
+    {"load_document", 1, load_pdf_document, 0},
+    {"get_page_count", 1, get_page_count, 0},
+    {"get_page_bitmap", 3, get_page_bitmap, 0}
 };
 
 ERL_NIF_INIT(Elixir.PDFium, nif_funcs, load, NULL, NULL, unload)

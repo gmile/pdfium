@@ -32,6 +32,15 @@ Native bindings for pdfium project
    # => {:ok, 1}
    ```
 
+3. render a page to file:
+
+   ```elixir
+   {:ok, ref} = PDFium.load_document("/Users/eugene/Downloads/7ade6db09604a8b41104763c6f16a987.pdf")
+   {:ok, binary, w, h} = PDFium.get_page_bitmap(ref, 0, 300) # 300 for DPI
+   {:ok, image} = Vix.Vips.Image.new_from_binary(binary, w, h, 4, :VIPS_FORMAT_UCHAR)
+   {:ok, _image} = Image.write(image, "/tmp/sample.png")
+   ```
+
 ## Releasing
 
 1. bump version in `VERSION` file. Run:

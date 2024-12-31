@@ -47,6 +47,7 @@ defmodule PDFium.MixProject do
 
   defp deps do
     [
+      {:image, "~> 0.1", only: :dev},
       {:cc_precompiler, "~> 0.1", runtime: false},
       {:elixir_make, "~> 0.1", runtime: false}
     ]
