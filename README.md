@@ -1,32 +1,66 @@
-1
-branch-1734902193
-branch-1734902317
-branch-1734902361
-branch-1734902370
-branch-1734902379
-branch-1734902414
-branch-1734902426
-branch-1734902775
-branch-1734903051
-123
-123
-README.md
-mmmmmm
+## PDFium
 
-kjkjkjkjkj
-branch-1735427460
-branch-1735429994
-branch-1735462663
-branch-1735463780
-branch-1735474850
+Native bindings for pdfium project
 
-branch-1735479090
-branch-1735479863
-branch-1735480590
-New value: 1735487663\n
-New value: 1735487837\n
-New value: 1735487897\n
-New value: 1735489599\n
-New value: 1735576346\n
-New value: 1735593293\n
-New value: 1735594492\n
+## Installing
+
+* for Mix projects, add the following under `deps` in `mix.exs`:
+
+    ```elixir
+    {:pdfium, "~> 0.1"}
+    ```
+
+* for single-file Elixir scripts, add the following:
+
+    ```elixir
+    Mix.install([pdfium: "~> 0.1"])
+    ```
+
+## Usage
+
+1. open a PDF file descriptor:
+
+   ```elixir
+   {:ok, document} = PDFium.load_document("file.pdf")
+   # => {:ok, #Reference<0.2181297728.2193227786.166499>}
+   ```
+
+2. get the number of pages in the file:
+
+   ```elixir
+   {:ok, pages} = PDFium.get_page_count(document)
+   # => {:ok, 1}
+   ```
+
+## Releasing
+
+1. bump version in `VERSION` file. Run:
+
+   ```sh
+   echo -n (awk 'BEGIN{FS=OFS="."} {$NF+=1}1' VERSION) > VERSION
+   ```
+
+2. commit and push the change:
+
+   ```sh
+   git add VERSION
+   git commit --message "Bump library version"
+   git push origin main
+   ```
+
+3. create a PR from `main` to `stable`. Run:
+
+   ```sh
+   gh pr create --base stable --fill
+   ```
+
+4. wait until the PR checks are green, then merge the PR
+
+## Known issues
+
+* Installing the library was tested and will work in macOS and inside Docker built by Bob. Installing
+  currently doesn't work under Elixir installed via package managers, like `apk add elixir`.
+
+## License
+
+See [LICENSE].
