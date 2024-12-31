@@ -230,7 +230,7 @@ defmodule Pdfium do
       dag()
       |> Dagger.Client.container()
       |> Dagger.Container.from("alpine:3.21")
-      |> Dagger.Container.with_exec(~w"apk add github-cli")
+      |> Dagger.Container.with_exec(~w"apk add github-cli perl-utils")
       |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
 
     {:ok, <<head_ref::binary-size(40), "\n", base_ref_name::binary >>} =
@@ -257,27 +257,23 @@ defmodule Pdfium do
       |> Dagger.Container.with_exec(run_id)
       |> Dagger.Container.stdout()
 
-    artifacts =
-      gh
-      |> Dagger.Container.with_exec(~w"gh run download #{run_id} --dir /artifacts --repo gmile/pdfium")
-      |> Dagger.Container.directory("/artifacts")
+    gh = Dagger.Container.with_exec(gh, ~w"gh run download #{run_id} --dir /artifacts --repo gmile/pdfium")
+    artifacts = Dagger.Container.directory(gh, "/artifacts")
 
     {:ok, entries} = Dagger.Directory.glob(artifacts, "**/*.tar.gz")
+    entries = Enum.map_join(entries, " ", &"/artifacts/#{&1}")
+
+    {:ok, checksums} =
+      gh
+      |> Dagger.Container.with_exec(~w"shasum --algorithm 256 #{entries}")
+      |> Dagger.Container.stdout()
 
     checksums =
-      Enum.reduce(entries, %{}, fn entry, acc ->
-        {:ok, contents} =
-          artifacts
-          |> Dagger.Directory.file(entry)
-          |> Dagger.File.contents()
-
-        sha256 =
-          :crypto.hash(:sha256, contents)
-          |> Base.encode16()
-          |> String.downcase()
-
-        Map.put_new(acc, Path.basename(entry), "sha256:#{sha256}")
-      end)
+      checksums
+      |> String.split("\n", trim: true)
+      |> Enum.map(&String.split(&1, ~r/\s+/, parts: 2))
+      |> Enum.map(fn [hash, path] -> {Path.basename(path), "sha256:" <> hash} end)
+      |> Map.new()
 
     pdfium =
       dag()
@@ -306,10 +302,10 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"git checkout #{base_ref_name}")
     |> Dagger.Container.with_new_file("/pdfium/checksum.exs", inspect(checksums, pretty: true))
     |> Dagger.Container.with_exec(~w"git add checksum.exs")
-    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update checksums"]) # remove checksumming from here
+    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update checksums"])
     |> Dagger.Container.with_exec(~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"])
     |> Dagger.Container.with_exec(~w"git push origin HEAD:#{base_ref_name} v#{package_version}")
-    |> Dagger.Container.with_exec(~w"gh release create v#{package_version} --repo gmile/pdfium #{Enum.map_join(entries, " ", &"/artifacts/#{&1}")}")
+    |> Dagger.Container.with_exec(~w"gh release create v#{package_version} --repo gmile/pdfium #{entries}")
     |> Dagger.Container.with_exec(~w"mix local.hex --force")
     |> Dagger.Container.with_exec(~w"mix do deps.get + deps.compile")
     |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
