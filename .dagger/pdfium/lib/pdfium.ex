@@ -230,7 +230,7 @@ defmodule Pdfium do
       dag()
       |> Dagger.Client.container()
       |> Dagger.Container.from("alpine:3.21")
-      |> Dagger.Container.with_exec(~w"apk add github-cli perl-utils")
+      |> Dagger.Container.with_exec(~w"apk add github-cli")
       |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
 
     {:ok, <<head_ref::binary-size(40), "\n", base_ref_name::binary >>} =
@@ -265,6 +265,7 @@ defmodule Pdfium do
 
     {:ok, checksums} =
       gh
+      |> Dagger.Container.with_exec(~w"apk add perl-utils")
       |> Dagger.Container.with_exec(~w"shasum --algorithm 256 #{entries}")
       |> Dagger.Container.stdout()
 
