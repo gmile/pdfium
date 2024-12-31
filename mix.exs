@@ -60,6 +60,7 @@ defmodule PDFium.MixProject do
         README.md
         c_src/pdfium_nif.c
         Makefile
+        VERSION
       ",
       licenses: ~w"MIT",
       links: %{
