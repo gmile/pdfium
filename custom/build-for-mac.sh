@@ -55,7 +55,7 @@ gcc \
   --include-directory $pdfium_directory_name/include \
   --compile \
   --output=pdfium_nif.o \
-  pdfium_nif.c
+  ../c_src/pdfium_nif.c
 
 gcc \
   -arch $arch \
@@ -96,6 +96,9 @@ tar --create \
 # cd ..
 
 # 7. Cleanup
+cp pdfium_nif.so ../priv
+cp $pdfium_directory_name/lib/libpdfium.dylib ../priv
+
 rm pdfium_nif.o
 rm pdfium_nif.so
 rm -fr $otp_directory_name
