@@ -325,6 +325,8 @@ defmodule Pdfium do
       def load_document(_filename), do: :erlang.nif_error(:nif_not_loaded)
 
       def get_page_count(_document), do: :erlang.nif_error(:nif_not_loaded)
+
+      def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
     end
 
     {:ok, ref} = PDFium.load_document("./test.pdf")
