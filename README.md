@@ -65,10 +65,34 @@ Native bindings for pdfium project
 
 4. wait until the PR checks are green, then merge the PR
 
+## Running CI steps locally
+
+1. Prepare:
+
+   ```sh
+   mkdir output
+   ```
+
+1. Build:
+
+   ```sh
+   dagger call \
+     precompile --src-dir . --platform-name linux/arm64 --abi musl \
+     export --path output/ --allowParentDirPath
+   ```
+
+2. Test:
+
+   ```sh
+   dagger call test \
+     --precompiled output/pdfium-nif-2.17-aarch64-linux-musl-0.1.23.tar.gz \
+     --abi musl --platform-name linux/arm64
+   ```
+
 ## Known issues
 
-* Installing the library was tested and will work in macOS and inside Docker built by Bob. Installing
-  currently doesn't work under Elixir installed via package managers, like `apk add elixir`.
+* Installing the library was tested and will work in macOS and inside Docker images built by Bob. Installing
+  currently doesn't work under Elixir installed via package managers, such as via `apk add elixir` for example.
 
 ## License
 
