@@ -79,6 +79,23 @@ static ERL_NIF_TERM load_pdf_document(ErlNifEnv* env, int argc, const ERL_NIF_TE
     return enif_make_tuple2(env, enif_make_atom(env, "ok"), resource_term);
 }
 
+static ERL_NIF_TERM close_document(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    if (argc != 1) return enif_make_badarg(env);
+
+    PDFDocResource* doc_res;
+    if (!enif_get_resource(env, argv[0], PDF_DOCUMENT_RESOURCE, (void**)&doc_res)) {
+        return enif_make_tuple2(env, enif_make_atom(env, "error"),
+            enif_make_atom(env, "invalid_resource"));
+    }
+
+    if (doc_res->document) {
+        FPDF_CloseDocument(doc_res->document);
+        doc_res->document = NULL;
+    }
+
+    return enif_make_atom(env, "ok");
+}
+
 static ERL_NIF_TERM get_page_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     if (argc != 1) return enif_make_badarg(env);
 
@@ -173,6 +190,7 @@ static ERL_NIF_TERM get_page_bitmap(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 
 static ErlNifFunc nif_funcs[] = {
     {"load_document", 1, load_pdf_document, 0},
+    {"close_document", 1, close_document, 0},
     {"get_page_count", 1, get_page_count, 0},
     {"get_page_bitmap", 3, get_page_bitmap, 0}
 };
