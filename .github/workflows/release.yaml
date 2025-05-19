@@ -16,7 +16,7 @@ jobs:
 
       - name: Release
         if: github.event.pull_request.merged == true
-        uses: dagger/dagger-for-github@v7.0.3
+        uses: dagger/dagger-for-github@8.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
