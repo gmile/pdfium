@@ -28,7 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
         with:
-          version: 0.15.1
+          version: 0.19.4
           args: >-
             create-release \
               --pr ${{ github.event.pull_request.number }} \
