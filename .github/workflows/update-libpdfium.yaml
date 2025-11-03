@@ -26,14 +26,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
-          version: 0.15.1
+          version: 0.19.4
           args: check-latest-tag --github-token GITHUB_TOKEN
 
       - name: Publish PR with version update
         if: ${{ fromJSON(steps.check-latest-tag.outputs.output).new_tag_available }}
         uses: dagger/dagger-for-github@v8.2.0
         with:
-          version: 0.15.1
+          version: 0.19.4
           args: >-
             prepare-release-pull-request \
               --base stable \
