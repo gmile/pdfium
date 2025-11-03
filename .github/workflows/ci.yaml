@@ -11,7 +11,7 @@ on:
       - stable
 
 jobs:
-  build-for-linux:
+  build-for-linux-amd64:
     runs-on: ubuntu-24.04
 
     strategy:
@@ -20,8 +20,52 @@ jobs:
           - glibc
           - musl
         platform:
-          - arm64
           - amd64
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Precompile and test
+        uses: dagger/dagger-for-github@v8.2.0
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          version: 0.19.4
+          args: >-
+            ci \
+              --ref pull/${{ github.ref_name }} \
+              --platform-name linux/${{ matrix.platform }} \
+              --abi ${{ matrix.abi }} \
+              --github-token GITHUB_TOKEN \
+            export \
+              --path . \
+              --allowParentDirPath
+
+      - name: Upload files
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.abi }}
+          path: pdfium-nif-*
+
+  build-for-linux-arm:
+    runs-on: ubuntu-24.04-arm
+
+    strategy:
+      matrix:
+        abi:
+          - glibc
+          - musl
+        platform:
+          - arm64
 
     steps:
       - uses: actions/checkout@v3
