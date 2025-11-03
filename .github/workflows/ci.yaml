@@ -119,8 +119,8 @@ jobs:
       - name: Build
         run: |
           pushd custom
-          ./build-for-mac.sh macos arm64 27.2
-          ./build-for-mac.sh macos x86_64 27.2
+          ./build-for-mac.sh macos arm64 28.1
+          ./build-for-mac.sh macos x86_64 28.1
           popd
 
       - name: Upload files
