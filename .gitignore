@@ -28,3 +28,6 @@ pdfium-*.tar
 
 c_src/pdfium_nif.o
 output
+.dagger/dagger_sdk
+.dagger/deps
+.dagger/_build

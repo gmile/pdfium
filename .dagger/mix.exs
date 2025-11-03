@@ -19,7 +19,7 @@ defmodule Pdfium.MixProject do
 
   defp deps do
     [
-      {:dagger, path: "../dagger_sdk"}
+      {:dagger, path: "./dagger_sdk"}
     ]
   end
 end
