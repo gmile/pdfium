@@ -69,7 +69,7 @@ defmodule Pdfium do
 
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("alpine:3.21")
+    |> Dagger.Container.from("alpine:3.22.d")
     |> Dagger.Container.with_exec(~w"apk add git github-cli")
     |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
     |> Dagger.Container.with_directory("/pdfium", pdfium)
@@ -227,7 +227,7 @@ defmodule Pdfium do
     gh =
       dag()
       |> Dagger.Client.container()
-      |> Dagger.Container.from("alpine:3.21")
+      |> Dagger.Container.from("alpine:3.22.2")
       |> Dagger.Container.with_exec(~w"apk add github-cli")
       |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
 
