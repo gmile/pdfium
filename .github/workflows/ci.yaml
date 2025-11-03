@@ -19,8 +19,6 @@ jobs:
         abi:
           - glibc
           - musl
-        platform:
-          - amd64
 
     steps:
       - uses: actions/checkout@v3
@@ -41,7 +39,7 @@ jobs:
           args: >-
             ci \
               --ref pull/${{ github.ref_name }} \
-              --platform-name linux/${{ matrix.platform }} \
+              --platform-name linux/amd64 \
               --abi ${{ matrix.abi }} \
               --github-token GITHUB_TOKEN \
             export \
@@ -64,8 +62,6 @@ jobs:
         abi:
           - glibc
           - musl
-        platform:
-          - arm64
 
     steps:
       - uses: actions/checkout@v3
@@ -86,7 +82,7 @@ jobs:
           args: >-
             ci \
               --ref pull/${{ github.ref_name }} \
-              --platform-name linux/${{ matrix.platform }} \
+              --platform-name linux/arm64 \
               --abi ${{ matrix.abi }} \
               --github-token GITHUB_TOKEN \
             export \
