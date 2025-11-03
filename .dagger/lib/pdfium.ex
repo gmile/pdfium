@@ -115,7 +115,7 @@ defmodule Pdfium do
 
     {build_image_name, nif_version} =
       case abi do
-        "glibc" -> {"hexpm/elixir:1.19.2-erlang-28.1-ubuntu-noble-20241015", "2.17"}
+        "glibc" -> {"hexpm/elixir:1.19.2-erlang-28.1-ubuntu-noble-20251001", "2.17"}
         "musl" -> {"hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2", "2.17"}
       end
 
@@ -372,7 +372,7 @@ defmodule Pdfium do
   defp with_test_image(dag, platform_name, "glibc") do
     dag
     |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.19.2-erlang-28.1-ubuntu-noble-20241015")
+    |> Dagger.Container.from("hexpm/elixir:1.19.2-erlang-28.1-ubuntu-noble-20251001")
     |> Dagger.Container.with_exec(~w"apt update")
     |> Dagger.Container.with_exec(~w"apt install tar")
   end
