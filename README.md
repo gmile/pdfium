@@ -89,6 +89,40 @@ Native bindings for pdfium project
      --abi musl --platform-name linux/arm64
    ```
 
+## Releasing manually
+
+1. open PR with a new libpdfium tag:
+
+    ```sh
+    env GITHUB_TOKEN=(gh auth token) dagger call prepare-release-pull-request \
+      --base stable \
+      --libpdfium-tag chromium/7506 \
+      --actor 41898282+github-actions[bot] \
+      --github-token GITHUB_TOKEN
+    ```
+
+2. wait until the PR is green, then merge it and release a package on hex:
+
+    ```sh
+    HEX_API_KEY=483a... GITHUB_TOKEN=(gh auth token) dagger call create-release \
+      --pr 99 \
+      --actor gmile \
+      --github-token GITHUB_TOKEN \
+      --hex-api-key HEX_API_KEY
+    ```
+
+## Updating OTP version (for macOS)
+
+```sh
+wget https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-amd64.tar.gz /tmp
+wget https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-arm64.tar.gz /tmp
+
+shasum -a 256 /tmp/OTP-28.1-macos-amd64.tar.gz
+shasum -a 256 /tmp/OTP-28.1-macos-arm64.tar.gz
+
+# Then edit custom/build.json by inserting the hashes
+```
+
 ## Known issues
 
 * Installing the library was tested and will work in macOS and inside Docker images built by Bob. Installing
