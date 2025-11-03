@@ -4,7 +4,7 @@ set -ex
 
 os=$1   # mac, linux, linux-musl
 arch=$2 # arm64, amd64
-otp=$3  # otp27.2, otp25.2
+otp=$3  # otp28.1, otp25.2
 
 eval $(jq -r --arg os "$os" \
            --arg arch "$arch" \
