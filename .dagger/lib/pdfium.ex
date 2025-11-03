@@ -138,7 +138,6 @@ defmodule Pdfium do
 
     otp_directory_name="/usr/local/lib/erlang"
 
-    # rename to libpdfium_extract_path
     libpdfium_extract_path="/pdfium"
 
     compile = ~w(
