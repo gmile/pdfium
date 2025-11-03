@@ -54,7 +54,7 @@ jobs:
           name: ${{ matrix.platform }}-${{ matrix.abi }}
           path: pdfium-nif-*
 
-  build-for-linux-arm:
+  build-for-linux-arm64:
     runs-on: ubuntu-24.04-arm
 
     strategy:
