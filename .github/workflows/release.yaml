@@ -14,11 +14,18 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Release
         if: github.event.pull_request.merged == true
         uses: dagger/dagger-for-github@v7.0.3
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
         with:
           version: 0.15.1

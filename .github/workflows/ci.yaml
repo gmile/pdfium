@@ -26,10 +26,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Precompile and test
         uses: dagger/dagger-for-github@v7.0.3
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           version: 0.15.1
           args: >-
@@ -44,7 +51,7 @@ jobs:
 
       - name: Upload files
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-${{ matrix.abi }}
@@ -52,10 +59,17 @@ jobs:
 
   build-for-macos:
     runs-on: macos-14
-    env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Checkout code
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         uses: actions/checkout@v4
 
       - name: Build
@@ -67,7 +81,7 @@ jobs:
 
       - name: Upload files
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         uses: actions/upload-artifact@v4
         with:
           name: macOS-builds
