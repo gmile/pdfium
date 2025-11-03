@@ -195,6 +195,8 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(link)
     |> Dagger.Container.with_exec(pack)
     |> Dagger.Container.file(output_path)
+    # Note: consider removing call to .file and return object instead, see:
+    # https://discord.com/channels/707636530424053791/1318250927056097363/1318507837986705439
   end
 
   defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
