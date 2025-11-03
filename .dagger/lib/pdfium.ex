@@ -4,8 +4,7 @@ defmodule Pdfium do
   defn check_latest_tag(github_token: Dagger.Secret.t()) :: String.t() do
     known_tag =
       dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium")
-      |> Dagger.GitRepository.with_auth_token(github_token)
+      |> Dagger.Client.git("https://github.com/gmile/pdfium", with_auth_token: github_token)
       |> Dagger.GitRepository.branch("stable")
       |> Dagger.GitRef.tree()
       |> Dagger.Directory.file("LIBPDFIUM_TAG")
@@ -34,8 +33,7 @@ defmodule Pdfium do
   ) :: Dagger.Container.t() do
     pdfium =
       dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium")
-      |> Dagger.GitRepository.with_auth_token(github_token)
+      |> Dagger.Client.git("https://github.com/gmile/pdfium", with_auth_token: github_token)
       |> Dagger.GitRepository.branch(base)
       |> Dagger.GitRef.tree()
 
@@ -217,8 +215,7 @@ defmodule Pdfium do
 
   defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.File.t() do
     dag()
-    |> Dagger.Client.git("https://github.com/gmile/pdfium")
-    |> Dagger.GitRepository.with_auth_token(github_token)
+    |> Dagger.Client.git("https://github.com/gmile/pdfium", with_auth_token: github_token)
     |> Dagger.GitRepository.ref(ref)
     |> Dagger.GitRef.tree()
     |> precompile(platform_name, abi)
@@ -278,8 +275,7 @@ defmodule Pdfium do
 
     pdfium =
       dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium")
-      |> Dagger.GitRepository.with_auth_token(github_token)
+      |> Dagger.Client.git("https://github.com/gmile/pdfium", with_auth_token: github_token)
       |> Dagger.GitRepository.branch(base_ref_name)
       |> Dagger.GitRef.tree()
 
