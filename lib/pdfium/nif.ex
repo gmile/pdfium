@@ -1,4 +1,4 @@
-defmodule PDFium do
+defmodule PDFium.NIF do
   @on_load :load_nif
 
   def load_nif do
