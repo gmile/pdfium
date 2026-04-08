@@ -11,6 +11,7 @@ defmodule PDFium.MixProject do
       version: @version,
       elixir: "~> 1.17",
       compilers: [:elixir_make] ++ Mix.compilers(),
+      make_env: fn -> %{"FINE_INCLUDE_DIR" => Fine.include_dir()} end,
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
@@ -48,6 +49,7 @@ defmodule PDFium.MixProject do
   defp deps do
     [
       {:image, "~> 0.1", only: :dev},
+      {:fine, "~> 0.1.0", runtime: false},
       {:cc_precompiler, "~> 0.1", runtime: false},
       {:elixir_make, "~> 0.1", runtime: false}
     ]
@@ -60,7 +62,7 @@ defmodule PDFium.MixProject do
         LICENSE
         mix.exs
         README.md
-        c_src/pdfium_nif.c
+        c_src/pdfium_nif.cpp
         Makefile
         VERSION
         LIBPDFIUM_TAG
