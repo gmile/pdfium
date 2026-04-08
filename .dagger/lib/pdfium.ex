@@ -140,34 +140,38 @@ defmodule Pdfium do
 
     libpdfium_extract_path="/pdfium"
 
+    fine_include_path="/fine"
+
     compile = ~w(
-      gcc
+      g++
       -march=native
       -Wall
       -Wextra
       -Werror
       -Wno-unused-parameter
-      -Wmissing-prototypes
       --pic
+      -fvisibility=hidden
       --optimize=2
-      --std c11
-      --include-directory #{otp_directory_name}/usr/include
-      --include-directory #{libpdfium_extract_path}/include
+      --std=c++17
+      --include-directory=#{otp_directory_name}/usr/include
+      --include-directory=#{libpdfium_extract_path}/include
+      --include-directory=#{fine_include_path}
       --compile
       --output=pdfium_nif.o
-      pdfium_nif.c
+      pdfium_nif.cpp
     )
 
     link = ~w(
-      gcc
+      g++
       pdfium_nif.o
       --shared
       --output=pdfium_nif.so
       --library-directory=#{otp_directory_name}/usr/lib
       --library-directory=#{libpdfium_extract_path}/lib
+      -static-libstdc++
       -Wl,-s
       -Wl,--disable-new-dtags
-      -Wl,-rpath=$ORIGIN
+      -Wl,-rpath,$ORIGIN
       -l:libpdfium.so
     )
 
@@ -182,12 +186,20 @@ defmodule Pdfium do
       --directory #{libpdfium_extract_path}/lib libpdfium.so
     )
 
+    fine_headers =
+      dag()
+      |> Dagger.Client.git("https://github.com/elixir-nx/fine")
+      |> Dagger.GitRepository.tag("v0.1.5")
+      |> Dagger.GitRef.tree()
+      |> Dagger.Directory.directory("c_include")
+
     dag()
     |> Dagger.Client.container(platform: platform_name)
     |> Dagger.Container.from(build_image_name)
     |> with_build_tools(abi)
     |> Dagger.Container.with_workdir("/build")
-    |> Dagger.Container.with_file("/build/pdfium_nif.c", Dagger.Directory.file(src_dir, "c_src/pdfium_nif.c"))
+    |> Dagger.Container.with_file("/build/pdfium_nif.cpp", Dagger.Directory.file(src_dir, "c_src/pdfium_nif.cpp"))
+    |> Dagger.Container.with_directory(fine_include_path, fine_headers)
     |> Dagger.Container.with_file("/build/pdfium.tar", Dagger.Client.http(dag(), pdfium_download_url))
     |> Dagger.Container.with_exec(~w"mkdir #{libpdfium_extract_path}")
     |> Dagger.Container.with_exec(~w"tar --extract --gunzip --directory=#{libpdfium_extract_path} --file=/build/pdfium.tar")
@@ -197,6 +209,8 @@ defmodule Pdfium do
     |> Dagger.Container.file(output_path)
     # Note: consider removing call to .file and return object instead, see:
     # https://discord.com/channels/707636530424053791/1318250927056097363/1318507837986705439
+    #
+    # Doing so could potentially make it possible to enter a container in "debug" mode
   end
 
   defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
@@ -312,7 +326,7 @@ defmodule Pdfium do
 
   def test_script do
     """
-    defmodule PDFium do
+    defmodule PDFium.NIF do
       @on_load :load_nif
 
       def load_nif do
@@ -328,8 +342,8 @@ defmodule Pdfium do
       def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
     end
 
-    {:ok, ref} = PDFium.load_document("./test.pdf")
-    {:ok, pages} = PDFium.get_page_count(ref)
+    {:ok, ref} = PDFium.NIF.load_document("./test.pdf")
+    {:ok, pages} = PDFium.NIF.get_page_count(ref)
 
     IO.inspect(pages, label: "pages")
     """
