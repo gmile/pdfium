@@ -27,7 +27,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           version: 0.20.6
-          args: check-latest-tag --github-token GITHUB_TOKEN
+          args: check-latest-tag --github-token env://GITHUB_TOKEN
 
       - name: Publish PR with version update
         if: ${{ fromJSON(steps.check-latest-tag.outputs.output).new_tag_available }}
@@ -39,4 +39,4 @@ jobs:
               --base stable \
               --libpdfium-tag ${{ fromJSON(steps.check-latest-tag.outputs.output).tag }} \
               --actor 41898282+github-actions[bot] \
-              --github-token GITHUB_TOKEN
+              --github-token env://GITHUB_TOKEN

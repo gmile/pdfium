@@ -43,7 +43,7 @@ jobs:
               --ref pull/${{ github.ref_name }} \
               --platform-name linux/${{ matrix.platform }} \
               --abi ${{ matrix.abi }} \
-              --github-token GITHUB_TOKEN \
+              --github-token env://GITHUB_TOKEN \
             export \
               --path . \
               --allowParentDirPath
@@ -88,7 +88,7 @@ jobs:
               --ref pull/${{ github.ref_name }} \
               --platform-name linux/${{ matrix.platform }} \
               --abi ${{ matrix.abi }} \
-              --github-token GITHUB_TOKEN \
+              --github-token env://GITHUB_TOKEN \
             export \
               --path . \
               --allowParentDirPath
