@@ -17,15 +17,24 @@ otp_directory_name=$(basename $otp_download_link .tar.gz)
 otp_archive_name=$(basename $otp_download_link)
 pdfium_directory_name=$(basename $pdfium_download_link .tgz)
 pdfium_archive_name=$(basename $pdfium_download_link)
-fine_directory_name="fine-${fine_tag}"
 test_directory_name=${os}-${arch}-${otp}-test
+
+# When invoked by elixir_make (mix compile), FINE_INCLUDE_DIR points at
+# the hex-packaged Fine headers. When invoked directly (CI), fetch them.
+if [ -n "$FINE_INCLUDE_DIR" ]; then
+  fine_include_dir=$FINE_INCLUDE_DIR
+  fine_directory_name=""
+else
+  fine_directory_name="fine-${fine_tag}"
+  fine_include_dir="${fine_directory_name}/c_include"
+fi
 
 # 1. Clean-up
 rm -fr $otp_directory_name
 rm -fr $otp_archive_name
 rm -fr $pdfium_directory_name
 rm -fr $pdfium_archive_name
-rm -fr $fine_directory_name
+[ -n "$fine_directory_name" ] && rm -fr $fine_directory_name
 rm -fr $test_directory_name
 
 mkdir $otp_directory_name
@@ -42,8 +51,10 @@ wget --quiet $pdfium_download_link
 shasum --algorithm 256 --check <<< "$pdfium_sha256sum  $pdfium_archive_name"
 tar --extract --gunzip --directory=$pdfium_directory_name < $pdfium_archive_name
 
-# 4. Fetch Fine headers
-git clone --quiet --depth 1 --branch $fine_tag https://github.com/elixir-nx/fine $fine_directory_name
+# 4. Fetch Fine headers (only if not supplied via FINE_INCLUDE_DIR)
+if [ -n "$fine_directory_name" ]; then
+  git clone --quiet --depth 1 --branch $fine_tag https://github.com/elixir-nx/fine $fine_directory_name
+fi
 
 # 5. Compile
 g++ \
@@ -58,7 +69,7 @@ g++ \
   --std=c++17 \
   --include-directory $otp_directory_name/usr/include \
   --include-directory $pdfium_directory_name/include \
-  --include-directory $fine_directory_name/c_include \
+  --include-directory $fine_include_dir \
   --compile \
   --output=pdfium_nif.o \
   ../c_src/pdfium_nif.cpp
@@ -111,7 +122,7 @@ rm -fr $otp_directory_name
 rm -fr $otp_archive_name
 rm -fr $pdfium_directory_name
 rm -fr $pdfium_archive_name
-rm -fr $fine_directory_name
+[ -n "$fine_directory_name" ] && rm -fr $fine_directory_name
 rm -fr $test_directory_name
 
 echo $output_name
