@@ -3,21 +3,23 @@
     {
       "os": "macos",
       "arch": "arm64",
-      "otp": "28.1",
-      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-mac-arm64.tgz",
-      "pdfium_sha256sum": "49babf3a146fced6d44014cd003b52d59b96dfd1be9ff6a88afc01c4b4d4f3d2",
-      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-arm64.tar.gz",
-      "otp_sha256sum": "831fcfb46929c752abf0a921409a46b306e7019061653323fab7f0958ad4db25",
+      "otp": "28.4.2",
+      "fine_tag": "v0.1.6",
+      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7506/pdfium-mac-arm64.tgz",
+      "pdfium_sha256sum": "afba59f29e654335d64e06c5c25fd652c515f4bce2b00a4cba008e6d31ef2c98",
+      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-28.4.2/OTP-28.4.2-macos-arm64.tar.gz",
+      "otp_sha256sum": "2d59451e66068ef306dde291cb4f1fe930f803b59429cd680d0fc067437c391f",
       "nif_version": "2.17"
     },
     {
       "os": "macos",
       "arch": "x86_64",
-      "otp": "28.1",
-      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6886/pdfium-mac-x64.tgz",
-      "pdfium_sha256sum": "1461985c13556b762a288115c39a5c2b1d22db159dca1eb0f1acf88b8087fc91",
-      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-amd64.tar.gz",
-      "otp_sha256sum": "821d8f2e039548b4343eadc7d25741e4d5b2280f429d14ded378f4de2067b83c",
+      "otp": "28.4.2",
+      "fine_tag": "v0.1.6",
+      "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7506/pdfium-mac-x64.tgz",
+      "pdfium_sha256sum": "2e76873aebc2f6b81b6487070574c2aa8270002fb36a4c1e4e194cd88a7e973d",
+      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-28.4.2/OTP-28.4.2-macos-amd64.tar.gz",
+      "otp_sha256sum": "d2268e549ad629e1ce396e558f1206099456af9748d860decb9d6cab0f89556f",
       "nif_version": "2.17"
     }
   ]
