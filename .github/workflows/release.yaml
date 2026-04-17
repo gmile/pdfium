@@ -33,5 +33,5 @@ jobs:
             create-release \
               --pr ${{ github.event.pull_request.number }} \
               --actor ${{ github.actor }} \
-              --github-token GITHUB_TOKEN \
-              --hex-api-key HEX_API_KEY
+              --github-token env://GITHUB_TOKEN \
+              --hex-api-key env://HEX_API_KEY
