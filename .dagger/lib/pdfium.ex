@@ -69,7 +69,7 @@ defmodule Pdfium do
 
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("alpine:3.22.2")
+    |> Dagger.Container.from("alpine:3.23.4")
     |> Dagger.Container.with_exec(~w"apk add git github-cli")
     |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
     |> Dagger.Container.with_directory("/pdfium", pdfium)
@@ -115,8 +115,8 @@ defmodule Pdfium do
 
     {build_image_name, nif_version} =
       case abi do
-        "glibc" -> {"hexpm/elixir:1.19.2-erlang-28.1-ubuntu-noble-20251001", "2.17"}
-        "musl" -> {"hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2", "2.17"}
+        "glibc" -> {"hexpm/elixir:1.19.5-erlang-28.4.2-ubuntu-noble-20260410", "2.17"}
+        "musl" -> {"hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4", "2.17"}
       end
 
     pdfium_download_url = "https://github.com/bblanchon/pdfium-binaries/releases/download/#{URI.encode_www_form(pdfium_tag)}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
@@ -189,7 +189,7 @@ defmodule Pdfium do
     fine_headers =
       dag()
       |> Dagger.Client.git("https://github.com/elixir-nx/fine")
-      |> Dagger.GitRepository.tag("v0.1.5")
+      |> Dagger.GitRepository.tag("v0.1.6")
       |> Dagger.GitRef.tree()
       |> Dagger.Directory.directory("c_include")
 
@@ -241,7 +241,7 @@ defmodule Pdfium do
     gh =
       dag()
       |> Dagger.Client.container()
-      |> Dagger.Container.from("alpine:3.22.2")
+      |> Dagger.Container.from("alpine:3.23.4")
       |> Dagger.Container.with_exec(~w"apk add github-cli")
       |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
 
@@ -301,7 +301,7 @@ defmodule Pdfium do
 
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2")
+    |> Dagger.Container.from("hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4")
     |> Dagger.Container.with_exec(~w"apk add git github-cli")
     |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
     |> Dagger.Container.with_directory("/pdfium", pdfium)
@@ -387,7 +387,7 @@ defmodule Pdfium do
   defp with_test_image(dag, platform_name, "glibc") do
     dag
     |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.19.2-erlang-28.1-ubuntu-noble-20251001")
+    |> Dagger.Container.from("hexpm/elixir:1.19.5-erlang-28.4.2-ubuntu-noble-20260410")
     |> Dagger.Container.with_exec(~w"apt update")
     |> Dagger.Container.with_exec(~w"apt install tar")
   end
@@ -395,7 +395,7 @@ defmodule Pdfium do
   defp with_test_image(dag, platform_name, "musl") do
     dag
     |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2")
+    |> Dagger.Container.from("hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4")
     |> Dagger.Container.with_exec(~w"apk add tar")
   end
 end
