@@ -23,9 +23,9 @@ jobs:
           - amd64
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.GH_APP_ID }}
@@ -51,7 +51,7 @@ jobs:
       - name: Upload files
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.platform }}-${{ matrix.abi }}
           path: pdfium-nif-*
@@ -68,9 +68,9 @@ jobs:
           - arm64
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.GH_APP_ID }}
@@ -96,7 +96,7 @@ jobs:
       - name: Upload files
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.platform }}-${{ matrix.abi }}
           path: pdfium-nif-*
@@ -104,7 +104,7 @@ jobs:
   build-for-macos:
     runs-on: macos-14
     steps:
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.GH_APP_ID }}
@@ -114,7 +114,7 @@ jobs:
       - name: Checkout code
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build
         run: |
@@ -126,7 +126,7 @@ jobs:
       - name: Upload files
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macOS-builds
           path: custom/pdfium-nif-*
