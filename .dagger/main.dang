@@ -110,6 +110,32 @@ type Pdfium {
     null
   }
 
+  """
+  Open a release preparation pull request when a newer libpdfium tag exists.
+  """
+  pub prepareLatestReleasePullRequest(
+    base: String!,
+    packageVersion: String,
+    githubToken: Secret!,
+    actor: String!,
+  ): Void {
+    let check = latestTagCheck(githubToken)
+
+    if (check.newTagAvailable) {
+      prepareReleasePullRequest(
+        base: base,
+        packageVersion: packageVersion,
+        libpdfiumTag: check.latestTag,
+        githubToken: githubToken,
+        actor: actor,
+      )
+    } else {
+      null
+    }
+
+    null
+  }
+
   let collectBuildInfo(srcDir: Directory!, platformName: String!, abi: String!): BuildInfo! {
     let erlangPlatformName = if (platformName == "linux/arm64") {
       "aarch64"
@@ -236,15 +262,15 @@ type Pdfium {
   """
   Test a precompiled pdfium NIF archive.
   """
-  pub test(precompiled: File!, platformName: String!, abi: String!): File! {
+  pub test(precompiled: File!, srcDir: Directory!, platformName: String!, abi: String!): File! {
     let precompiledPath = "/test/" + precompiled.name
 
     withTestImage(platformName, abi)
       .withWorkdir("/test")
       .withFile(precompiledPath, precompiled)
       .withExec(["tar", "--extract", "--directory=/test/", "--file=" + precompiledPath])
-      .withNewFile("/test/test.exs", testScript)
-      .withNewFile("/test/test.pdf", testPdf)
+      .withFile("/test/test.exs", srcDir.file("custom/test.exs"))
+      .withFile("/test/test.pdf", srcDir.file("custom/test.pdf"))
       .withExec(["elixir", "test.exs"])
       .file(precompiledPath)
   }
@@ -253,7 +279,9 @@ type Pdfium {
   Build and test a git ref from gmile/pdfium.
   """
   pub ci(ref: String!, platformName: String!, abi: String!, githubToken: Secret!): File! {
-    test(precompile(sourceTree(ref, githubToken), platformName, abi), platformName, abi)
+    let srcDir = sourceTree(ref, githubToken)
+
+    test(precompile(srcDir, platformName, abi), srcDir, platformName, abi)
   }
 
   """
@@ -368,52 +396,6 @@ type Pdfium {
       .withExec(["awk", "-F.", "{ printf \"%s.%s.%s\", $1, $2, $3 + 1 }", "/VERSION"])
       .stdout
       .trimSpace
-  }
-
-  let testScript: String! {
-    """
-    defmodule PDFium.NIF do
-      @on_load :load_nif
-
-      def load_nif do
-        :erlang.load_nif(~c"./pdfium_nif", 0)
-      end
-
-      def load_document(_filename), do: :erlang.nif_error(:nif_not_loaded)
-
-      def close_document(_document), do: :erlang.nif_error(:nif_not_loaded)
-
-      def get_page_count(_document), do: :erlang.nif_error(:nif_not_loaded)
-
-      def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
-    end
-
-    {:ok, ref} = PDFium.NIF.load_document("./test.pdf")
-    {:ok, pages} = PDFium.NIF.get_page_count(ref)
-
-    IO.inspect(pages, label: "pages")
-    """
-  }
-
-  let testPdf: String! {
-    """
-    %PDF-1.0
-    1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
-    2 0 obj<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>endobj
-    3 0 obj<</Type/Page/Parent 2 0 R>>endobj
-    4 0 obj<</Type/Page/Parent 2 0 R>>endobj
-    xref
-    0 5
-    0000000000 65535 f
-    0000000009 00000 n
-    0000000053 00000 n
-    0000000102 00000 n
-    0000000148 00000 n
-    trailer<</Size 5/Root 1 0 R>>
-    startxref
-    194
-    %%EOF
-    """
   }
 
   let withBuildTools(base: Container!, abi: String!): Container! {

@@ -1,3 +1,0 @@
-FROM hexpm/elixir:1.20.1-erlang-29.0.2-ubuntu-resolute-20260421
-
-RUN apt update; apt install build-essential tar jq wget git --yes
