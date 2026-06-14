@@ -8,37 +8,54 @@ type Pdfium {
     pub outputFilename: String!
   }
 
+  let repositorySlug: String! {
+    "gmile/pdfium"
+  }
+
+  let repositoryURL: String! {
+    "https://github.com/gmile/pdfium"
+  }
+
+  let pdfiumBinariesURL: String! {
+    "https://github.com/bblanchon/pdfium-binaries"
+  }
+
+  let fineURL: String! {
+    "https://github.com/elixir-nx/fine"
+  }
+
+  let fineTag: String! {
+    "v0.1.6"
+  }
+
+  let alpineImage: String! {
+    "alpine:3.23.4"
+  }
+
+  let glibcImage: String! {
+    "hexpm/elixir:1.20.1-erlang-29.0.2-ubuntu-resolute-20260421"
+  }
+
+  let muslImage: String! {
+    "hexpm/elixir:1.20.1-erlang-29.0.2-alpine-3.23.4"
+  }
+
+  let nifVersion: String! {
+    "2.17"
+  }
+
   """
   Check whether bblanchon's pdfium-binaries project has a newer Chromium tag.
   """
   pub checkLatestTag(githubToken: Secret!): String! {
-    container
-      .from("alpine:3.23.4")
-      .withExec(["apk", "add", "git", "github-cli", "jq"])
-      .withSecretVariable("GH_TOKEN", githubToken)
-      .withExec([
-        "sh",
-        "-c",
-        """
-        set -eu
-        gh auth setup-git
-        git clone --depth 1 --branch stable https://github.com/gmile/pdfium /pdfium
-        known_tag="$(cat /pdfium/LIBPDFIUM_TAG)"
-        latest_tag="$(
-          git ls-remote --tags --sort=-v:refname https://github.com/bblanchon/pdfium-binaries.git 'refs/tags/chromium/*' |
-            head -n 1 |
-            sed 's#.*refs/tags/##'
-        )"
+    let knownTag = sourceTree("stable", githubToken).file("LIBPDFIUM_TAG").contents.trimSpace
+    let latestTag = latestLibpdfiumTag
 
-        if [ "$latest_tag" '>' "$known_tag" ]; then
-          printf '{"new_tag_available":true,"tag":%s}\n' "$(printf '%s' "$latest_tag" | jq --raw-input --slurp .)"
-        else
-          printf '{"new_tag_available":false}\n'
-        fi
-        """,
-      ])
-      .stdout
-      .trimSpace
+    if (latestTag > knownTag) {
+      "{\"new_tag_available\":true,\"tag\":" + toJSON(latestTag) + "}"
+    } else {
+      "{\"new_tag_available\":false}"
+    }
   }
 
   """
@@ -51,53 +68,47 @@ type Pdfium {
     githubToken: Secret!,
     actor: String!,
   ): Container! {
-    container
-      .from("alpine:3.23.4")
-      .withExec(["apk", "add", "git", "github-cli"])
-      .withSecretVariable("GH_TOKEN", githubToken)
-      .withEnvVariable("BASE", base)
-      .withEnvVariable("PACKAGE_VERSION", if (packageVersion == null) { "" } else { packageVersion })
-      .withEnvVariable("LIBPDFIUM_TAG", if (libpdfiumTag == null) { "" } else { libpdfiumTag })
+    let srcDir = sourceTree(base, githubToken)
+    let resolvedPackageVersion = if (packageVersion == null) {
+      nextPatchVersion(srcDir.file("VERSION").contents.trimSpace)
+    } else {
+      packageVersion
+    }
+    let resolvedLibpdfiumTag = if (libpdfiumTag == null) {
+      latestLibpdfiumTag
+    } else {
+      libpdfiumTag
+    }
+    let branchName = "update-libpdfium-to-" + resolvedLibpdfiumTag
+
+    githubCLI(githubToken)
+      .withDirectory("/pdfium", sourceTreeWithGit(base, githubToken))
+      .withWorkdir("/pdfium")
       .withEnvVariable("ACTOR", actor)
+      .withExec(["gh", "auth", "setup-git"])
+      .withExec(["git", "switch", "--create", branchName])
+      .withExec(["git", "config", "user.name", actor])
+      .withExec(["git", "config", "user.email", actor + "@users.noreply.github.com"])
+      .withNewFile("/pdfium/LIBPDFIUM_TAG", resolvedLibpdfiumTag)
+      .withExec(["git", "add", "LIBPDFIUM_TAG"])
+      .withExec(["git", "commit", "--message", "Update libpdfium tag to " + resolvedLibpdfiumTag])
+      .withNewFile("/pdfium/VERSION", resolvedPackageVersion)
+      .withExec(["git", "add", "VERSION"])
+      .withExec(["git", "commit", "--message", "Update package to version " + resolvedPackageVersion])
+      .withExec(["git", "push", "origin", branchName])
       .withExec([
-        "sh",
-        "-c",
-        """
-        set -eu
-        gh auth setup-git
-        git clone https://github.com/gmile/pdfium /pdfium
-        cd /pdfium
-        git fetch origin "$BASE"
-        git switch --create release-base "origin/$BASE"
-
-        if [ -z "$PACKAGE_VERSION" ]; then
-          PACKAGE_VERSION="$(awk -F. '{ printf "%s.%s.%s", $1, $2, $3 + 1 }' VERSION)"
-        fi
-
-        if [ -z "$LIBPDFIUM_TAG" ]; then
-          LIBPDFIUM_TAG="$(
-            git ls-remote --tags --sort=-v:refname https://github.com/bblanchon/pdfium-binaries.git 'refs/tags/chromium/*' |
-              head -n 1 |
-              sed 's#.*refs/tags/##'
-          )"
-        fi
-
-        new_branch_name="update-libpdfium-to-${LIBPDFIUM_TAG}"
-        git switch --create "$new_branch_name"
-        git config user.name "$ACTOR"
-        git config user.email "${ACTOR}@users.noreply.github.com"
-
-        printf '%s' "$LIBPDFIUM_TAG" > LIBPDFIUM_TAG
-        git add LIBPDFIUM_TAG
-        git commit --message "Update libpdfium tag to ${LIBPDFIUM_TAG}"
-
-        printf '%s' "$PACKAGE_VERSION" > VERSION
-        git add VERSION
-        git commit --message "Update package to version ${PACKAGE_VERSION}"
-
-        git push origin "$new_branch_name"
-        gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium --title "Bump libpdfium to ${LIBPDFIUM_TAG} tag"
-        """,
+        "gh",
+        "pr",
+        "create",
+        "--base",
+        base,
+        "--reviewer",
+        "gmile",
+        "--fill",
+        "--repo",
+        repositorySlug,
+        "--title",
+        "Bump libpdfium to " + resolvedLibpdfiumTag + " tag",
       ])
   }
 
@@ -135,9 +146,9 @@ type Pdfium {
     }
 
     let buildImageName = if (abi == "glibc") {
-      "hexpm/elixir:1.19.5-erlang-28.4.2-ubuntu-noble-20260410"
+      glibcImage
     } else if (abi == "musl") {
-      "hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4"
+      muslImage
     } else {
       raise "unsupported abi: " + abi
     }
@@ -145,7 +156,6 @@ type Pdfium {
     let pdfiumTag = srcDir.file("LIBPDFIUM_TAG").contents.trimSpace
     let encodedPdfiumTag = pdfiumTag.replace("/", "%2F")
     let packageVersion = srcDir.file("VERSION").contents.trimSpace
-    let nifVersion = "2.17"
 
     BuildInfo {
       buildImageName: buildImageName,
@@ -163,6 +173,7 @@ type Pdfium {
     let libpdfiumExtractPath = "/pdfium"
     let fineIncludePath = "/fine"
     let outputPath = "/build/" + info.outputFilename
+    let fineHeaders = git(url: fineURL).tag(fineTag).tree.directory("c_include")
 
     let compile = [
       "g++",
@@ -213,12 +224,8 @@ type Pdfium {
     withBuildTools(container(platform: platformName).from(info.buildImageName), abi)
       .withWorkdir("/build")
       .withFile("/build/pdfium_nif.cpp", srcDir.file("c_src/pdfium_nif.cpp"))
-      .withExec([
-        "sh",
-        "-c",
-        "git clone --depth 1 --branch v0.1.6 https://github.com/elixir-nx/fine /tmp/fine && mkdir -p /fine && cp -R /tmp/fine/c_include/. /fine/",
-      ])
-      .withExec(["wget", "--output-document=/build/pdfium.tar", info.pdfiumDownloadUrl])
+      .withDirectory(fineIncludePath, fineHeaders)
+      .withFile("/build/pdfium.tar", http(url: info.pdfiumDownloadUrl))
       .withExec(["mkdir", libpdfiumExtractPath])
       .withExec(["tar", "--extract", "--gunzip", "--directory=" + libpdfiumExtractPath, "--file=/build/pdfium.tar"])
       .withExec(compile)
@@ -247,69 +254,64 @@ type Pdfium {
   Build and test a git ref from gmile/pdfium.
   """
   pub ci(ref: String!, platformName: String!, abi: String!, githubToken: Secret!): File! {
-    let srcDir = container
-      .from("alpine:3.23.4")
-      .withExec(["apk", "add", "git", "github-cli"])
-      .withSecretVariable("GH_TOKEN", githubToken)
-      .withEnvVariable("REF", ref)
-      .withExec([
-        "sh",
-        "-c",
-        """
-        set -eu
-        gh auth setup-git
-        git clone https://github.com/gmile/pdfium /src
-        cd /src
-        git checkout "$REF"
-        """,
-      ])
-      .directory("/src")
-
-    test(precompile(srcDir, platformName, abi), platformName, abi)
+    test(precompile(sourceTree(ref, githubToken), platformName, abi), platformName, abi)
   }
 
   """
   Create a GitHub release from the successful CI artifacts for a pull request.
   """
   pub createRelease(pr: String!, actor: String!, githubToken: Secret!, hexApiKey: Secret!): Container! {
+    let headRef = githubCLI(githubToken)
+      .withExec(["gh", "pr", "view", pr, "--json", "headRefOid", "--jq", ".headRefOid", "--repo", repositorySlug])
+      .stdout
+      .trimSpace
+    let baseRefName = githubCLI(githubToken)
+      .withExec(["gh", "pr", "view", pr, "--json", "baseRefName", "--jq", ".baseRefName", "--repo", repositorySlug])
+      .stdout
+      .trimSpace
+    let runID = githubCLI(githubToken)
+      .withExec([
+        "gh",
+        "run",
+        "list",
+        "--workflow",
+        "ci.yaml",
+        "--commit",
+        headRef,
+        "--status",
+        "success",
+        "--limit",
+        "1",
+        "--json",
+        "databaseId",
+        "--repo",
+        repositorySlug,
+        "--jq",
+        ".[0].databaseId",
+      ])
+      .stdout
+      .trimSpace
+    let packageVersion = sourceTree(baseRefName, githubToken).file("VERSION").contents.trimSpace
+
     container
-      .from("hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4")
+      .from(muslImage)
       .withExec(["apk", "add", "git", "github-cli", "coreutils", "perl-utils"])
+      .withDirectory("/pdfium", sourceTreeWithGit(baseRefName, githubToken))
+      .withWorkdir("/pdfium")
+      .withSecretVariable("GH_TOKEN", githubToken)
       .withSecretVariable("GITHUB_TOKEN", githubToken)
       .withSecretVariable("HEX_API_KEY", hexApiKey)
-      .withEnvVariable("PR", pr)
       .withEnvVariable("ACTOR", actor)
+      .withEnvVariable("PACKAGE_VERSION", packageVersion)
+      .withExec(["gh", "auth", "setup-git"])
+      .withExec(["gh", "run", "download", runID, "--dir", "/artifacts", "--repo", repositorySlug])
+      .withExec(["git", "config", "user.name", actor])
+      .withExec(["git", "config", "user.email", actor + "@users.noreply.github.com"])
       .withExec([
         "sh",
         "-c",
         """
         set -eu
-
-        gh auth setup-git
-        pr_data="$(gh pr view "$PR" --json headRefOid,baseRefName --jq '.headRefOid + " " + .baseRefName' --repo gmile/pdfium)"
-        head_ref="${pr_data%% *}"
-        base_ref_name="${pr_data#* }"
-
-        run_id="$(
-          gh run list \
-            --workflow ci.yaml \
-            --commit "$head_ref" \
-            --status success \
-            --limit 1 \
-            --json databaseId \
-            --repo gmile/pdfium \
-            --jq '.[0].databaseId'
-        )"
-
-        gh run download "$run_id" --dir /artifacts --repo gmile/pdfium
-
-        git clone https://github.com/gmile/pdfium /pdfium
-        cd /pdfium
-        git fetch origin "$base_ref_name"
-        git checkout "$base_ref_name"
-        git config user.name "$ACTOR"
-        git config user.email "${ACTOR}@users.noreply.github.com"
-
         {
           printf '%%{\n'
           find /artifacts -name '*.tar.gz' -type f | sort | while read -r artifact; do
@@ -318,18 +320,55 @@ type Pdfium {
           done
           printf '}\n'
         } > checksum.exs
-
-        package_version="$(cat VERSION)"
-        git add checksum.exs
-        git commit --message "Update checksums"
-        git tag "v${package_version}" --message "Tagging v${package_version} release"
-        git push origin "HEAD:${base_ref_name}" "v${package_version}"
-        find /artifacts -name '*.tar.gz' -type f -print0 | xargs -0 gh release create "v${package_version}" --repo gmile/pdfium
-        mix local.hex --force
-        mix do deps.get + deps.compile
-        mix hex.publish package --yes
         """,
       ])
+      .withExec(["git", "add", "checksum.exs"])
+      .withExec(["git", "commit", "--message", "Update checksums"])
+      .withExec(["git", "tag", "v" + packageVersion, "--message", "Tagging v" + packageVersion + " release"])
+      .withExec(["git", "push", "origin", "HEAD:" + baseRefName, "v" + packageVersion])
+      .withExec([
+        "sh",
+        "-c",
+        "find /artifacts -name '*.tar.gz' -type f -print0 | xargs -0 gh release create \"v${PACKAGE_VERSION}\" --repo " + repositorySlug,
+      ])
+      .withExec(["mix", "local.hex", "--force"])
+      .withExec(["mix", "do", "deps.get", "+", "deps.compile"])
+      .withExec(["mix", "hex.publish", "package", "--yes"])
+  }
+
+  let sourceTree(ref: String!, githubToken: Secret!): Directory! {
+    git(url: repositoryURL, httpAuthToken: githubToken).ref(ref).tree(discardGitDir: true)
+  }
+
+  let sourceTreeWithGit(ref: String!, githubToken: Secret!): Directory! {
+    git(url: repositoryURL, httpAuthToken: githubToken).ref(ref).tree(discardGitDir: false)
+  }
+
+  let latestLibpdfiumTag: String! {
+    container
+      .from(alpineImage)
+      .withExec(["apk", "add", "coreutils"])
+      .withNewFile("/tags", git(url: pdfiumBinariesURL).tags(patterns: ["refs/tags/chromium/*", "chromium/*"]).join("\n"))
+      .withExec(["sh", "-c", "sed 's#^refs/tags/##' /tags | sort --version-sort | tail --lines 1"])
+      .stdout
+      .trimSpace
+  }
+
+  let nextPatchVersion(version: String!): String! {
+    container
+      .from(alpineImage)
+      .withNewFile("/VERSION", version)
+      .withExec(["awk", "-F.", "{ printf \"%s.%s.%s\", $1, $2, $3 + 1 }", "/VERSION"])
+      .stdout
+      .trimSpace
+  }
+
+  let githubCLI(githubToken: Secret!): Container! {
+    container
+      .from(alpineImage)
+      .withExec(["apk", "add", "git", "github-cli"])
+      .withSecretVariable("GH_TOKEN", githubToken)
+      .withSecretVariable("GITHUB_TOKEN", githubToken)
   }
 
   let testScript: String! {
@@ -382,10 +421,10 @@ type Pdfium {
     if (abi == "glibc") {
       base
         .withExec(["apt", "update"])
-        .withExec(["apt", "install", "build-essential", "tar", "jq", "wget", "git", "--yes"])
+        .withExec(["apt", "install", "build-essential", "tar", "--yes"])
     } else if (abi == "musl") {
       base
-        .withExec(["apk", "add", "build-base", "tar", "jq", "coreutils", "wget", "git"])
+        .withExec(["apk", "add", "build-base", "tar", "coreutils"])
     } else {
       raise "unsupported abi: " + abi
     }
@@ -394,12 +433,12 @@ type Pdfium {
   let withTestImage(platformName: String!, abi: String!): Container! {
     if (abi == "glibc") {
       container(platform: platformName)
-        .from("hexpm/elixir:1.19.5-erlang-28.4.2-ubuntu-noble-20260410")
+        .from(glibcImage)
         .withExec(["apt", "update"])
         .withExec(["apt", "install", "tar", "--yes"])
     } else if (abi == "musl") {
       container(platform: platformName)
-        .from("hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4")
+        .from(muslImage)
         .withExec(["apk", "add", "tar"])
     } else {
       raise "unsupported abi: " + abi

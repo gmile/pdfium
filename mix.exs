@@ -9,7 +9,7 @@ defmodule PDFium.MixProject do
       description: "Elixir interface for pdfium",
       link: "https://github.com/gmile/pdfium",
       version: @version,
-      elixir: "~> 1.17",
+      elixir: "~> 1.20",
       compilers: [:elixir_make] ++ Mix.compilers(),
       make_env: fn -> %{"FINE_INCLUDE_DIR" => Fine.include_dir()} end,
       start_permanent: Mix.env() == :prod,

@@ -114,13 +114,13 @@ Native bindings for pdfium project
 ## Updating OTP version (for macOS)
 
 ```sh
-wget https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-amd64.tar.gz /tmp
-wget https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-arm64.tar.gz /tmp
+curl -L --fail --output /tmp/OTP-29.0.2-macos-amd64.tar.gz https://github.com/erlef/otp_builds/releases/download/OTP-29.0.2/OTP-29.0.2-macos-amd64.tar.gz
+curl -L --fail --output /tmp/OTP-29.0.2-macos-arm64.tar.gz https://github.com/erlef/otp_builds/releases/download/OTP-29.0.2/OTP-29.0.2-macos-arm64.tar.gz
 
-shasum -a 256 /tmp/OTP-28.1-macos-amd64.tar.gz
-shasum -a 256 /tmp/OTP-28.1-macos-arm64.tar.gz
+shasum -a 256 /tmp/OTP-29.0.2-macos-amd64.tar.gz
+shasum -a 256 /tmp/OTP-29.0.2-macos-arm64.tar.gz
 
-# Then edit custom/build.json by inserting the hashes
+# Then edit custom/builds.json by inserting the hashes
 ```
 
 ## Known issues
