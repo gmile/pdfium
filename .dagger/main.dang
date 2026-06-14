@@ -250,7 +250,7 @@ type Pdfium {
   """
   Create a GitHub release from the successful CI artifacts for a pull request.
   """
-  pub createRelease(pr: String!, actor: String!, githubToken: Secret!, hexApiKey: Secret!): Container! {
+  pub createRelease(pr: String!, actor: String!, githubToken: Secret!, hexApiKey: Secret!): Void {
     let github = gh(token: githubToken, repo: repositorySlug)
     let headRef = github
       .exec(["pr", "view", pr, "--json", "headRefOid", "--jq", ".headRefOid"])
@@ -280,21 +280,12 @@ type Pdfium {
       .stdout
       .trimSpace
     let packageVersion = sourceTree(baseRefName, githubToken).file("VERSION").contents.trimSpace
-
-    container
-      .from(muslImage)
-      .withExec(["apk", "add", "git", "github-cli", "coreutils", "perl-utils"])
+    let artifacts = github.exec(["run", "download", runID, "--dir", "/artifacts"]).directory("/artifacts")
+    let checksumSource = container
+      .from(alpineImage)
       .withDirectory("/pdfium", sourceTreeWithGit(baseRefName, githubToken))
+      .withDirectory("/artifacts", artifacts)
       .withWorkdir("/pdfium")
-      .withSecretVariable("GH_TOKEN", githubToken)
-      .withSecretVariable("GITHUB_TOKEN", githubToken)
-      .withSecretVariable("HEX_API_KEY", hexApiKey)
-      .withEnvVariable("ACTOR", actor)
-      .withEnvVariable("PACKAGE_VERSION", packageVersion)
-      .withExec(["gh", "auth", "setup-git"])
-      .withDirectory("/artifacts", github.exec(["run", "download", runID, "--dir", "/artifacts"]).directory("/artifacts"))
-      .withExec(["git", "config", "user.name", actor])
-      .withExec(["git", "config", "user.email", actor + "@users.noreply.github.com"])
       .withExec([
         "sh",
         "-c",
@@ -303,25 +294,44 @@ type Pdfium {
         {
           printf '%%{\n'
           find /artifacts -name '*.tar.gz' -type f | sort | while read -r artifact; do
-            hash="$(shasum --algorithm 256 "$artifact" | awk '{ print $1 }')"
+            hash="$(sha256sum "$artifact" | awk '{ print $1 }')"
             printf '  "%s" => "sha256:%s",\n' "$(basename "$artifact")" "$hash"
           done
           printf '}\n'
         } > checksum.exs
         """,
       ])
-      .withExec(["git", "add", "checksum.exs"])
-      .withExec(["git", "commit", "--message", "Update checksums"])
-      .withExec(["git", "tag", "v" + packageVersion, "--message", "Tagging v" + packageVersion + " release"])
-      .withExec(["git", "push", "origin", "HEAD:" + baseRefName, "v" + packageVersion])
-      .withExec([
-        "sh",
-        "-c",
-        "find /artifacts -name '*.tar.gz' -type f -print0 | xargs -0 gh release create \"v${PACKAGE_VERSION}\" --repo " + repositorySlug,
-      ])
+      .directory("/pdfium")
+    let releasedSource = gh(token: githubToken, repo: repositorySlug, source: checksumSource)
+      .withGitExec(["config", "user.name", actor])
+      .withGitExec(["config", "user.email", actor + "@users.noreply.github.com"])
+      .withGitExec(["add", "checksum.exs"])
+      .withGitExec(["commit", "--message", "Update checksums"])
+      .withGitExec(["tag", "v" + packageVersion, "--message", "Tagging v" + packageVersion + " release"])
+      .withGitExec(["push", "origin", "HEAD:" + baseRefName, "v" + packageVersion])
+    let artifactFiles = artifacts.glob("**/*.tar.gz").map { path =>
+      artifacts.file(path)
+    }
+
+    releasedSource
+      .release
+      .create(
+        tag: "v" + packageVersion,
+        title: "v" + packageVersion,
+        files: artifactFiles,
+      )
+
+    container
+      .from(muslImage)
+      .withDirectory("/pdfium", checksumSource)
+      .withWorkdir("/pdfium")
+      .withSecretVariable("HEX_API_KEY", hexApiKey)
       .withExec(["mix", "local.hex", "--force"])
       .withExec(["mix", "do", "deps.get", "+", "deps.compile"])
       .withExec(["mix", "hex.publish", "package", "--yes"])
+      .sync
+
+    null
   }
 
   let sourceTree(ref: String!, githubToken: Secret!): Directory! {
