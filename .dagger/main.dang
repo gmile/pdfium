@@ -4,8 +4,14 @@ Dagger automation for building, testing, and releasing pdfium.
 type Pdfium {
   type BuildInfo {
     pub buildImageName: String!
-    pub pdfiumDownloadUrl: String!
+    pub pdfiumArchive: File!
     pub outputFilename: String!
+  }
+
+  type LatestTagCheck {
+    pub knownTag: String!
+    pub latestTag: String!
+    pub newTagAvailable: Boolean!
   }
 
   let repositorySlug: String! {
@@ -47,14 +53,14 @@ type Pdfium {
   """
   Check whether bblanchon's pdfium-binaries project has a newer Chromium tag.
   """
-  pub checkLatestTag(githubToken: Secret!): String! {
+  pub latestTagCheck(githubToken: Secret!): LatestTagCheck! {
     let knownTag = sourceTree("stable", githubToken).file("LIBPDFIUM_TAG").contents.trimSpace
     let latestTag = latestLibpdfiumTag
 
-    if (latestTag > knownTag) {
-      "{\"new_tag_available\":true,\"tag\":" + toJSON(latestTag) + "}"
-    } else {
-      "{\"new_tag_available\":false}"
+    LatestTagCheck {
+      knownTag: knownTag,
+      latestTag: latestTag,
+      newTagAvailable: latestTag > knownTag,
     }
   }
 
@@ -67,7 +73,7 @@ type Pdfium {
     libpdfiumTag: String,
     githubToken: Secret!,
     actor: String!,
-  ): Void! {
+  ): Void {
     let srcDir = sourceTree(base, githubToken)
     let resolvedPackageVersion = if (packageVersion == null) {
       nextPatchVersion(srcDir.file("VERSION").contents.trimSpace)
@@ -100,6 +106,8 @@ type Pdfium {
         fill: true,
         title: "Bump libpdfium to " + resolvedLibpdfiumTag + " tag",
       )
+
+    null
   }
 
   let collectBuildInfo(srcDir: Directory!, platformName: String!, abi: String!): BuildInfo! {
@@ -146,10 +154,11 @@ type Pdfium {
     let pdfiumTag = srcDir.file("LIBPDFIUM_TAG").contents.trimSpace
     let encodedPdfiumTag = pdfiumTag.replace("/", "%2F")
     let packageVersion = srcDir.file("VERSION").contents.trimSpace
+    let pdfiumDownloadUrl = "https://github.com/bblanchon/pdfium-binaries/releases/download/" + encodedPdfiumTag + "/pdfium-" + pdfiumAbiName + "-" + pdfiumPlatformName + ".tgz"
 
     BuildInfo {
       buildImageName: buildImageName,
-      pdfiumDownloadUrl: "https://github.com/bblanchon/pdfium-binaries/releases/download/" + encodedPdfiumTag + "/pdfium-" + pdfiumAbiName + "-" + pdfiumPlatformName + ".tgz",
+      pdfiumArchive: http(url: pdfiumDownloadUrl, name: "pdfium.tar"),
       outputFilename: "pdfium-nif-" + nifVersion + "-" + erlangPlatformName + "-" + erlangAbiName + "-" + packageVersion + ".tar.gz",
     }
   }
@@ -215,8 +224,8 @@ type Pdfium {
       .withWorkdir("/build")
       .withFile("/build/pdfium_nif.cpp", srcDir.file("c_src/pdfium_nif.cpp"))
       .withDirectory(fineIncludePath, fineHeaders)
-      .withFile("/build/pdfium.tar", http(url: info.pdfiumDownloadUrl))
-      .withExec(["mkdir", libpdfiumExtractPath])
+      .withFile("/build/pdfium.tar", info.pdfiumArchive)
+      .withDirectory(libpdfiumExtractPath, directory)
       .withExec(["tar", "--extract", "--gunzip", "--directory=" + libpdfiumExtractPath, "--file=/build/pdfium.tar"])
       .withExec(compile)
       .withExec(link)
