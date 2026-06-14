@@ -1,6 +1,6 @@
-set -ex
+#!/usr/bin/env bash
 
-# TODO: script to update builds.json
+set -ex
 
 os=$1   # mac, linux, linux-musl
 arch=$2 # arm64, amd64
@@ -15,6 +15,17 @@ eval $(jq -r --arg os "$os" \
 
 otp_directory_name=$(basename $otp_download_link .tar.gz)
 otp_archive_name=$(basename $otp_download_link)
+pdfium_tag=$(cat ../LIBPDFIUM_TAG)
+encoded_pdfium_tag=${pdfium_tag//\//%2F}
+if [ "$arch" = "arm64" ]; then
+  pdfium_arch="arm64"
+elif [ "$arch" = "x86_64" ]; then
+  pdfium_arch="x64"
+else
+  echo "unsupported macOS arch: $arch" >&2
+  exit 1
+fi
+pdfium_download_link="https://github.com/bblanchon/pdfium-binaries/releases/download/${encoded_pdfium_tag}/pdfium-mac-${pdfium_arch}.tgz"
 pdfium_directory_name=$(basename $pdfium_download_link .tgz)
 pdfium_archive_name=$(basename $pdfium_download_link)
 test_directory_name=${os}-${arch}-${otp}-test
@@ -48,7 +59,6 @@ tar --extract --gunzip --directory=$otp_directory_name < $otp_archive_name
 
 # 3. Download PDFium
 wget --quiet $pdfium_download_link
-shasum --algorithm 256 --check <<< "$pdfium_sha256sum  $pdfium_archive_name"
 tar --extract --gunzip --directory=$pdfium_directory_name < $pdfium_archive_name
 
 # 4. Fetch Fine headers (only if not supplied via FINE_INCLUDE_DIR)

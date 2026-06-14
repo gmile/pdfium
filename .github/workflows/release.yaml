@@ -1,18 +1,34 @@
 name: Release
 
 on:
-  pull_request:
-    types:
-      - closed
-    branches:
-      - stable
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version to release. Defaults to the next patch version when libpdfium changed.
+        required: false
+        type: string
+      libpdfium_tag:
+        description: libpdfium tag to release. Defaults to the latest bblanchon/pdfium-binaries Chromium tag.
+        required: false
+        type: string
+  schedule:
+    - cron: 0 13 * * 1
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.release.outputs.release }}
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: main
 
       - uses: actions/create-github-app-token@v3
         id: app-token
@@ -21,8 +37,118 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
-      - name: Release
-        if: github.event.pull_request.merged == true
+      - name: Prepare release
+        uses: dagger/dagger-for-github@v8.4.1
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          version: 0.21.6
+          args: >-
+            prepare-release \
+              --ref main \
+              --version "${{ inputs.version }}" \
+              --libpdfium-tag "${{ inputs.libpdfium_tag }}" \
+              --actor 41898282+github-actions[bot] \
+              --github-token env://GITHUB_TOKEN \
+            export \
+              --path release.json
+
+      - name: Read release status
+        id: release
+        run: |
+          echo "release=$(jq --raw-output .release release.json)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - kind: linux
+            platform: amd64
+            abi: glibc
+            runner: ubuntu-24.04
+          - kind: linux
+            platform: amd64
+            abi: musl
+            runner: ubuntu-24.04
+          - kind: linux
+            platform: arm64
+            abi: glibc
+            runner: ubuntu-24.04-arm
+          - kind: linux
+            platform: arm64
+            abi: musl
+            runner: ubuntu-24.04-arm
+          - kind: macos
+            arch: arm64
+            runner: macos-14
+          - kind: macos
+            arch: x86_64
+            runner: macos-14
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Precompile and test
+        if: matrix.kind == 'linux'
+        uses: dagger/dagger-for-github@v8.4.1
+        with:
+          version: 0.21.6
+          args: >-
+            ci \
+              --ref main \
+              --platform-name linux/${{ matrix.platform }} \
+              --abi ${{ matrix.abi }} \
+              export \
+              --path . \
+              --allowParentDirPath
+
+      - name: Build
+        if: matrix.kind == 'macos'
+        run: |
+          pushd custom
+          ./build-for-mac.sh macos ${{ matrix.arch }} 29.0.2
+          popd
+
+      - name: Upload files
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.kind }}-${{ matrix.platform || matrix.arch }}-${{ matrix.abi || 'default' }}
+          path: |
+            pdfium-nif-*
+            custom/pdfium-nif-*
+
+  publish:
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          app-id: ${{ vars.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Download files
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Publish
         uses: dagger/dagger-for-github@v8.4.1
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -30,8 +156,9 @@ jobs:
         with:
           version: 0.21.6
           args: >-
-            create-release \
-              --pr ${{ github.event.pull_request.number }} \
-              --actor ${{ github.actor }} \
+            publish-release \
+              --ref main \
+              --artifacts ./artifacts \
+              --actor 41898282+github-actions[bot] \
               --github-token env://GITHUB_TOKEN \
               --hex-api-key env://HEX_API_KEY

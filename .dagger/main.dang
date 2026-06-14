@@ -8,12 +8,6 @@ type Pdfium {
     pub outputFilename: String!
   }
 
-  type LatestTagCheck {
-    pub knownTag: String!
-    pub latestTag: String!
-    pub newTagAvailable: Boolean!
-  }
-
   let repositorySlug: String! {
     "gmile/pdfium"
   }
@@ -51,87 +45,141 @@ type Pdfium {
   }
 
   """
-  Check whether bblanchon's pdfium-binaries project has a newer Chromium tag.
+  Prepare a release commit when a release is needed.
   """
-  pub latestTagCheck(githubToken: Secret!): LatestTagCheck! {
-    let knownTag = sourceTree("stable", githubToken).file("LIBPDFIUM_TAG").contents.trimSpace
-    let latestTag = latestLibpdfiumTag
-
-    LatestTagCheck {
-      knownTag: knownTag,
-      latestTag: latestTag,
-      newTagAvailable: latestTag > knownTag,
-    }
-  }
-
-  """
-  Open a release preparation pull request for a libpdfium tag and package version.
-  """
-  pub prepareReleasePullRequest(
-    base: String!,
-    packageVersion: String,
+  pub prepareRelease(
+    ref: String!,
+    version: String,
     libpdfiumTag: String,
     githubToken: Secret!,
     actor: String!,
-  ): Void {
-    let srcDir = sourceTree(base, githubToken)
-    let resolvedPackageVersion = if (packageVersion == null) {
-      nextPatchVersion(srcDir.file("VERSION").contents.trimSpace)
-    } else {
-      packageVersion
-    }
-    let resolvedLibpdfiumTag = if (libpdfiumTag == null) {
+  ): File! {
+    let srcDir = sourceTree(ref)
+    let currentVersion = srcDir.file("VERSION").contents.trimSpace
+    let currentLibpdfiumTag = srcDir.file("LIBPDFIUM_TAG").contents.trimSpace
+    let plannedLibpdfiumTag = if (libpdfiumTag == null || libpdfiumTag == "") {
       latestLibpdfiumTag
     } else {
       libpdfiumTag
     }
-    let branchName = "update-libpdfium-to-" + resolvedLibpdfiumTag
-    let releaseSource = sourceTreeWithGit(base, githubToken)
-      .withNewFile("LIBPDFIUM_TAG", resolvedLibpdfiumTag)
-      .withNewFile("VERSION", resolvedPackageVersion)
+    let plannedVersion = if (version == null || version == "") {
+      if (plannedLibpdfiumTag == currentLibpdfiumTag) {
+        currentVersion
+      } else {
+        nextPatchVersion(currentVersion)
+      }
+    } else {
+      version
+    }
+    let shouldRelease = plannedVersion != currentVersion || plannedLibpdfiumTag != currentLibpdfiumTag
+    let status = toJSON({
+      release: shouldRelease,
+      version: plannedVersion,
+      libpdfium_tag: plannedLibpdfiumTag,
+      current_version: currentVersion,
+      current_libpdfium_tag: currentLibpdfiumTag,
+    })
 
-    gh(token: githubToken, repo: repositorySlug, source: releaseSource)
-      .withGitExec(["switch", "--create", branchName])
-      .withGitExec(["config", "user.name", actor])
-      .withGitExec(["config", "user.email", actor + "@users.noreply.github.com"])
-      .withGitExec(["add", "LIBPDFIUM_TAG"])
-      .withGitExec(["commit", "--message", "Update libpdfium tag to " + resolvedLibpdfiumTag])
-      .withGitExec(["add", "VERSION"])
-      .withGitExec(["commit", "--message", "Update package to version " + resolvedPackageVersion])
-      .withGitExec(["push", "origin", branchName])
-      .pullRequest
-      .create(
-        base: base,
-        reviewers: ["gmile"],
-        fill: true,
-        title: "Bump libpdfium to " + resolvedLibpdfiumTag + " tag",
-      )
-
-    null
-  }
-
-  """
-  Open a release preparation pull request when a newer libpdfium tag exists.
-  """
-  pub prepareLatestReleasePullRequest(
-    base: String!,
-    packageVersion: String,
-    githubToken: Secret!,
-    actor: String!,
-  ): Void {
-    let check = latestTagCheck(githubToken)
-
-    if (check.newTagAvailable) {
-      prepareReleasePullRequest(
-        base: base,
-        packageVersion: packageVersion,
-        libpdfiumTag: check.latestTag,
+    if (shouldRelease) {
+      commitReleaseInputs(
+        ref: ref,
+        version: plannedVersion,
+        libpdfiumTag: plannedLibpdfiumTag,
         githubToken: githubToken,
         actor: actor,
       )
     } else {
       null
     }
+
+    container
+      .from(alpineImage)
+      .withNewFile("/release.json", status)
+      .file("/release.json")
+  }
+
+  let commitReleaseInputs(
+    ref: String!,
+    version: String!,
+    libpdfiumTag: String!,
+    githubToken: Secret!,
+    actor: String!,
+  ): Void {
+    let releaseSource = sourceTreeWithGit(ref, githubToken)
+      .withNewFile("LIBPDFIUM_TAG", libpdfiumTag)
+      .withNewFile("VERSION", version)
+
+    gh(token: githubToken, repo: repositorySlug, source: releaseSource)
+      .withGitExec(["config", "user.name", actor])
+      .withGitExec(["config", "user.email", actor + "@users.noreply.github.com"])
+      .withGitExec(["add", "LIBPDFIUM_TAG", "VERSION"])
+      .withGitExec(["commit", "--message", "Prepare v" + version + " release"])
+      .withGitExec(["push", "origin", "HEAD:" + ref])
+
+    null
+  }
+
+  """
+  Publish a release from already-built artifacts.
+  """
+  pub publishRelease(
+    ref: String!,
+    artifacts: Directory!,
+    githubToken: Secret!,
+    actor: String!,
+    hexApiKey: Secret!,
+  ): Void {
+    let source = sourceTreeWithGit(ref, githubToken)
+    let packageVersion = source.file("VERSION").contents.trimSpace
+    let checksumSource = container
+      .from(alpineImage)
+      .withDirectory("/pdfium", source)
+      .withDirectory("/artifacts", artifacts)
+      .withWorkdir("/pdfium")
+      .withExec([
+        "sh",
+        "-c",
+        """
+        set -eu
+        {
+          printf '%%{\n'
+          find /artifacts -name '*.tar.gz' -type f | sort | while read -r artifact; do
+            hash="$(sha256sum "$artifact" | awk '{ print $1 }')"
+            printf '  "%s" => "sha256:%s",\n' "$(basename "$artifact")" "$hash"
+          done
+          printf '}\n'
+        } > checksum.exs
+        """,
+      ])
+      .directory("/pdfium")
+    let releasedSource = gh(token: githubToken, repo: repositorySlug, source: checksumSource)
+      .withGitExec(["config", "user.name", actor])
+      .withGitExec(["config", "user.email", actor + "@users.noreply.github.com"])
+      .withGitExec(["add", "checksum.exs"])
+      .withGitExec(["commit", "--message", "Update checksums"])
+      .withGitExec(["tag", "v" + packageVersion, "--message", "Tagging v" + packageVersion + " release"])
+      .withGitExec(["push", "origin", "HEAD:" + ref, "v" + packageVersion])
+    let artifactFiles = artifacts.glob("**/*.tar.gz").map { path =>
+      artifacts.file(path)
+    }
+
+    releasedSource
+      .release
+      .create(
+        tag: "v" + packageVersion,
+        title: "v" + packageVersion,
+        files: artifactFiles,
+      )
+
+    container
+      .from(muslImage)
+      .withDirectory("/pdfium", checksumSource)
+      .withWorkdir("/pdfium")
+      .withSecretVariable("HEX_API_KEY", hexApiKey)
+      .withExec(["mix", "local.hex", "--force"])
+      .withExec(["mix", "do", "deps.get", "+", "deps.compile"])
+      .withExec(["mix", "hex.publish", "package", "--yes"])
+      .sync
 
     null
   }
@@ -278,101 +326,14 @@ type Pdfium {
   """
   Build and test a git ref from gmile/pdfium.
   """
-  pub ci(ref: String!, platformName: String!, abi: String!, githubToken: Secret!): File! {
-    let srcDir = sourceTree(ref, githubToken)
+  pub ci(ref: String!, platformName: String!, abi: String!): File! {
+    let srcDir = sourceTree(ref)
 
     test(precompile(srcDir, platformName, abi), srcDir, platformName, abi)
   }
 
-  """
-  Create a GitHub release from the successful CI artifacts for a pull request.
-  """
-  pub createRelease(pr: String!, actor: String!, githubToken: Secret!, hexApiKey: Secret!): Void {
-    let github = gh(token: githubToken, repo: repositorySlug)
-    let headRef = github
-      .exec(["pr", "view", pr, "--json", "headRefOid", "--jq", ".headRefOid"])
-      .stdout
-      .trimSpace
-    let baseRefName = github
-      .exec(["pr", "view", pr, "--json", "baseRefName", "--jq", ".baseRefName"])
-      .stdout
-      .trimSpace
-    let runID = github
-      .exec([
-        "run",
-        "list",
-        "--workflow",
-        "ci.yaml",
-        "--commit",
-        headRef,
-        "--status",
-        "success",
-        "--limit",
-        "1",
-        "--json",
-        "databaseId",
-        "--jq",
-        ".[0].databaseId",
-      ])
-      .stdout
-      .trimSpace
-    let packageVersion = sourceTree(baseRefName, githubToken).file("VERSION").contents.trimSpace
-    let artifacts = github.exec(["run", "download", runID, "--dir", "/artifacts"]).directory("/artifacts")
-    let checksumSource = container
-      .from(alpineImage)
-      .withDirectory("/pdfium", sourceTreeWithGit(baseRefName, githubToken))
-      .withDirectory("/artifacts", artifacts)
-      .withWorkdir("/pdfium")
-      .withExec([
-        "sh",
-        "-c",
-        """
-        set -eu
-        {
-          printf '%%{\n'
-          find /artifacts -name '*.tar.gz' -type f | sort | while read -r artifact; do
-            hash="$(sha256sum "$artifact" | awk '{ print $1 }')"
-            printf '  "%s" => "sha256:%s",\n' "$(basename "$artifact")" "$hash"
-          done
-          printf '}\n'
-        } > checksum.exs
-        """,
-      ])
-      .directory("/pdfium")
-    let releasedSource = gh(token: githubToken, repo: repositorySlug, source: checksumSource)
-      .withGitExec(["config", "user.name", actor])
-      .withGitExec(["config", "user.email", actor + "@users.noreply.github.com"])
-      .withGitExec(["add", "checksum.exs"])
-      .withGitExec(["commit", "--message", "Update checksums"])
-      .withGitExec(["tag", "v" + packageVersion, "--message", "Tagging v" + packageVersion + " release"])
-      .withGitExec(["push", "origin", "HEAD:" + baseRefName, "v" + packageVersion])
-    let artifactFiles = artifacts.glob("**/*.tar.gz").map { path =>
-      artifacts.file(path)
-    }
-
-    releasedSource
-      .release
-      .create(
-        tag: "v" + packageVersion,
-        title: "v" + packageVersion,
-        files: artifactFiles,
-      )
-
-    container
-      .from(muslImage)
-      .withDirectory("/pdfium", checksumSource)
-      .withWorkdir("/pdfium")
-      .withSecretVariable("HEX_API_KEY", hexApiKey)
-      .withExec(["mix", "local.hex", "--force"])
-      .withExec(["mix", "do", "deps.get", "+", "deps.compile"])
-      .withExec(["mix", "hex.publish", "package", "--yes"])
-      .sync
-
-    null
-  }
-
-  let sourceTree(ref: String!, githubToken: Secret!): Directory! {
-    git(url: repositoryURL, httpAuthToken: githubToken).ref(ref).tree(discardGitDir: true)
+  let sourceTree(ref: String!): Directory! {
+    git(url: repositoryURL).ref(ref).tree(discardGitDir: true)
   }
 
   let sourceTreeWithGit(ref: String!, githubToken: Secret!): Directory! {
