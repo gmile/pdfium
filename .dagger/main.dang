@@ -67,7 +67,7 @@ type Pdfium {
     libpdfiumTag: String,
     githubToken: Secret!,
     actor: String!,
-  ): Container! {
+  ): Void! {
     let srcDir = sourceTree(base, githubToken)
     let resolvedPackageVersion = if (packageVersion == null) {
       nextPatchVersion(srcDir.file("VERSION").contents.trimSpace)
@@ -80,36 +80,26 @@ type Pdfium {
       libpdfiumTag
     }
     let branchName = "update-libpdfium-to-" + resolvedLibpdfiumTag
+    let releaseSource = sourceTreeWithGit(base, githubToken)
+      .withNewFile("LIBPDFIUM_TAG", resolvedLibpdfiumTag)
+      .withNewFile("VERSION", resolvedPackageVersion)
 
-    githubCLI(githubToken)
-      .withDirectory("/pdfium", sourceTreeWithGit(base, githubToken))
-      .withWorkdir("/pdfium")
-      .withEnvVariable("ACTOR", actor)
-      .withExec(["gh", "auth", "setup-git"])
-      .withExec(["git", "switch", "--create", branchName])
-      .withExec(["git", "config", "user.name", actor])
-      .withExec(["git", "config", "user.email", actor + "@users.noreply.github.com"])
-      .withNewFile("/pdfium/LIBPDFIUM_TAG", resolvedLibpdfiumTag)
-      .withExec(["git", "add", "LIBPDFIUM_TAG"])
-      .withExec(["git", "commit", "--message", "Update libpdfium tag to " + resolvedLibpdfiumTag])
-      .withNewFile("/pdfium/VERSION", resolvedPackageVersion)
-      .withExec(["git", "add", "VERSION"])
-      .withExec(["git", "commit", "--message", "Update package to version " + resolvedPackageVersion])
-      .withExec(["git", "push", "origin", branchName])
-      .withExec([
-        "gh",
-        "pr",
-        "create",
-        "--base",
-        base,
-        "--reviewer",
-        "gmile",
-        "--fill",
-        "--repo",
-        repositorySlug,
-        "--title",
-        "Bump libpdfium to " + resolvedLibpdfiumTag + " tag",
-      ])
+    gh(token: githubToken, repo: repositorySlug, source: releaseSource)
+      .withGitExec(["switch", "--create", branchName])
+      .withGitExec(["config", "user.name", actor])
+      .withGitExec(["config", "user.email", actor + "@users.noreply.github.com"])
+      .withGitExec(["add", "LIBPDFIUM_TAG"])
+      .withGitExec(["commit", "--message", "Update libpdfium tag to " + resolvedLibpdfiumTag])
+      .withGitExec(["add", "VERSION"])
+      .withGitExec(["commit", "--message", "Update package to version " + resolvedPackageVersion])
+      .withGitExec(["push", "origin", branchName])
+      .pullRequest
+      .create(
+        base: base,
+        reviewers: ["gmile"],
+        fill: true,
+        title: "Bump libpdfium to " + resolvedLibpdfiumTag + " tag",
+      )
   }
 
   let collectBuildInfo(srcDir: Directory!, platformName: String!, abi: String!): BuildInfo! {
@@ -261,17 +251,17 @@ type Pdfium {
   Create a GitHub release from the successful CI artifacts for a pull request.
   """
   pub createRelease(pr: String!, actor: String!, githubToken: Secret!, hexApiKey: Secret!): Container! {
-    let headRef = githubCLI(githubToken)
-      .withExec(["gh", "pr", "view", pr, "--json", "headRefOid", "--jq", ".headRefOid", "--repo", repositorySlug])
+    let github = gh(token: githubToken, repo: repositorySlug)
+    let headRef = github
+      .exec(["pr", "view", pr, "--json", "headRefOid", "--jq", ".headRefOid"])
       .stdout
       .trimSpace
-    let baseRefName = githubCLI(githubToken)
-      .withExec(["gh", "pr", "view", pr, "--json", "baseRefName", "--jq", ".baseRefName", "--repo", repositorySlug])
+    let baseRefName = github
+      .exec(["pr", "view", pr, "--json", "baseRefName", "--jq", ".baseRefName"])
       .stdout
       .trimSpace
-    let runID = githubCLI(githubToken)
-      .withExec([
-        "gh",
+    let runID = github
+      .exec([
         "run",
         "list",
         "--workflow",
@@ -284,8 +274,6 @@ type Pdfium {
         "1",
         "--json",
         "databaseId",
-        "--repo",
-        repositorySlug,
         "--jq",
         ".[0].databaseId",
       ])
@@ -304,7 +292,7 @@ type Pdfium {
       .withEnvVariable("ACTOR", actor)
       .withEnvVariable("PACKAGE_VERSION", packageVersion)
       .withExec(["gh", "auth", "setup-git"])
-      .withExec(["gh", "run", "download", runID, "--dir", "/artifacts", "--repo", repositorySlug])
+      .withDirectory("/artifacts", github.exec(["run", "download", runID, "--dir", "/artifacts"]).directory("/artifacts"))
       .withExec(["git", "config", "user.name", actor])
       .withExec(["git", "config", "user.email", actor + "@users.noreply.github.com"])
       .withExec([
@@ -361,14 +349,6 @@ type Pdfium {
       .withExec(["awk", "-F.", "{ printf \"%s.%s.%s\", $1, $2, $3 + 1 }", "/VERSION"])
       .stdout
       .trimSpace
-  }
-
-  let githubCLI(githubToken: Secret!): Container! {
-    container
-      .from(alpineImage)
-      .withExec(["apk", "add", "git", "github-cli"])
-      .withSecretVariable("GH_TOKEN", githubToken)
-      .withSecretVariable("GITHUB_TOKEN", githubToken)
   }
 
   let testScript: String! {

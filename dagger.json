@@ -4,5 +4,11 @@
   "sdk": {
     "source": "dang"
   },
+  "dependencies": [
+    {
+      "name": "gh",
+      "source": "github.com/dagger/dagger/toolchains/release/gh@76c1bf81f55b7cd7dcc5b83ee5a04caf1ffb98ad"
+    }
+  ],
   "source": ".dagger"
 }
