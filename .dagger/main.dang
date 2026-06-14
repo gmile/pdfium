@@ -1,0 +1,408 @@
+"""
+Dagger automation for building, testing, and releasing pdfium.
+"""
+type Pdfium {
+  type BuildInfo {
+    pub buildImageName: String!
+    pub pdfiumDownloadUrl: String!
+    pub outputFilename: String!
+  }
+
+  """
+  Check whether bblanchon's pdfium-binaries project has a newer Chromium tag.
+  """
+  pub checkLatestTag(githubToken: Secret!): String! {
+    container
+      .from("alpine:3.23.4")
+      .withExec(["apk", "add", "git", "github-cli", "jq"])
+      .withSecretVariable("GH_TOKEN", githubToken)
+      .withExec([
+        "sh",
+        "-c",
+        """
+        set -eu
+        gh auth setup-git
+        git clone --depth 1 --branch stable https://github.com/gmile/pdfium /pdfium
+        known_tag="$(cat /pdfium/LIBPDFIUM_TAG)"
+        latest_tag="$(
+          git ls-remote --tags --sort=-v:refname https://github.com/bblanchon/pdfium-binaries.git 'refs/tags/chromium/*' |
+            head -n 1 |
+            sed 's#.*refs/tags/##'
+        )"
+
+        if [ "$latest_tag" '>' "$known_tag" ]; then
+          printf '{"new_tag_available":true,"tag":%s}\n' "$(printf '%s' "$latest_tag" | jq --raw-input --slurp .)"
+        else
+          printf '{"new_tag_available":false}\n'
+        fi
+        """,
+      ])
+      .stdout
+      .trimSpace
+  }
+
+  """
+  Open a release preparation pull request for a libpdfium tag and package version.
+  """
+  pub prepareReleasePullRequest(
+    base: String!,
+    packageVersion: String,
+    libpdfiumTag: String,
+    githubToken: Secret!,
+    actor: String!,
+  ): Container! {
+    container
+      .from("alpine:3.23.4")
+      .withExec(["apk", "add", "git", "github-cli"])
+      .withSecretVariable("GH_TOKEN", githubToken)
+      .withEnvVariable("BASE", base)
+      .withEnvVariable("PACKAGE_VERSION", if (packageVersion == null) { "" } else { packageVersion })
+      .withEnvVariable("LIBPDFIUM_TAG", if (libpdfiumTag == null) { "" } else { libpdfiumTag })
+      .withEnvVariable("ACTOR", actor)
+      .withExec([
+        "sh",
+        "-c",
+        """
+        set -eu
+        gh auth setup-git
+        git clone https://github.com/gmile/pdfium /pdfium
+        cd /pdfium
+        git fetch origin "$BASE"
+        git switch --create release-base "origin/$BASE"
+
+        if [ -z "$PACKAGE_VERSION" ]; then
+          PACKAGE_VERSION="$(awk -F. '{ printf "%s.%s.%s", $1, $2, $3 + 1 }' VERSION)"
+        fi
+
+        if [ -z "$LIBPDFIUM_TAG" ]; then
+          LIBPDFIUM_TAG="$(
+            git ls-remote --tags --sort=-v:refname https://github.com/bblanchon/pdfium-binaries.git 'refs/tags/chromium/*' |
+              head -n 1 |
+              sed 's#.*refs/tags/##'
+          )"
+        fi
+
+        new_branch_name="update-libpdfium-to-${LIBPDFIUM_TAG}"
+        git switch --create "$new_branch_name"
+        git config user.name "$ACTOR"
+        git config user.email "${ACTOR}@users.noreply.github.com"
+
+        printf '%s' "$LIBPDFIUM_TAG" > LIBPDFIUM_TAG
+        git add LIBPDFIUM_TAG
+        git commit --message "Update libpdfium tag to ${LIBPDFIUM_TAG}"
+
+        printf '%s' "$PACKAGE_VERSION" > VERSION
+        git add VERSION
+        git commit --message "Update package to version ${PACKAGE_VERSION}"
+
+        git push origin "$new_branch_name"
+        gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium --title "Bump libpdfium to ${LIBPDFIUM_TAG} tag"
+        """,
+      ])
+  }
+
+  let collectBuildInfo(srcDir: Directory!, platformName: String!, abi: String!): BuildInfo! {
+    let erlangPlatformName = if (platformName == "linux/arm64") {
+      "aarch64"
+    } else if (platformName == "linux/amd64") {
+      "x86_64"
+    } else {
+      raise "unsupported platform: " + platformName
+    }
+
+    let pdfiumPlatformName = if (platformName == "linux/arm64") {
+      "arm64"
+    } else if (platformName == "linux/amd64") {
+      "x64"
+    } else {
+      raise "unsupported platform: " + platformName
+    }
+
+    let erlangAbiName = if (abi == "glibc") {
+      "linux-gnu"
+    } else if (abi == "musl") {
+      "linux-musl"
+    } else {
+      raise "unsupported abi: " + abi
+    }
+
+    let pdfiumAbiName = if (abi == "glibc") {
+      "linux"
+    } else if (abi == "musl") {
+      "linux-musl"
+    } else {
+      raise "unsupported abi: " + abi
+    }
+
+    let buildImageName = if (abi == "glibc") {
+      "hexpm/elixir:1.19.5-erlang-28.4.2-ubuntu-noble-20260410"
+    } else if (abi == "musl") {
+      "hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4"
+    } else {
+      raise "unsupported abi: " + abi
+    }
+
+    let pdfiumTag = srcDir.file("LIBPDFIUM_TAG").contents.trimSpace
+    let encodedPdfiumTag = pdfiumTag.replace("/", "%2F")
+    let packageVersion = srcDir.file("VERSION").contents.trimSpace
+    let nifVersion = "2.17"
+
+    BuildInfo {
+      buildImageName: buildImageName,
+      pdfiumDownloadUrl: "https://github.com/bblanchon/pdfium-binaries/releases/download/" + encodedPdfiumTag + "/pdfium-" + pdfiumAbiName + "-" + pdfiumPlatformName + ".tgz",
+      outputFilename: "pdfium-nif-" + nifVersion + "-" + erlangPlatformName + "-" + erlangAbiName + "-" + packageVersion + ".tar.gz",
+    }
+  }
+
+  """
+  Build a precompiled pdfium NIF archive for one platform and ABI.
+  """
+  pub precompile(srcDir: Directory!, platformName: String!, abi: String!): File! {
+    let info = collectBuildInfo(srcDir, platformName, abi)
+    let otpDirectoryName = "/usr/local/lib/erlang"
+    let libpdfiumExtractPath = "/pdfium"
+    let fineIncludePath = "/fine"
+    let outputPath = "/build/" + info.outputFilename
+
+    let compile = [
+      "g++",
+      "-march=native",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Wno-unused-parameter",
+      "--pic",
+      "-fvisibility=hidden",
+      "--optimize=2",
+      "--std=c++17",
+      "--include-directory=" + otpDirectoryName + "/usr/include",
+      "--include-directory=" + libpdfiumExtractPath + "/include",
+      "--include-directory=" + fineIncludePath,
+      "--compile",
+      "--output=pdfium_nif.o",
+      "pdfium_nif.cpp",
+    ]
+
+    let link = [
+      "g++",
+      "pdfium_nif.o",
+      "--shared",
+      "--output=pdfium_nif.so",
+      "--library-directory=" + otpDirectoryName + "/usr/lib",
+      "--library-directory=" + libpdfiumExtractPath + "/lib",
+      "-static-libstdc++",
+      "-Wl,-s",
+      "-Wl,--disable-new-dtags",
+      "-Wl,-rpath,$ORIGIN",
+      "-l:libpdfium.so",
+    ]
+
+    let pack = [
+      "tar",
+      "--create",
+      "--verbose",
+      "--file=" + outputPath,
+      "--directory",
+      "/build",
+      "pdfium_nif.so",
+      "--directory",
+      libpdfiumExtractPath + "/lib",
+      "libpdfium.so",
+    ]
+
+    withBuildTools(container(platform: platformName).from(info.buildImageName), abi)
+      .withWorkdir("/build")
+      .withFile("/build/pdfium_nif.cpp", srcDir.file("c_src/pdfium_nif.cpp"))
+      .withExec([
+        "sh",
+        "-c",
+        "git clone --depth 1 --branch v0.1.6 https://github.com/elixir-nx/fine /tmp/fine && mkdir -p /fine && cp -R /tmp/fine/c_include/. /fine/",
+      ])
+      .withExec(["wget", "--output-document=/build/pdfium.tar", info.pdfiumDownloadUrl])
+      .withExec(["mkdir", libpdfiumExtractPath])
+      .withExec(["tar", "--extract", "--gunzip", "--directory=" + libpdfiumExtractPath, "--file=/build/pdfium.tar"])
+      .withExec(compile)
+      .withExec(link)
+      .withExec(pack)
+      .file(outputPath)
+  }
+
+  """
+  Test a precompiled pdfium NIF archive.
+  """
+  pub test(precompiled: File!, platformName: String!, abi: String!): File! {
+    let precompiledPath = "/test/" + precompiled.name
+
+    withTestImage(platformName, abi)
+      .withWorkdir("/test")
+      .withFile(precompiledPath, precompiled)
+      .withExec(["tar", "--extract", "--directory=/test/", "--file=" + precompiledPath])
+      .withNewFile("/test/test.exs", testScript)
+      .withNewFile("/test/test.pdf", testPdf)
+      .withExec(["elixir", "test.exs"])
+      .file(precompiledPath)
+  }
+
+  """
+  Build and test a git ref from gmile/pdfium.
+  """
+  pub ci(ref: String!, platformName: String!, abi: String!, githubToken: Secret!): File! {
+    let srcDir = container
+      .from("alpine:3.23.4")
+      .withExec(["apk", "add", "git", "github-cli"])
+      .withSecretVariable("GH_TOKEN", githubToken)
+      .withEnvVariable("REF", ref)
+      .withExec([
+        "sh",
+        "-c",
+        """
+        set -eu
+        gh auth setup-git
+        git clone https://github.com/gmile/pdfium /src
+        cd /src
+        git checkout "$REF"
+        """,
+      ])
+      .directory("/src")
+
+    test(precompile(srcDir, platformName, abi), platformName, abi)
+  }
+
+  """
+  Create a GitHub release from the successful CI artifacts for a pull request.
+  """
+  pub createRelease(pr: String!, actor: String!, githubToken: Secret!, hexApiKey: Secret!): Container! {
+    container
+      .from("hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4")
+      .withExec(["apk", "add", "git", "github-cli", "coreutils", "perl-utils"])
+      .withSecretVariable("GITHUB_TOKEN", githubToken)
+      .withSecretVariable("HEX_API_KEY", hexApiKey)
+      .withEnvVariable("PR", pr)
+      .withEnvVariable("ACTOR", actor)
+      .withExec([
+        "sh",
+        "-c",
+        """
+        set -eu
+
+        gh auth setup-git
+        pr_data="$(gh pr view "$PR" --json headRefOid,baseRefName --jq '.headRefOid + " " + .baseRefName' --repo gmile/pdfium)"
+        head_ref="${pr_data%% *}"
+        base_ref_name="${pr_data#* }"
+
+        run_id="$(
+          gh run list \
+            --workflow ci.yaml \
+            --commit "$head_ref" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --repo gmile/pdfium \
+            --jq '.[0].databaseId'
+        )"
+
+        gh run download "$run_id" --dir /artifacts --repo gmile/pdfium
+
+        git clone https://github.com/gmile/pdfium /pdfium
+        cd /pdfium
+        git fetch origin "$base_ref_name"
+        git checkout "$base_ref_name"
+        git config user.name "$ACTOR"
+        git config user.email "${ACTOR}@users.noreply.github.com"
+
+        {
+          printf '%%{\n'
+          find /artifacts -name '*.tar.gz' -type f | sort | while read -r artifact; do
+            hash="$(shasum --algorithm 256 "$artifact" | awk '{ print $1 }')"
+            printf '  "%s" => "sha256:%s",\n' "$(basename "$artifact")" "$hash"
+          done
+          printf '}\n'
+        } > checksum.exs
+
+        package_version="$(cat VERSION)"
+        git add checksum.exs
+        git commit --message "Update checksums"
+        git tag "v${package_version}" --message "Tagging v${package_version} release"
+        git push origin "HEAD:${base_ref_name}" "v${package_version}"
+        find /artifacts -name '*.tar.gz' -type f -print0 | xargs -0 gh release create "v${package_version}" --repo gmile/pdfium
+        mix local.hex --force
+        mix do deps.get + deps.compile
+        mix hex.publish package --yes
+        """,
+      ])
+  }
+
+  let testScript: String! {
+    """
+    defmodule PDFium.NIF do
+      @on_load :load_nif
+
+      def load_nif do
+        :erlang.load_nif(~c"./pdfium_nif", 0)
+      end
+
+      def load_document(_filename), do: :erlang.nif_error(:nif_not_loaded)
+
+      def close_document(_document), do: :erlang.nif_error(:nif_not_loaded)
+
+      def get_page_count(_document), do: :erlang.nif_error(:nif_not_loaded)
+
+      def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
+    end
+
+    {:ok, ref} = PDFium.NIF.load_document("./test.pdf")
+    {:ok, pages} = PDFium.NIF.get_page_count(ref)
+
+    IO.inspect(pages, label: "pages")
+    """
+  }
+
+  let testPdf: String! {
+    """
+    %PDF-1.0
+    1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+    2 0 obj<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>endobj
+    3 0 obj<</Type/Page/Parent 2 0 R>>endobj
+    4 0 obj<</Type/Page/Parent 2 0 R>>endobj
+    xref
+    0 5
+    0000000000 65535 f
+    0000000009 00000 n
+    0000000053 00000 n
+    0000000102 00000 n
+    0000000148 00000 n
+    trailer<</Size 5/Root 1 0 R>>
+    startxref
+    194
+    %%EOF
+    """
+  }
+
+  let withBuildTools(base: Container!, abi: String!): Container! {
+    if (abi == "glibc") {
+      base
+        .withExec(["apt", "update"])
+        .withExec(["apt", "install", "build-essential", "tar", "jq", "wget", "git", "--yes"])
+    } else if (abi == "musl") {
+      base
+        .withExec(["apk", "add", "build-base", "tar", "jq", "coreutils", "wget", "git"])
+    } else {
+      raise "unsupported abi: " + abi
+    }
+  }
+
+  let withTestImage(platformName: String!, abi: String!): Container! {
+    if (abi == "glibc") {
+      container(platform: platformName)
+        .from("hexpm/elixir:1.19.5-erlang-28.4.2-ubuntu-noble-20260410")
+        .withExec(["apt", "update"])
+        .withExec(["apt", "install", "tar", "--yes"])
+    } else if (abi == "musl") {
+      container(platform: platformName)
+        .from("hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4")
+        .withExec(["apk", "add", "tar"])
+    } else {
+      raise "unsupported abi: " + abi
+    }
+  }
+}

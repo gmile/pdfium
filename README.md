@@ -96,7 +96,7 @@ Native bindings for pdfium project
     ```sh
     env GITHUB_TOKEN=(gh auth token) dagger call prepare-release-pull-request \
       --base stable \
-      --libpdfium-tag chromium/7506 \
+      --libpdfium-tag chromium/7881 \
       --actor 41898282+github-actions[bot] \
       --github-token GITHUB_TOKEN
     ```

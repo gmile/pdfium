@@ -37,7 +37,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
-          version: 0.20.6
+          version: 0.21.6
           args: >-
             ci \
               --ref pull/${{ github.ref_name }} \
@@ -82,7 +82,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
-          version: 0.20.6
+          version: 0.21.6
           args: >-
             ci \
               --ref pull/${{ github.ref_name }} \
