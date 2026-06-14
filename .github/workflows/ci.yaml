@@ -8,125 +8,64 @@ on:
       - reopened
     branches:
       - main
-      - stable
 
 jobs:
-  build-for-linux-amd64:
-    runs-on: ubuntu-24.04
-
+  build:
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        abi:
-          - glibc
-          - musl
-        platform:
-          - amd64
+        include:
+          - kind: linux
+            platform: amd64
+            abi: glibc
+            runner: ubuntu-24.04
+          - kind: linux
+            platform: amd64
+            abi: musl
+            runner: ubuntu-24.04
+          - kind: linux
+            platform: arm64
+            abi: glibc
+            runner: ubuntu-24.04-arm
+          - kind: linux
+            platform: arm64
+            abi: musl
+            runner: ubuntu-24.04-arm
+          - kind: macos
+            arch: arm64
+            runner: macos-14
+          - kind: macos
+            arch: x86_64
+            runner: macos-14
 
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/create-github-app-token@v3
-        id: app-token
-        with:
-          app-id: ${{ vars.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Precompile and test
+        if: matrix.kind == 'linux'
         uses: dagger/dagger-for-github@v8.4.1
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
-          version: 0.20.6
+          version: 0.21.6
           args: >-
             ci \
               --ref pull/${{ github.ref_name }} \
               --platform-name linux/${{ matrix.platform }} \
               --abi ${{ matrix.abi }} \
-              --github-token env://GITHUB_TOKEN \
             export \
               --path . \
               --allowParentDirPath
-
-      - name: Upload files
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.platform }}-${{ matrix.abi }}
-          path: pdfium-nif-*
-
-  build-for-linux-arm64:
-    runs-on: ubuntu-24.04-arm
-
-    strategy:
-      matrix:
-        abi:
-          - glibc
-          - musl
-        platform:
-          - arm64
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/create-github-app-token@v3
-        id: app-token
-        with:
-          app-id: ${{ vars.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      - name: Precompile and test
-        uses: dagger/dagger-for-github@v8.4.1
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        with:
-          version: 0.20.6
-          args: >-
-            ci \
-              --ref pull/${{ github.ref_name }} \
-              --platform-name linux/${{ matrix.platform }} \
-              --abi ${{ matrix.abi }} \
-              --github-token env://GITHUB_TOKEN \
-            export \
-              --path . \
-              --allowParentDirPath
-
-      - name: Upload files
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.platform }}-${{ matrix.abi }}
-          path: pdfium-nif-*
-
-  build-for-macos:
-    runs-on: macos-14
-    steps:
-      - uses: actions/create-github-app-token@v3
-        id: app-token
-        with:
-          app-id: ${{ vars.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      - name: Checkout code
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/checkout@v6
 
       - name: Build
+        if: matrix.kind == 'macos'
         run: |
           pushd custom
-          ./build-for-mac.sh macos arm64 28.4.2
-          ./build-for-mac.sh macos x86_64 28.4.2
+          ./build-for-mac.sh macos ${{ matrix.arch }} 29.0.2
           popd
 
       - name: Upload files
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         uses: actions/upload-artifact@v7
         with:
-          name: macOS-builds
-          path: custom/pdfium-nif-*
+          name: ${{ matrix.kind }}-${{ matrix.platform || matrix.arch }}-${{ matrix.abi || 'default' }}
+          path: |
+            pdfium-nif-*
+            custom/pdfium-nif-*

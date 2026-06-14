@@ -1,3 +1,0 @@
-FROM hexpm/elixir:1.17.3-erlang-28.1-ubuntu-noble-20251001
-
-RUN apt update; apt install build-essential tar jq wget --yes

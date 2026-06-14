@@ -43,27 +43,31 @@ Native bindings for pdfium project
 
 ## Releasing
 
-1. bump version in `VERSION` file. Run:
+Releases are driven from the `main` branch by the GitHub Actions `Release` workflow.
 
-   ```sh
-   echo -n (awk 'BEGIN{FS=OFS="."} {$NF+=1}1' VERSION) > VERSION
-   ```
+The workflow can be run manually, and it also runs on a weekly cron. On cron, it checks the latest
+`bblanchon/pdfium-binaries` Chromium tag and exits without publishing when `LIBPDFIUM_TAG` is already
+current.
 
-2. commit and push the change:
+Manual release:
 
-   ```sh
-   git add VERSION
-   git commit --message "Bump library version"
-   git push origin main
-   ```
+1. open the `Release` workflow in GitHub Actions.
+2. optionally provide a package version and libpdfium tag.
+3. run the workflow.
 
-3. create a PR from `main` to `stable`. Run:
+The workflow prepares a release commit on `main`, builds all Linux and macOS artifacts, commits
+`checksum.exs`, tags the release, creates the GitHub release, and publishes the Hex package.
 
-   ```sh
-   gh pr create --base stable --fill
-   ```
+Local publishing is also possible when release artifacts already exist locally:
 
-4. wait until the PR checks are green, then merge the PR
+```sh
+GITHUB_TOKEN=$(gh auth token) HEX_API_KEY=483a... dagger call publish-release \
+  --ref main \
+  --artifacts ./artifacts \
+  --actor gmile \
+  --github-token env://GITHUB_TOKEN \
+  --hex-api-key env://HEX_API_KEY
+```
 
 ## Running CI steps locally
 
@@ -86,41 +90,20 @@ Native bindings for pdfium project
    ```sh
    dagger call test \
      --precompiled output/pdfium-nif-2.17-aarch64-linux-musl-0.1.23.tar.gz \
+     --src-dir . \
      --abi musl --platform-name linux/arm64
    ```
-
-## Releasing manually
-
-1. open PR with a new libpdfium tag:
-
-    ```sh
-    env GITHUB_TOKEN=(gh auth token) dagger call prepare-release-pull-request \
-      --base stable \
-      --libpdfium-tag chromium/7506 \
-      --actor 41898282+github-actions[bot] \
-      --github-token GITHUB_TOKEN
-    ```
-
-2. wait until the PR is green, then merge it and release a package on hex:
-
-    ```sh
-    HEX_API_KEY=483a... GITHUB_TOKEN=(gh auth token) dagger call create-release \
-      --pr 99 \
-      --actor gmile \
-      --github-token GITHUB_TOKEN \
-      --hex-api-key HEX_API_KEY
-    ```
 
 ## Updating OTP version (for macOS)
 
 ```sh
-wget https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-amd64.tar.gz /tmp
-wget https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-arm64.tar.gz /tmp
+curl -L --fail --output /tmp/OTP-29.0.2-macos-amd64.tar.gz https://github.com/erlef/otp_builds/releases/download/OTP-29.0.2/OTP-29.0.2-macos-amd64.tar.gz
+curl -L --fail --output /tmp/OTP-29.0.2-macos-arm64.tar.gz https://github.com/erlef/otp_builds/releases/download/OTP-29.0.2/OTP-29.0.2-macos-arm64.tar.gz
 
-shasum -a 256 /tmp/OTP-28.1-macos-amd64.tar.gz
-shasum -a 256 /tmp/OTP-28.1-macos-arm64.tar.gz
+shasum -a 256 /tmp/OTP-29.0.2-macos-amd64.tar.gz
+shasum -a 256 /tmp/OTP-29.0.2-macos-arm64.tar.gz
 
-# Then edit custom/build.json by inserting the hashes
+# Then edit custom/builds.json by updating the OTP URLs and hashes
 ```
 
 ## Known issues
