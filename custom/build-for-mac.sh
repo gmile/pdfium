@@ -4,7 +4,7 @@ set -ex
 
 os=$1   # mac, linux, linux-musl
 arch=$2 # arm64, amd64
-otp=$3  # otp28.4.2, otp25.2
+otp=$3  # 29.0.3
 
 eval $(jq -r --arg os "$os" \
            --arg arch "$arch" \
@@ -94,7 +94,7 @@ elif [ "$arch" = "x86_64" ]; then
    otp_arch="x86_64"
 fi
 
-output_name="pdfium-nif-2.17-${otp_arch}-apple-darwin-$(cat ../VERSION).tar.gz"
+output_name="pdfium-nif-${nif_version}-${otp_arch}-apple-darwin-$(cat ../VERSION).tar.gz"
 
 # 6. Create archive
 tar --create \
@@ -113,6 +113,7 @@ tar --create \
 # cd ..
 
 # 8. Cleanup
+mkdir -p ../priv
 cp pdfium_nif.so ../priv
 cp $pdfium_directory_name/lib/libpdfium.dylib ../priv
 

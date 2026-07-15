@@ -85,7 +85,7 @@ Native bindings for pdfium project
 
    ```sh
    dagger call test \
-     --precompiled output/pdfium-nif-2.17-aarch64-linux-musl-0.1.23.tar.gz \
+     --precompiled output/pdfium-nif-2.18-aarch64-linux-musl-0.1.29.tar.gz \
      --abi musl --platform-name linux/arm64
    ```
 
@@ -114,11 +114,11 @@ Native bindings for pdfium project
 ## Updating OTP version (for macOS)
 
 ```sh
-wget https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-amd64.tar.gz /tmp
-wget https://github.com/erlef/otp_builds/releases/download/OTP-28.1/OTP-28.1-macos-arm64.tar.gz /tmp
+wget https://github.com/erlef/otp_builds/releases/download/OTP-29.0.3/OTP-29.0.3-macos-amd64.tar.gz /tmp
+wget https://github.com/erlef/otp_builds/releases/download/OTP-29.0.3/OTP-29.0.3-macos-arm64.tar.gz /tmp
 
-shasum -a 256 /tmp/OTP-28.1-macos-amd64.tar.gz
-shasum -a 256 /tmp/OTP-28.1-macos-arm64.tar.gz
+shasum -a 256 /tmp/OTP-29.0.3-macos-amd64.tar.gz
+shasum -a 256 /tmp/OTP-29.0.3-macos-arm64.tar.gz
 
 # Then edit custom/build.json by inserting the hashes
 ```

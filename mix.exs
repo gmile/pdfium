@@ -14,14 +14,15 @@ defmodule PDFium.MixProject do
       make_env: fn -> %{"FINE_INCLUDE_DIR" => Fine.include_dir()} end,
       start_permanent: Mix.env() == :prod,
       package: package(),
-      deps: deps(),
+      deps: deps()
     ] ++ make_precompiler()
   end
 
   def make_precompiler do
     [
       make_precompiler: {:nif, CCPrecompiler},
-      make_precompiler_url: "https://github.com/gmile/pdfium/releases/download/v#{@version}/@{artefact_filename}",
+      make_precompiler_url:
+        "https://github.com/gmile/pdfium/releases/download/v#{@version}/@{artefact_filename}",
       # TODO: not sure if below is necessary
       cc_precompiler: [
         compilers: %{

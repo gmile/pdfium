@@ -115,8 +115,8 @@ defmodule Pdfium do
 
     {build_image_name, nif_version} =
       case abi do
-        "glibc" -> {"hexpm/elixir:1.19.5-erlang-28.4.2-ubuntu-noble-20260410", "2.17"}
-        "musl" -> {"hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4", "2.17"}
+        "glibc" -> {"hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610", "2.18"}
+        "musl" -> {"hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5", "2.18"}
       end
 
     pdfium_download_url = "https://github.com/bblanchon/pdfium-binaries/releases/download/#{URI.encode_www_form(pdfium_tag)}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
@@ -194,9 +194,7 @@ defmodule Pdfium do
       |> Dagger.Directory.directory("c_include")
 
     dag()
-    |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from(build_image_name)
-    |> with_build_tools(abi)
+    |> with_build_image(platform_name, abi, build_image_name)
     |> Dagger.Container.with_workdir("/build")
     |> Dagger.Container.with_file("/build/pdfium_nif.cpp", Dagger.Directory.file(src_dir, "c_src/pdfium_nif.cpp"))
     |> Dagger.Container.with_directory(fine_include_path, fine_headers)
@@ -301,7 +299,7 @@ defmodule Pdfium do
 
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4")
+    |> Dagger.Container.from("hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5")
     |> Dagger.Container.with_exec(~w"apk add git github-cli")
     |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
     |> Dagger.Container.with_directory("/pdfium", pdfium)
@@ -373,29 +371,37 @@ defmodule Pdfium do
   # todo: in principle it should be possible to move all file-related operations and utilities
   #       (tar/wget and tar/coreutils) to a generic busybox so the disappear here
   #
-  defp with_build_tools(container, "glibc") do
-    container
-    |> Dagger.Container.with_exec(~w"apt update")
-    |> Dagger.Container.with_exec(~w"apt install build-essential tar jq wget --yes")
+  defp with_build_image(dag, platform_name, "glibc", otp_image_name) do
+    otp_directory =
+      dag
+      |> Dagger.Client.container(platform: platform_name)
+      |> Dagger.Container.from(otp_image_name)
+      |> Dagger.Container.directory("/usr/local/lib/erlang")
+
+    dag
+    |> Dagger.Client.container(platform: platform_name)
+    |> Dagger.Container.from("gcc:14-bookworm")
+    |> Dagger.Container.with_directory("/usr/local/lib/erlang", otp_directory)
   end
 
-  defp with_build_tools(container, "musl") do
-    container
+  defp with_build_image(dag, platform_name, "musl", build_image_name) do
+    dag
+    |> Dagger.Client.container(platform: platform_name)
+    |> Dagger.Container.from(build_image_name)
     |> Dagger.Container.with_exec(~w"apk add build-base tar jq coreutils")
   end
 
   defp with_test_image(dag, platform_name, "glibc") do
     dag
     |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.19.5-erlang-28.4.2-ubuntu-noble-20260410")
-    |> Dagger.Container.with_exec(~w"apt update")
-    |> Dagger.Container.with_exec(~w"apt install tar")
+    |> Dagger.Container.from("hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610")
   end
 
   defp with_test_image(dag, platform_name, "musl") do
     dag
     |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.19.5-erlang-28.4.2-alpine-3.23.4")
+    |> Dagger.Container.from("hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5")
     |> Dagger.Container.with_exec(~w"apk add tar")
   end
+
 end
