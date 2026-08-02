@@ -1,6 +1,9 @@
 #include <fine.hpp>
 #include <fine/sync.hpp>
+#include <fpdf_flatten.h>
+#include <fpdf_save.h>
 #include <fpdfview.h>
+#include <cstdio>
 #include <mutex>
 #include <string>
 #include <variant>
@@ -10,6 +13,11 @@ static std::unique_ptr<fine::Mutex> pdfium_mutex;
 static fine::Atom document_closed("document_closed");
 static fine::Atom page_load_failed("page_load_failed");
 static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
+static fine::Atom flattened("flattened");
+static fine::Atom nothing_to_do("nothing_to_do");
+static fine::Atom flatten_failed("flatten_failed");
+static fine::Atom output_open_failed("output_open_failed");
+static fine::Atom save_failed("save_failed");
 
 struct PDFDoc {
     FPDF_DOCUMENT document;
@@ -134,5 +142,74 @@ BitmapResult get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
 }
 
 FINE_NIF(get_page_bitmap, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+namespace {
+
+struct FileWriter : FPDF_FILEWRITE {
+    std::FILE *file;
+};
+
+int write_block(FPDF_FILEWRITE *self, const void *data, unsigned long size) {
+    auto *writer = static_cast<FileWriter *>(self);
+    return std::fwrite(data, 1, size, writer->file) == size ? 1 : 0;
+}
+
+} // namespace
+
+using FlattenResult = std::variant<fine::Ok<fine::Atom>, fine::Error<fine::Atom>>;
+
+FlattenResult flatten(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
+                      std::string output_path) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+
+    int page_count = FPDF_GetPageCount(doc->document);
+    bool changed = false;
+
+    for (int index = 0; index < page_count; index++) {
+        FPDF_PAGE page = FPDF_LoadPage(doc->document, index);
+        if (!page) {
+            return fine::Error(page_load_failed);
+        }
+
+        int result = FPDFPage_Flatten(page, FLAT_NORMALDISPLAY);
+        FPDF_ClosePage(page);
+
+        if (result == FLATTEN_FAIL) {
+            return fine::Error(flatten_failed);
+        }
+
+        if (result == FLATTEN_SUCCESS) {
+            changed = true;
+        }
+    }
+
+    if (!changed) {
+        return fine::Ok(nothing_to_do);
+    }
+
+    FileWriter writer{};
+    writer.version = 1;
+    writer.WriteBlock = write_block;
+    writer.file = std::fopen(output_path.c_str(), "wb");
+
+    if (!writer.file) {
+        return fine::Error(output_open_failed);
+    }
+
+    FPDF_BOOL saved = FPDF_SaveAsCopy(doc->document, &writer, 0);
+    std::fclose(writer.file);
+
+    if (!saved) {
+        return fine::Error(save_failed);
+    }
+
+    return fine::Ok(flattened);
+}
+
+FINE_NIF(flatten, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 FINE_INIT("Elixir.PDFium.NIF");
