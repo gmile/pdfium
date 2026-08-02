@@ -54,7 +54,7 @@ DocResult load_document(ErlNifEnv *env, std::string filename) {
     return fine::Ok(fine::make_resource<PDFDoc>(document));
 }
 
-FINE_NIF(load_document, 0);
+FINE_NIF(load_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 fine::Ok<> close_document(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
     std::unique_lock lock(*pdfium_mutex);
@@ -65,7 +65,7 @@ fine::Ok<> close_document(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
     return fine::Ok<>();
 }
 
-FINE_NIF(close_document, 0);
+FINE_NIF(close_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 using CountResult = std::variant<fine::Ok<int64_t>, fine::Error<fine::Atom>>;
 
@@ -77,7 +77,7 @@ CountResult get_page_count(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
     return fine::Ok(static_cast<int64_t>(FPDF_GetPageCount(doc->document)));
 }
 
-FINE_NIF(get_page_count, 0);
+FINE_NIF(get_page_count, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 using BitmapResult = std::variant<fine::Ok<std::string, int64_t, int64_t>, fine::Error<fine::Atom>>;
 
@@ -133,6 +133,6 @@ BitmapResult get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
                     static_cast<int64_t>(height));
 }
 
-FINE_NIF(get_page_bitmap, 0);
+FINE_NIF(get_page_bitmap, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 FINE_INIT("Elixir.PDFium.NIF");
