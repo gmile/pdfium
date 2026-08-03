@@ -25,12 +25,12 @@ defmodule Pdfium do
   end
 
   defn prepare_release_pull_request(
-    base: String.t(),
-    package_version: String.t() | nil,
-    libpdfium_tag: String.t(),
-    github_token: Dagger.Secret.t(),
-    actor: String.t()
-  ) :: Dagger.Container.t() do
+         base: String.t(),
+         package_version: String.t() | nil,
+         libpdfium_tag: String.t(),
+         github_token: Dagger.Secret.t(),
+         actor: String.t()
+       ) :: Dagger.Container.t() do
     pdfium =
       dag()
       |> Dagger.Client.git("https://github.com/gmile/pdfium", with_auth_token: github_token)
@@ -49,7 +49,7 @@ defmodule Pdfium do
         package_version
         |> String.trim_trailing()
         |> Version.parse!()
-        |> Map.update!(:patch, & &1 + 1)
+        |> Map.update!(:patch, &(&1 + 1))
         |> Version.to_string()
       end
 
@@ -81,12 +81,20 @@ defmodule Pdfium do
     |> Dagger.Container.with_exec(~w"git switch --create #{new_branch_name} origin/#{base}")
     |> Dagger.Container.with_new_file("/pdfium/LIBPDFIUM_TAG", libpdfium_tag)
     |> Dagger.Container.with_exec(~w"git add LIBPDFIUM_TAG")
-    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update libpdfium tag to #{libpdfium_tag}"])
+    |> Dagger.Container.with_exec(
+      ~w"git commit --message" ++ ["Update libpdfium tag to #{libpdfium_tag}"]
+    )
     |> Dagger.Container.with_new_file("/pdfium/VERSION", package_version)
     |> Dagger.Container.with_exec(~w"git add VERSION")
-    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update package to version #{package_version}"])
+    |> Dagger.Container.with_exec(
+      ~w"git commit --message" ++ ["Update package to version #{package_version}"]
+    )
     |> Dagger.Container.with_exec(~w"git push origin #{new_branch_name}")
-    |> Dagger.Container.with_exec(~w"gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium" ++ ["--title", "Bump libpdfium to #{libpdfium_tag} tag"])
+    |> Dagger.Container.with_exec(
+      ~w"gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium" ++
+        ["--title", "Bump libpdfium to #{libpdfium_tag} tag"]
+    )
+
     # |> Dagger.Container.with_exec(~w"gh pr merge #{new_branch_name} --auto --delete-branch --rebase")
   end
 
@@ -119,8 +127,11 @@ defmodule Pdfium do
         "musl" -> {"hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5", "2.18"}
       end
 
-    pdfium_download_url = "https://github.com/bblanchon/pdfium-binaries/releases/download/#{URI.encode_www_form(pdfium_tag)}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
-    output_filename = "pdfium-nif-#{nif_version}-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
+    pdfium_download_url =
+      "https://github.com/bblanchon/pdfium-binaries/releases/download/#{URI.encode_www_form(pdfium_tag)}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
+
+    output_filename =
+      "pdfium-nif-#{nif_version}-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
 
     {
       build_image_name,
@@ -129,18 +140,19 @@ defmodule Pdfium do
     }
   end
 
-  defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
+  defn precompile(src_dir: Dagger.Directory.t(), platform_name: String.t(), abi: String.t()) ::
+         Dagger.File.t() do
     {
       build_image_name,
       pdfium_download_url,
       output_filename
     } = collect_build_info(src_dir, platform_name, abi)
 
-    otp_directory_name="/usr/local/lib/erlang"
+    otp_directory_name = "/usr/local/lib/erlang"
 
-    libpdfium_extract_path="/pdfium"
+    libpdfium_extract_path = "/pdfium"
 
-    fine_include_path="/fine"
+    fine_include_path = "/fine"
 
     compile = ~w(
       g++
@@ -196,22 +208,32 @@ defmodule Pdfium do
     dag()
     |> with_build_image(platform_name, abi, build_image_name)
     |> Dagger.Container.with_workdir("/build")
-    |> Dagger.Container.with_file("/build/pdfium_nif.cpp", Dagger.Directory.file(src_dir, "c_src/pdfium_nif.cpp"))
+    |> Dagger.Container.with_file(
+      "/build/pdfium_nif.cpp",
+      Dagger.Directory.file(src_dir, "c_src/pdfium_nif.cpp")
+    )
     |> Dagger.Container.with_directory(fine_include_path, fine_headers)
-    |> Dagger.Container.with_file("/build/pdfium.tar", Dagger.Client.http(dag(), pdfium_download_url))
+    |> Dagger.Container.with_file(
+      "/build/pdfium.tar",
+      Dagger.Client.http(dag(), pdfium_download_url)
+    )
     |> Dagger.Container.with_exec(~w"mkdir #{libpdfium_extract_path}")
-    |> Dagger.Container.with_exec(~w"tar --extract --gunzip --directory=#{libpdfium_extract_path} --file=/build/pdfium.tar")
+    |> Dagger.Container.with_exec(
+      ~w"tar --extract --gunzip --directory=#{libpdfium_extract_path} --file=/build/pdfium.tar"
+    )
     |> Dagger.Container.with_exec(compile)
     |> Dagger.Container.with_exec(link)
     |> Dagger.Container.with_exec(pack)
     |> Dagger.Container.file(output_path)
+
     # Note: consider removing call to .file and return object instead, see:
     # https://discord.com/channels/707636530424053791/1318250927056097363/1318507837986705439
     #
     # Doing so could potentially make it possible to enter a container in "debug" mode
   end
 
-  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
+  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) ::
+         Dagger.File.t() do
     {:ok, filename} = Dagger.File.name(precompiled)
     precompiled_path = "/test/#{filename}"
 
@@ -226,7 +248,12 @@ defmodule Pdfium do
     |> Dagger.Container.file(precompiled_path)
   end
 
-  defn ci(ref: String.t(), platform_name: String.t(), abi: String.t(), github_token: Dagger.Secret.t()) :: Dagger.File.t() do
+  defn ci(
+         ref: String.t(),
+         platform_name: String.t(),
+         abi: String.t(),
+         github_token: Dagger.Secret.t()
+       ) :: Dagger.File.t() do
     dag()
     |> Dagger.Client.git("https://github.com/gmile/pdfium", with_auth_token: github_token)
     |> Dagger.GitRepository.ref(ref)
@@ -235,7 +262,12 @@ defmodule Pdfium do
     |> test(platform_name, abi)
   end
 
-  defn create_release(pr: String.t(), actor: String.t(), github_token: Dagger.Secret.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
+  defn create_release(
+         pr: String.t(),
+         actor: String.t(),
+         github_token: Dagger.Secret.t(),
+         hex_api_key: Dagger.Secret.t()
+       ) :: Dagger.Container.t() do
     gh =
       dag()
       |> Dagger.Client.container()
@@ -243,10 +275,12 @@ defmodule Pdfium do
       |> Dagger.Container.with_exec(~w"apk add github-cli")
       |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
 
-    {:ok, <<head_ref::binary-size(40), "\n", base_ref_name::binary >>} =
+    {:ok, <<head_ref::binary-size(40), "\n", base_ref_name::binary>>} =
       gh
       |> Dagger.Container.with_exec(~w"echo #{DateTime.utc_now()}")
-      |> Dagger.Container.with_exec(~w"gh pr view #{pr} --json headRefOid,baseRefName --jq .headRefOid,.baseRefName --repo gmile/pdfium")
+      |> Dagger.Container.with_exec(
+        ~w"gh pr view #{pr} --json headRefOid,baseRefName --jq .headRefOid,.baseRefName --repo gmile/pdfium"
+      )
       |> Dagger.Container.stdout()
 
     base_ref_name = String.trim_trailing(base_ref_name)
@@ -267,7 +301,12 @@ defmodule Pdfium do
       |> Dagger.Container.with_exec(run_id)
       |> Dagger.Container.stdout()
 
-    gh = Dagger.Container.with_exec(gh, ~w"gh run download #{run_id} --dir /artifacts --repo gmile/pdfium")
+    gh =
+      Dagger.Container.with_exec(
+        gh,
+        ~w"gh run download #{run_id} --dir /artifacts --repo gmile/pdfium"
+      )
+
     artifacts = Dagger.Container.directory(gh, "/artifacts")
 
     {:ok, entries} = Dagger.Directory.glob(artifacts, "**/*.tar.gz")
@@ -313,9 +352,13 @@ defmodule Pdfium do
     |> Dagger.Container.with_new_file("/pdfium/checksum.exs", inspect(checksums, pretty: true))
     |> Dagger.Container.with_exec(~w"git add checksum.exs")
     |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update checksums"])
-    |> Dagger.Container.with_exec(~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"])
+    |> Dagger.Container.with_exec(
+      ~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"]
+    )
     |> Dagger.Container.with_exec(~w"git push origin HEAD:#{base_ref_name} v#{package_version}")
-    |> Dagger.Container.with_exec(~w"gh release create v#{package_version} --repo gmile/pdfium #{entries}")
+    |> Dagger.Container.with_exec(
+      ~w"gh release create v#{package_version} --repo gmile/pdfium #{entries}"
+    )
     |> Dagger.Container.with_exec(~w"mix local.hex --force")
     |> Dagger.Container.with_exec(~w"mix do deps.get + deps.compile")
     |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
@@ -340,6 +383,12 @@ defmodule Pdfium do
       def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
 
       def flatten(_document, _output_path), do: :erlang.nif_error(:nif_not_loaded)
+
+      def load_font(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+      def close_font(_font), do: :erlang.nif_error(:nif_not_loaded)
+
+      def measure_text(_font, _size, _texts), do: :erlang.nif_error(:nif_not_loaded)
     end
 
     {:ok, ref} = PDFium.NIF.load_document("./test.pdf")
@@ -406,5 +455,4 @@ defmodule Pdfium do
     |> Dagger.Container.from("hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5")
     |> Dagger.Container.with_exec(~w"apk add tar")
   end
-
 end
