@@ -355,7 +355,13 @@ MeasureResult measure_text(ErlNifEnv *env, fine::ResourcePtr<PDFFont> font, doub
         FPDF_PAGEOBJECT object =
             FPDFPageObj_CreateTextObj(font->document, font->font, static_cast<float>(size));
 
-        auto utf16 = to_utf16(text);
+        // A character's box is derived from its glyph outline, so a blank glyph
+        // ending a run measures as nothing and " " comes back as zero. Appending
+        // a sentinel and taking the distance the pen travelled measures
+        // advances rather than ink, which is what a width is. The sentinel's own
+        // advance never enters the result, so it does not matter whether the
+        // font even has that character.
+        auto utf16 = to_utf16(text + "A");
         FPDFText_SetText(object, utf16.data());
         FPDFPage_InsertObject(page, object);
         FPDFPage_GenerateContent(page);
@@ -364,11 +370,11 @@ MeasureResult measure_text(ErlNifEnv *env, fine::ResourcePtr<PDFFont> font, doub
         double width = 0.0;
 
         int count = FPDFText_CountChars(text_page);
-        for (int index = 0; index < count; index++) {
-            FS_RECTF rect;
-            if (FPDFText_GetLooseCharBox(text_page, index, &rect)) {
-                width += rect.right - rect.left;
-            }
+        double start_x, start_y, end_x, end_y;
+
+        if (count > 1 && FPDFText_GetCharOrigin(text_page, 0, &start_x, &start_y) &&
+            FPDFText_GetCharOrigin(text_page, count - 1, &end_x, &end_y)) {
+            width = end_x - start_x;
         }
 
         FPDFText_ClosePage(text_page);
