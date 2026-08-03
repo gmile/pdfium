@@ -111,6 +111,16 @@ defmodule PDFiumTest do
       assert_widths(widths, [9.0])
     end
 
+    test "measures a string that is only whitespace", %{font: font} do
+      # Nothing inked anchors this measurement, so summing glyph extents answers
+      # zero for a single space and loses one space from every longer run.
+      # Callers that measure the gaps between words as strings in their own right
+      # would be told there are no gaps.
+      assert {:ok, widths} = PDFium.measure_text(font, 12.0, [" ", "  ", "   "])
+
+      assert_widths(widths, [3.0, 6.0, 9.0])
+    end
+
     test "measures characters outside latin-1", %{font: font} do
       # ę is 600 units where .notdef is 500. A simple, single byte encoded font
       # would fall back to .notdef here and quietly answer 6.0.
