@@ -22,6 +22,9 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 pdfium-*.tar
 
+# Ignore the NIF archives the macOS build writes beside the script.
+custom/pdfium-nif-*.tar.gz
+
 # Temporary files, for example, from tests.
 /tmp/
 /priv/
