@@ -97,7 +97,9 @@ fi
 output_name="pdfium-nif-${nif_version}-${otp_arch}-apple-darwin-$(cat ../VERSION).tar.gz"
 
 # 6. Create archive
-tar --create \
+# -s is BSD tar's substitution flag; GNU tar reads it as --same-order and
+# refuses. The system tar is the BSD one, whatever else is on PATH.
+/usr/bin/tar --create \
     --verbose \
     --file="$output_name" \
     -s '|.*/||' \
