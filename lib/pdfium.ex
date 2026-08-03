@@ -8,4 +8,10 @@ defmodule PDFium do
   defdelegate get_page_bitmap(document, page_number, dpi), to: PDFium.NIF
 
   defdelegate flatten(document, output_path), to: PDFium.NIF
+
+  defdelegate load_font(data), to: PDFium.NIF
+
+  defdelegate close_font(font), to: PDFium.NIF
+
+  defdelegate measure_text(font, size, texts), to: PDFium.NIF
 end
