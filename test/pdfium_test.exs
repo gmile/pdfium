@@ -161,4 +161,109 @@ defmodule PDFiumTest do
       assert {:error, :font_load_failed} = PDFium.load_font("not a font")
     end
   end
+
+  describe "draw_text/5" do
+    setup do
+      {:ok, font} = PDFium.load_font(File.read!(Path.expand("fixtures/measuring.ttf", __DIR__)))
+
+      {:ok, font: font}
+    end
+
+    # The bitmap runs top down and a page runs bottom up, so a row has to be
+    # turned back around before it can be compared with the baseline asked for.
+    defp ink_box(path) do
+      {:ok, document} = PDFium.load_document(path)
+
+      try do
+        {:ok, bitmap, width, height} = PDFium.get_page_bitmap(document, 0, 72)
+
+        {box, _index} =
+          for <<r::8, g::8, b::8, _a::8 <- bitmap>>, reduce: {nil, 0} do
+            {box, index} ->
+              if div(r + g + b, 3) < 200 do
+                x = rem(index, width)
+                y = height - div(index, width) - 1
+
+                case box do
+                  nil -> {{x, y, x, y}, index + 1}
+                  {x0, y0, x1, y1} -> {{min(x0, x), min(y0, y), max(x1, x), max(y1, y)}, index + 1}
+                end
+              else
+                {box, index + 1}
+              end
+          end
+
+        box
+      after
+        PDFium.close_document(document)
+      end
+    end
+
+    test "puts the pen where it was told to", %{font: font, output: output} do
+      assert {:ok, :drawn} = PDFium.draw_text(font, 48.0, {300, 300}, [{"A", 100, 150}], output)
+
+      assert {x0, y0, _x1, _y1} = ink_box(output)
+
+      # The glyph fills its cell and has no side bearings, so its corner is the pen.
+      assert_in_delta x0, 100, 2
+      assert_in_delta y0, 150, 2
+    end
+
+    test "keeps the placements apart", %{font: font, output: output} do
+      placements = [{"A", 40, 60}, {"A", 40, 200}]
+
+      assert {:ok, :drawn} = PDFium.draw_text(font, 24.0, {300, 300}, placements, output)
+
+      assert {_x0, y0, _x1, y1} = ink_box(output)
+
+      assert y1 - y0 > 140, "two baselines 140 apart should span at least that far"
+    end
+
+    test "writes a page of the size it was given", %{font: font, output: output} do
+      assert {:ok, :drawn} = PDFium.draw_text(font, 12.0, {200, 400}, [{"A", 10, 10}], output)
+
+      {:ok, document} = PDFium.load_document(output)
+      {:ok, _bitmap, width, height} = PDFium.get_page_bitmap(document, 0, 72)
+      PDFium.close_document(document)
+
+      assert {width, height} == {200, 400}
+    end
+
+    test "writes one page however many times it is called", %{font: font, output: output} do
+      # The page is built inside the font's own document, so failing to take it
+      # back out would leave the next overlay carrying every page drawn before it.
+      for _ <- 1..5 do
+        assert {:ok, :drawn} = PDFium.draw_text(font, 12.0, {100, 100}, [{"A", 10, 10}], output)
+      end
+
+      {:ok, document} = PDFium.load_document(output)
+      assert {:ok, 1} = PDFium.get_page_count(document)
+      PDFium.close_document(document)
+    end
+
+    test "draws nothing when given nothing", %{font: font, output: output} do
+      assert {:ok, :drawn} = PDFium.draw_text(font, 12.0, {100, 100}, [], output)
+
+      assert ink_box(output) == nil
+    end
+
+    test "still measures after drawing", %{font: font, output: output} do
+      assert {:ok, :drawn} = PDFium.draw_text(font, 12.0, {100, 100}, [{"A", 10, 10}], output)
+
+      assert {:ok, [width]} = PDFium.measure_text(font, 12.0, ["A"])
+      assert_in_delta width, 6.0, 0.0001
+    end
+
+    test "reports a closed font", %{font: font, output: output} do
+      assert :ok = PDFium.close_font(font)
+
+      assert {:error, :font_closed} =
+               PDFium.draw_text(font, 12.0, {100, 100}, [{"A", 10, 10}], output)
+    end
+
+    test "reports placements that do not line up", %{font: font, output: output} do
+      assert {:error, :placement_mismatch} =
+               PDFium.NIF.draw_text(font, 12.0, 100.0, 100.0, ["A", "B"], [10.0], [10.0], output)
+    end
+  end
 end
