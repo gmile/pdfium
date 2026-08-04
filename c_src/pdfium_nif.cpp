@@ -22,6 +22,11 @@ static fine::Atom output_open_failed("output_open_failed");
 static fine::Atom save_failed("save_failed");
 static fine::Atom font_load_failed("font_load_failed");
 static fine::Atom font_closed("font_closed");
+static fine::Atom placement_mismatch("placement_mismatch");
+static fine::Atom page_creation_failed("page_creation_failed");
+static fine::Atom text_object_failed("text_object_failed");
+static fine::Atom generate_content_failed("generate_content_failed");
+static fine::Atom drawn("drawn");
 
 struct PDFDoc {
     FPDF_DOCUMENT document;
@@ -391,5 +396,85 @@ MeasureResult measure_text(ErlNifEnv *env, fine::ResourcePtr<PDFFont> font, doub
 }
 
 FINE_NIF(measure_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+using DrawResult = std::variant<fine::Ok<fine::Atom>, fine::Error<fine::Atom>>;
+
+// Draws every string on one page of its own document and writes it out, for
+// compositing onto the page it belongs over.
+//
+// The page is built inside the document the font was loaded into, because a page
+// object belongs to the document that made it and the font cannot be borrowed
+// across one. It is removed again afterwards, so the document a caller holds is
+// no larger for having drawn.
+//
+// Positions are the pen, so y is the baseline rather than the bottom of the
+// glyphs, which is what a text placement means everywhere else.
+DrawResult draw_text(ErlNifEnv *env, fine::ResourcePtr<PDFFont> font, double size, double width,
+                     double height, std::vector<std::string> texts, std::vector<double> xs,
+                     std::vector<double> ys, std::string output_path) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!font->font) {
+        return fine::Error(font_closed);
+    }
+
+    if (texts.size() != xs.size() || texts.size() != ys.size()) {
+        return fine::Error(placement_mismatch);
+    }
+
+    FPDF_PAGE page = FPDFPage_New(font->document, 0, width, height);
+
+    if (!page) {
+        return fine::Error(page_creation_failed);
+    }
+
+    for (size_t index = 0; index < texts.size(); index++) {
+        FPDF_PAGEOBJECT object =
+            FPDFPageObj_CreateTextObj(font->document, font->font, static_cast<float>(size));
+
+        if (!object) {
+            FPDF_ClosePage(page);
+            FPDFPage_Delete(font->document, 0);
+            return fine::Error(text_object_failed);
+        }
+
+        auto utf16 = to_utf16(texts[index]);
+        FPDFText_SetText(object, utf16.data());
+        FPDFPageObj_SetFillColor(object, 0, 0, 0, 255);
+        FPDFPageObj_Transform(object, 1, 0, 0, 1, xs[index], ys[index]);
+        FPDFPage_InsertObject(page, object);
+    }
+
+    FPDF_BOOL generated = FPDFPage_GenerateContent(page);
+    FPDF_ClosePage(page);
+
+    if (!generated) {
+        FPDFPage_Delete(font->document, 0);
+        return fine::Error(generate_content_failed);
+    }
+
+    FileWriter writer{};
+    writer.version = 1;
+    writer.WriteBlock = write_block;
+    writer.file = std::fopen(output_path.c_str(), "wb");
+
+    if (!writer.file) {
+        FPDFPage_Delete(font->document, 0);
+        return fine::Error(output_open_failed);
+    }
+
+    FPDF_BOOL saved = FPDF_SaveAsCopy(font->document, &writer, 0);
+    std::fclose(writer.file);
+
+    FPDFPage_Delete(font->document, 0);
+
+    if (!saved) {
+        return fine::Error(save_failed);
+    }
+
+    return fine::Ok(drawn);
+}
+
+FINE_NIF(draw_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 FINE_INIT("Elixir.PDFium.NIF");
