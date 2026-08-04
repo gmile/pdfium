@@ -1,8 +1,8 @@
 %{
-  "pdfium-nif-2.18-aarch64-apple-darwin-0.1.31.tar.gz" => "sha256:7a3aee62c15c90b6c5980ba99c5bf52cb7db64f8bfa4a771a84d3efbccf9f79e",
-  "pdfium-nif-2.18-aarch64-linux-gnu-0.1.31.tar.gz" => "sha256:8bcaa0f4d7475ab319eef31225b5777bcf12ff96b92a4d2ec884fa99ec0587d3",
-  "pdfium-nif-2.18-aarch64-linux-musl-0.1.31.tar.gz" => "sha256:8b10ec569a98b0cabf72b3144d74357f5c0e6fed27d661318745a78285a81c56",
-  "pdfium-nif-2.18-x86_64-apple-darwin-0.1.31.tar.gz" => "sha256:0445f036f97383c2178325a2635b8d7082736048a3b549305dbc61499a18a086",
-  "pdfium-nif-2.18-x86_64-linux-gnu-0.1.31.tar.gz" => "sha256:e172359cb03c72f218adf3b9b3d36a5f1b5cc5133f484c0f1a5b3d9e510d317f",
-  "pdfium-nif-2.18-x86_64-linux-musl-0.1.31.tar.gz" => "sha256:29bd93b67b4b3ea44bd99961095533e8362d5ff392c32d7197069ccf13425531"
+  "pdfium-nif-2.18-aarch64-apple-darwin-0.1.32.tar.gz" => "sha256:013e3c71facc460e422c3a094bc33c230bc29dc79028a51496dcba4728a35b2c",
+  "pdfium-nif-2.18-aarch64-linux-gnu-0.1.32.tar.gz" => "sha256:b3745191c7a1dba43324acc66c03bf2236c477096f20b3bf3eda9a887774bc87",
+  "pdfium-nif-2.18-aarch64-linux-musl-0.1.32.tar.gz" => "sha256:03e5fac7b66ade94e5787263d02579d9337f170ff8756fe7c3590391e26bde6a",
+  "pdfium-nif-2.18-x86_64-apple-darwin-0.1.32.tar.gz" => "sha256:40eb6f7c50aca890d35561dc3caad3607ab2b03c11e6248ca85fcc484b88dbed",
+  "pdfium-nif-2.18-x86_64-linux-gnu-0.1.32.tar.gz" => "sha256:bfc8baf3ecb002015fb486381144b9a7ecb43b46abfa8eb836cc25150b829352",
+  "pdfium-nif-2.18-x86_64-linux-musl-0.1.32.tar.gz" => "sha256:0e3b6e8678b8c935b02aff984424fddde3a41a68dd9305d153180003400832b5"
 }
