@@ -21,4 +21,7 @@ defmodule PDFium.NIF do
   def close_font(_font), do: :erlang.nif_error(:nif_not_loaded)
 
   def measure_text(_font, _size, _texts), do: :erlang.nif_error(:nif_not_loaded)
+
+  def draw_text(_font, _size, _width, _height, _texts, _xs, _ys, _output_path),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
