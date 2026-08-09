@@ -14,5 +14,13 @@ defmodule PDFium.NIF do
 
   def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
 
+  def get_page_boxes(_document), do: :erlang.nif_error(:nif_not_loaded)
+
+  def get_page_sizes(_documents), do: :erlang.nif_error(:nif_not_loaded)
+
+  def get_annotation_counts(_document), do: :erlang.nif_error(:nif_not_loaded)
+
+  def get_meta_text(_document, _key), do: :erlang.nif_error(:nif_not_loaded)
+
   def flatten(_document, _output_path), do: :erlang.nif_error(:nif_not_loaded)
 end

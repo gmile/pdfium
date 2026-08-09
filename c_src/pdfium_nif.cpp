@@ -2,12 +2,15 @@
 #include <fine/sync.hpp>
 #include <fpdf_annot.h>
 #include <fpdf_annot.h>
+#include <fpdf_doc.h>
 #include <fpdf_edit.h>
 #include <fpdf_flatten.h>
 #include <fpdf_save.h>
+#include <fpdf_transformpage.h>
 #include <fpdfview.h>
 #include <cstdio>
 #include <mutex>
+#include <tuple>
 #include <string>
 #include <variant>
 
@@ -180,6 +183,193 @@ BitmapResult get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
 }
 
 FINE_NIF(get_page_bitmap, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+using PageBox = std::tuple<double, double, double, double, int64_t>;
+
+using BoxesResult = std::variant<fine::Ok<std::vector<PageBox>>, fine::Error<fine::Atom>>;
+
+BoxesResult get_page_boxes(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+
+    int page_count = FPDF_GetPageCount(doc->document);
+
+    std::vector<PageBox> boxes;
+    boxes.reserve(static_cast<size_t>(page_count));
+
+    for (int index = 0; index < page_count; index++) {
+        FPDF_PAGE page = FPDF_LoadPage(doc->document, index);
+        if (!page) {
+            return fine::Error(page_load_failed);
+        }
+
+        int rotation = FPDFPage_GetRotation(page);
+
+        float left, bottom, right, top;
+
+        if (!FPDFPage_GetMediaBox(page, &left, &bottom, &right, &top)) {
+            float width = FPDF_GetPageWidthF(page);
+            float height = FPDF_GetPageHeightF(page);
+
+            if (rotation % 2 != 0) {
+                std::swap(width, height);
+            }
+
+            left = 0.0f;
+            bottom = 0.0f;
+            right = width;
+            top = height;
+        }
+
+        FPDF_ClosePage(page);
+
+        boxes.emplace_back(std::min(left, right), std::min(bottom, top), std::max(left, right),
+                           std::max(bottom, top), static_cast<int64_t>(rotation) * 90);
+    }
+
+    return fine::Ok(std::move(boxes));
+}
+
+FINE_NIF(get_page_boxes, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+using PageSize = std::tuple<double, double>;
+
+using SizesResult =
+    std::variant<fine::Ok<std::vector<std::vector<PageSize>>>, fine::Error<fine::Atom>>;
+
+// Every document in one call, because placing anything wants the sizes of the
+// page it goes on and of the overlay going there, and each call over this
+// boundary waits its turn on the same lock.
+SizesResult get_page_sizes(ErlNifEnv *env, std::vector<fine::ResourcePtr<PDFDoc>> docs) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    std::vector<std::vector<PageSize>> documents;
+    documents.reserve(docs.size());
+
+    for (const auto &doc : docs) {
+        if (!doc->document) {
+            return fine::Error(document_closed);
+        }
+
+        int page_count = FPDF_GetPageCount(doc->document);
+
+        std::vector<PageSize> sizes;
+        sizes.reserve(static_cast<size_t>(page_count));
+
+        for (int index = 0; index < page_count; index++) {
+            FPDF_PAGE page = FPDF_LoadPage(doc->document, index);
+
+            if (!page) {
+                return fine::Error(page_load_failed);
+            }
+
+            sizes.emplace_back(FPDF_GetPageWidthF(page), FPDF_GetPageHeightF(page));
+            FPDF_ClosePage(page);
+        }
+
+        documents.push_back(std::move(sizes));
+    }
+
+    return fine::Ok(std::move(documents));
+}
+
+FINE_NIF(get_page_sizes, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+using CountsResult = std::variant<fine::Ok<std::vector<int64_t>>, fine::Error<fine::Atom>>;
+
+CountsResult get_annotation_counts(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+
+    int page_count = FPDF_GetPageCount(doc->document);
+
+    std::vector<int64_t> counts;
+    counts.reserve(static_cast<size_t>(page_count));
+
+    for (int index = 0; index < page_count; index++) {
+        FPDF_PAGE page = FPDF_LoadPage(doc->document, index);
+
+        if (!page) {
+            return fine::Error(page_load_failed);
+        }
+
+        counts.push_back(static_cast<int64_t>(FPDFPage_GetAnnotCount(page)));
+        FPDF_ClosePage(page);
+    }
+
+    return fine::Ok(std::move(counts));
+}
+
+FINE_NIF(get_annotation_counts, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+namespace {
+
+std::string from_utf16(const std::vector<unsigned short> &utf16) {
+    std::string out;
+    size_t index = 0;
+
+    while (index < utf16.size() && utf16[index] != 0) {
+        uint32_t point = utf16[index++];
+
+        if (point >= 0xD800 && point <= 0xDBFF && index < utf16.size()) {
+            uint32_t trail = utf16[index];
+
+            if (trail >= 0xDC00 && trail <= 0xDFFF) {
+                point = 0x10000 + ((point - 0xD800) << 10) + (trail - 0xDC00);
+                index++;
+            }
+        }
+
+        if (point < 0x80) {
+            out.push_back(static_cast<char>(point));
+        } else if (point < 0x800) {
+            out.push_back(static_cast<char>(0xC0 | (point >> 6)));
+            out.push_back(static_cast<char>(0x80 | (point & 0x3F)));
+        } else if (point < 0x10000) {
+            out.push_back(static_cast<char>(0xE0 | (point >> 12)));
+            out.push_back(static_cast<char>(0x80 | ((point >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (point & 0x3F)));
+        } else {
+            out.push_back(static_cast<char>(0xF0 | (point >> 18)));
+            out.push_back(static_cast<char>(0x80 | ((point >> 12) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | ((point >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (point & 0x3F)));
+        }
+    }
+
+    return out;
+}
+
+} // namespace
+
+using MetaResult = std::variant<fine::Ok<std::string>, fine::Error<fine::Atom>>;
+
+MetaResult get_meta_text(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string key) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+
+    unsigned long length = FPDF_GetMetaText(doc->document, key.c_str(), nullptr, 0);
+
+    if (length <= sizeof(unsigned short)) {
+        return fine::Ok(std::string());
+    }
+
+    std::vector<unsigned short> utf16(length / sizeof(unsigned short));
+    FPDF_GetMetaText(doc->document, key.c_str(), utf16.data(), length);
+
+    return fine::Ok(from_utf16(utf16));
+}
+
+FINE_NIF(get_meta_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 namespace {
 
