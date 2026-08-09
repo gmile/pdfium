@@ -11,6 +11,14 @@
 
 static std::unique_ptr<fine::Mutex> pdfium_mutex;
 
+static fine::Atom error_unknown("unknown");
+static fine::Atom error_file("file");
+static fine::Atom error_format("format");
+static fine::Atom error_password("password");
+static fine::Atom error_security("security");
+static fine::Atom error_page("page");
+static fine::Atom error_xfa_load("xfa_load");
+static fine::Atom error_xfa_layout("xfa_layout");
 static fine::Atom document_closed("document_closed");
 static fine::Atom page_load_failed("page_load_failed");
 static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
@@ -48,7 +56,34 @@ static auto unload_reg = fine::Registration::register_unload(
         FPDF_DestroyLibrary();
     });
 
-using DocResult = std::variant<fine::Ok<fine::ResourcePtr<PDFDoc>>, fine::Error<uint64_t>>;
+namespace {
+
+fine::Atom last_error_name(unsigned long error) {
+    switch (error) {
+    case FPDF_ERR_FILE:
+        return error_file;
+    case FPDF_ERR_FORMAT:
+        return error_format;
+    case FPDF_ERR_PASSWORD:
+        return error_password;
+    case FPDF_ERR_SECURITY:
+        return error_security;
+    case FPDF_ERR_PAGE:
+        return error_page;
+#ifdef PDF_ENABLE_XFA
+    case FPDF_ERR_XFALOAD:
+        return error_xfa_load;
+    case FPDF_ERR_XFALAYOUT:
+        return error_xfa_layout;
+#endif
+    default:
+        return error_unknown;
+    }
+}
+
+} // namespace
+
+using DocResult = std::variant<fine::Ok<fine::ResourcePtr<PDFDoc>>, fine::Error<fine::Atom>>;
 
 DocResult load_document(ErlNifEnv *env, std::string filename) {
     std::unique_lock lock(*pdfium_mutex);
@@ -57,7 +92,7 @@ DocResult load_document(ErlNifEnv *env, std::string filename) {
     lock.unlock();
 
     if (!document) {
-        return fine::Error(static_cast<uint64_t>(error));
+        return fine::Error(last_error_name(error));
     }
 
     return fine::Ok(fine::make_resource<PDFDoc>(document));
