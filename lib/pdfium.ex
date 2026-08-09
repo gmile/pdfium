@@ -109,5 +109,50 @@ defmodule PDFium do
   @spec get_annotation_counts(reference()) :: {:ok, [non_neg_integer()]} | {:error, atom()}
   defdelegate get_annotation_counts(document), to: PDFium.NIF
 
+  @doc """
+  Makes an empty document.
+  """
+  @spec create_document() :: {:ok, reference()} | {:error, atom()}
+  defdelegate create_document(), to: PDFium.NIF
+
+  @doc """
+  Writes a document out.
+  """
+  @spec save(reference(), Path.t()) :: {:ok, :saved} | {:error, atom()}
+  defdelegate save(document, output_path), to: PDFium.NIF
+
+  @doc """
+  Copies pages of `source` into `destination`, starting at page `at`.
+
+  `pages` is `:all` or a list of page indexes counted from zero, in the order
+  they should arrive.
+  """
+  @spec import_pages(reference(), reference(), :all | [non_neg_integer()], non_neg_integer()) ::
+          {:ok, :imported} | {:error, atom()}
+  def import_pages(destination, source, pages, at \\ 0)
+
+  def import_pages(destination, source, :all, at),
+    do: PDFium.NIF.import_pages(destination, source, [], at)
+
+  def import_pages(_destination, _source, [], _at), do: {:error, :no_pages}
+
+  def import_pages(destination, source, pages, at) when is_list(pages),
+    do: PDFium.NIF.import_pages(destination, source, pages, at)
+
+  @doc """
+  Runs `function` with an empty document and closes it again.
+  """
+  @spec with_new_document((reference() -> result)) :: result | {:error, atom()}
+        when result: term()
+  def with_new_document(function) do
+    with {:ok, document} <- create_document() do
+      try do
+        function.(document)
+      after
+        close_document(document)
+      end
+    end
+  end
+
   defdelegate flatten(document, output_path), to: PDFium.NIF
 end

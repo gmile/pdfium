@@ -23,4 +23,9 @@ defmodule PDFium.NIF do
   def get_meta_text(_document, _key), do: :erlang.nif_error(:nif_not_loaded)
 
   def flatten(_document, _output_path), do: :erlang.nif_error(:nif_not_loaded)
+  def create_document, do: :erlang.nif_error(:nif_not_loaded)
+
+  def save(_document, _output_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  def import_pages(_dest, _src, _page_indices, _at), do: :erlang.nif_error(:nif_not_loaded)
 end
