@@ -1,5 +1,7 @@
 #include <fine.hpp>
 #include <fine/sync.hpp>
+#include <fpdf_annot.h>
+#include <fpdf_annot.h>
 #include <fpdf_edit.h>
 #include <fpdf_flatten.h>
 #include <fpdf_save.h>
@@ -151,7 +153,7 @@ BitmapResult get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
     }
 
     FPDFBitmap_FillRect(bitmap, 0, 0, width, height, 0xFFFFFFFF);
-    FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, 0);
+    FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, FPDF_ANNOT);
 
     auto *buffer = static_cast<unsigned char *>(FPDFBitmap_GetBuffer(bitmap));
     int stride = FPDFBitmap_GetStride(bitmap);

@@ -29,6 +29,15 @@ defmodule PDFium do
 
   defdelegate get_page_count(document), to: PDFium.NIF
 
+  @doc """
+  Renders a page to RGBA pixels at the given resolution.
+
+  Annotations are drawn, because a page is what a reader shows and every reader
+  draws them. A page whose annotation paints over its content renders without
+  that content, which is the point of the annotation.
+  """
+  @spec get_page_bitmap(reference(), non_neg_integer(), pos_integer()) ::
+          {:ok, binary(), non_neg_integer(), non_neg_integer()} | {:error, atom()}
   defdelegate get_page_bitmap(document, page_number, dpi), to: PDFium.NIF
 
   defdelegate flatten(document, output_path), to: PDFium.NIF
