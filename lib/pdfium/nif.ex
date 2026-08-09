@@ -2,7 +2,16 @@ defmodule PDFium.NIF do
   @on_load :load_nif
 
   def load_nif do
-    path = :filename.join(:code.priv_dir(:pdfium), ~c"pdfium_nif")
+    # Loaded straight from the working directory when there is no application
+    # around it, which is how the precompiled artefact is smoke tested.
+    path =
+      case :code.priv_dir(:pdfium) do
+        # Spelled as a path rather than a name: a bare name sends the loader
+        # looking through the system library directories instead of here.
+        {:error, :bad_name} -> ~c"./pdfium_nif"
+        directory -> :filename.join(directory, ~c"pdfium_nif")
+      end
+
     :erlang.load_nif(path, 0)
   end
 

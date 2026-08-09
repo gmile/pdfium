@@ -232,8 +232,12 @@ defmodule Pdfium do
     # Doing so could potentially make it possible to enter a container in "debug" mode
   end
 
-  defn test(precompiled: Dagger.File.t(), platform_name: String.t(), abi: String.t()) ::
-         Dagger.File.t() do
+  defn test(
+         precompiled: Dagger.File.t(),
+         src_dir: Dagger.Directory.t(),
+         platform_name: String.t(),
+         abi: String.t()
+       ) :: Dagger.File.t() do
     {:ok, filename} = Dagger.File.name(precompiled)
     precompiled_path = "/test/#{filename}"
 
@@ -242,6 +246,10 @@ defmodule Pdfium do
     |> Dagger.Container.with_workdir("/test")
     |> Dagger.Container.with_file(precompiled_path, precompiled)
     |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=#{precompiled_path}")
+    |> Dagger.Container.with_file(
+      "/test/nif.ex",
+      Dagger.Directory.file(src_dir, "lib/pdfium/nif.ex")
+    )
     |> Dagger.Container.with_new_file("/test/test.exs", test_script())
     |> Dagger.Container.with_new_file("/test/test.pdf", test_pdf())
     |> Dagger.Container.with_exec(~w"elixir test.exs")
@@ -254,12 +262,15 @@ defmodule Pdfium do
          abi: String.t(),
          github_token: Dagger.Secret.t()
        ) :: Dagger.File.t() do
-    dag()
-    |> Dagger.Client.git("https://github.com/gmile/pdfium", with_auth_token: github_token)
-    |> Dagger.GitRepository.ref(ref)
-    |> Dagger.GitRef.tree()
+    src_dir =
+      dag()
+      |> Dagger.Client.git("https://github.com/gmile/pdfium", with_auth_token: github_token)
+      |> Dagger.GitRepository.ref(ref)
+      |> Dagger.GitRef.tree()
+
+    src_dir
     |> precompile(platform_name, abi)
-    |> test(platform_name, abi)
+    |> test(src_dir, platform_name, abi)
   end
 
   defn create_release(
@@ -367,36 +378,16 @@ defmodule Pdfium do
 
   def test_script do
     """
-    defmodule PDFium.NIF do
-      @on_load :load_nif
+    # The module the library ships, rather than a copy of it kept in step by
+    # hand: a NIF that declares a function the module does not will not load at
+    # all, so a copy left behind fails the build for the wrong reason.
+    Code.require_file("nif.ex")
 
-      def load_nif do
-        :erlang.load_nif(~c"./pdfium_nif", 0)
-      end
+    {:ok, document} = PDFium.NIF.load_document("./test.pdf")
+    {:ok, pages} = PDFium.NIF.get_page_count(document)
+    {:ok, boxes} = PDFium.NIF.get_page_boxes(document)
 
-      def load_document(_filename), do: :erlang.nif_error(:nif_not_loaded)
-
-      def close_document(_document), do: :erlang.nif_error(:nif_not_loaded)
-
-      def get_page_count(_document), do: :erlang.nif_error(:nif_not_loaded)
-
-      def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
-
-      def flatten(_document, _output_path), do: :erlang.nif_error(:nif_not_loaded)
-
-      def load_font(_data), do: :erlang.nif_error(:nif_not_loaded)
-
-      def close_font(_font), do: :erlang.nif_error(:nif_not_loaded)
-
-      def measure_text(_font, _size, _texts), do: :erlang.nif_error(:nif_not_loaded)
-
-      def draw_text(_font, _size, _width, _height, _texts, _xs, _ys, _output_path),
-        do: :erlang.nif_error(:nif_not_loaded)
-    end
-
-    {:ok, ref} = PDFium.NIF.load_document("./test.pdf")
-    {:ok, pages} = PDFium.NIF.get_page_count(ref)
-    {:ok, :nothing_to_do} = PDFium.NIF.flatten(ref, "./flattened.pdf")
+    ^pages = length(boxes)
 
     IO.inspect(pages, label: "pages")
     """
