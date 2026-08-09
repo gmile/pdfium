@@ -109,6 +109,8 @@ defmodule PDFium do
   @spec get_annotation_counts(reference()) :: {:ok, [non_neg_integer()]} | {:error, atom()}
   defdelegate get_annotation_counts(document), to: PDFium.NIF
 
+  defdelegate flatten(document, output_path), to: PDFium.NIF
+
   @doc """
   Makes an empty document.
   """
@@ -153,6 +155,4 @@ defmodule PDFium do
       end
     end
   end
-
-  defdelegate flatten(document, output_path), to: PDFium.NIF
 end
