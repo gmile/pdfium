@@ -5,12 +5,14 @@
 #include <fpdf_doc.h>
 #include <fpdf_edit.h>
 #include <fpdf_flatten.h>
+#include <fpdf_ppo.h>
 #include <fpdf_save.h>
 #include <fpdf_transformpage.h>
 #include <fpdfview.h>
 #include <cstdio>
 #include <mutex>
 #include <tuple>
+#include <optional>
 #include <string>
 #include <variant>
 
@@ -24,6 +26,10 @@ static fine::Atom error_security("security");
 static fine::Atom error_page("page");
 static fine::Atom error_xfa_load("xfa_load");
 static fine::Atom error_xfa_layout("xfa_layout");
+static fine::Atom document_creation_failed("document_creation_failed");
+static fine::Atom import_failed("import_failed");
+static fine::Atom saved("saved");
+static fine::Atom imported_atom("imported");
 static fine::Atom document_closed("document_closed");
 static fine::Atom page_load_failed("page_load_failed");
 static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
@@ -382,6 +388,26 @@ int write_block(FPDF_FILEWRITE *self, const void *data, unsigned long size) {
     return std::fwrite(data, 1, size, writer->file) == size ? 1 : 0;
 }
 
+std::optional<fine::Atom> write_document(FPDF_DOCUMENT document, const std::string &path) {
+    FileWriter writer{};
+    writer.version = 1;
+    writer.WriteBlock = write_block;
+    writer.file = std::fopen(path.c_str(), "wb");
+
+    if (!writer.file) {
+        return output_open_failed;
+    }
+
+    FPDF_BOOL saved = FPDF_SaveAsCopy(document, &writer, 0);
+    std::fclose(writer.file);
+
+    if (!saved) {
+        return save_failed;
+    }
+
+    return std::nullopt;
+}
+
 } // namespace
 
 using FlattenResult = std::variant<fine::Ok<fine::Atom>, fine::Error<fine::Atom>>;
@@ -419,25 +445,76 @@ FlattenResult flatten(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
         return fine::Ok(nothing_to_do);
     }
 
-    FileWriter writer{};
-    writer.version = 1;
-    writer.WriteBlock = write_block;
-    writer.file = std::fopen(output_path.c_str(), "wb");
-
-    if (!writer.file) {
-        return fine::Error(output_open_failed);
-    }
-
-    FPDF_BOOL saved = FPDF_SaveAsCopy(doc->document, &writer, 0);
-    std::fclose(writer.file);
-
-    if (!saved) {
-        return fine::Error(save_failed);
+    if (auto error = write_document(doc->document, output_path)) {
+        return fine::Error(*error);
     }
 
     return fine::Ok(flattened);
 }
 
 FINE_NIF(flatten, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+using WriteResult = std::variant<fine::Ok<fine::Atom>, fine::Error<fine::Atom>>;
+
+DocResult create_document(ErlNifEnv *env) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    FPDF_DOCUMENT document = FPDF_CreateNewDocument();
+
+    if (!document) {
+        return fine::Error(document_creation_failed);
+    }
+
+    return fine::Ok(fine::make_resource<PDFDoc>(document));
+}
+
+FINE_NIF(create_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+WriteResult save(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string output_path) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+
+    if (auto error = write_document(doc->document, output_path)) {
+        return fine::Error(*error);
+    }
+
+    return fine::Ok(saved);
+}
+
+FINE_NIF(save, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+// An empty list of pages is pdfium's way of asking for all of them.
+WriteResult import_pages(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> dest,
+                         fine::ResourcePtr<PDFDoc> src, std::vector<int64_t> page_indices,
+                         int64_t at) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!dest->document || !src->document) {
+        return fine::Error(document_closed);
+    }
+
+    std::vector<int> indices;
+    indices.reserve(page_indices.size());
+
+    for (int64_t index : page_indices) {
+        indices.push_back(static_cast<int>(index));
+    }
+
+    FPDF_BOOL imported =
+        FPDF_ImportPagesByIndex(dest->document, src->document,
+                                indices.empty() ? nullptr : indices.data(),
+                                static_cast<unsigned long>(indices.size()), static_cast<int>(at));
+
+    if (!imported) {
+        return fine::Error(import_failed);
+    }
+
+    return fine::Ok(imported_atom);
+}
+
+FINE_NIF(import_pages, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 FINE_INIT("Elixir.PDFium.NIF");

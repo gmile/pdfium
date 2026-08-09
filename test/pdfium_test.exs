@@ -194,6 +194,84 @@ defmodule PDFiumTest do
     end
   end
 
+  describe "documents" do
+    test "a new one has no pages", %{output: output} do
+      assert {:ok, document} = PDFium.create_document()
+      assert {:ok, 0} = PDFium.get_page_count(document)
+
+      assert {:ok, :saved} = PDFium.save(document, output)
+      assert {:ok, 0} = PDFium.get_page_count(open!(output))
+    end
+
+    test "importing named pages, in the order named", %{output: output} do
+      pages = Enum.map([200, 300, 400], &[box: {0, 0, &1, &1}])
+      source = tmp_path() |> Document.write!(pages) |> open!()
+
+      PDFium.with_new_document(fn document ->
+        assert {:ok, :imported} = PDFium.import_pages(document, source, [2, 0], 0)
+        assert {:ok, :saved} = PDFium.save(document, output)
+      end)
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
+      assert Enum.map(boxes, & &1.right) == [400.0, 200.0]
+    end
+
+    test "importing every page of one into another", %{output: output} do
+      source = tmp_path() |> Document.write!([[box: {0, 0, 100, 100}], []]) |> open!()
+
+      PDFium.with_new_document(fn document ->
+        assert {:ok, :imported} = PDFium.import_pages(document, source, :all, 0)
+        assert {:ok, :saved} = PDFium.save(document, output)
+      end)
+
+      assert {:ok, 2} = PDFium.get_page_count(open!(output))
+    end
+
+    test "importing where the caller asked", %{output: output} do
+      first = tmp_path() |> Document.write!([[box: {0, 0, 100, 100}]]) |> open!()
+      second = tmp_path() |> Document.write!([[box: {0, 0, 200, 200}]]) |> open!()
+
+      PDFium.with_new_document(fn document ->
+        assert {:ok, :imported} = PDFium.import_pages(document, first, :all, 0)
+        assert {:ok, :imported} = PDFium.import_pages(document, second, :all, 0)
+        assert {:ok, :saved} = PDFium.save(document, output)
+      end)
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
+      assert Enum.map(boxes, & &1.right) == [200.0, 100.0]
+    end
+
+    test "refusing to import no pages at all" do
+      source = tmp_path() |> Document.write!([[]]) |> open!()
+
+      PDFium.with_new_document(fn document ->
+        assert {:error, :no_pages} = PDFium.import_pages(document, source, [], 0)
+      end)
+    end
+
+    test "reporting a page that is not there" do
+      source = tmp_path() |> Document.write!([[]]) |> open!()
+
+      PDFium.with_new_document(fn document ->
+        assert {:error, :import_failed} = PDFium.import_pages(document, source, [9], 0)
+      end)
+    end
+
+    test "reporting a closed document", %{output: output} do
+      document = open!(@plain)
+      PDFium.close_document(document)
+
+      assert {:error, :document_closed} = PDFium.save(document, output)
+    end
+
+    test "reporting an unwritable path" do
+      PDFium.with_new_document(fn document ->
+        assert {:error, :output_open_failed} =
+                 PDFium.save(document, "/nonexistent-directory/out.pdf")
+      end)
+    end
+  end
+
   describe "flatten/2" do
     test "renders annotations into the page and writes the result", %{output: output} do
       {:ok, document} = PDFium.load_document(@annotated)
