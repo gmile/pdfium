@@ -9,7 +9,9 @@
 #include <fpdf_save.h>
 #include <fpdf_transformpage.h>
 #include <fpdfview.h>
+#include <algorithm>
 #include <cstdio>
+#include <map>
 #include <mutex>
 #include <tuple>
 #include <optional>
@@ -30,6 +32,10 @@ static fine::Atom document_creation_failed("document_creation_failed");
 static fine::Atom import_failed("import_failed");
 static fine::Atom saved("saved");
 static fine::Atom imported_atom("imported");
+static fine::Atom generate_content_failed("generate_content_failed");
+static fine::Atom xobject_failed("xobject_failed");
+static fine::Atom form_object_failed("form_object_failed");
+static fine::Atom stamped("stamped");
 static fine::Atom document_closed("document_closed");
 static fine::Atom page_load_failed("page_load_failed");
 static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
@@ -505,5 +511,163 @@ WriteResult import_pages(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> dest,
 }
 
 FINE_NIF(import_pages, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+namespace {
+
+struct Box {
+    double left, bottom, right, top;
+};
+
+struct Matrix {
+    double a, b, c, d, e, f;
+};
+
+bool is_empty(const Box &box) { return box.right <= box.left || box.top <= box.bottom; }
+
+Box sorted(float left, float bottom, float right, float top) {
+    return {std::min(left, right), std::min(bottom, top), std::max(left, right),
+            std::max(bottom, top)};
+}
+
+Box effective_box(FPDF_PAGE page) {
+    float left, bottom, right, top;
+
+    Box media = {0.0, 0.0, 612.0, 792.0};
+
+    if (FPDFPage_GetMediaBox(page, &left, &bottom, &right, &top)) {
+        Box box = sorted(left, bottom, right, top);
+
+        if (!is_empty(box)) {
+            media = box;
+        }
+    }
+
+    if (FPDFPage_GetCropBox(page, &left, &bottom, &right, &top)) {
+        Box crop = sorted(left, bottom, right, top);
+
+        if (!is_empty(crop)) {
+            return {std::max(media.left, crop.left), std::max(media.bottom, crop.bottom),
+                    std::min(media.right, crop.right), std::min(media.top, crop.top)};
+        }
+    }
+
+    return media;
+}
+
+Matrix display_to_page(const Box &box, int rotation) {
+    switch (rotation) {
+    case 1:
+        return {0.0, 1.0, -1.0, 0.0, box.right, box.bottom};
+    case 2:
+        return {-1.0, 0.0, 0.0, -1.0, box.right, box.top};
+    case 3:
+        return {0.0, -1.0, 1.0, 0.0, box.left, box.top};
+    default:
+        return {1.0, 0.0, 0.0, 1.0, box.left, box.bottom};
+    }
+}
+
+} // namespace
+
+// Each placement says where its overlay goes on the page as displayed: origin
+// at the bottom left of the page the way a reader shows it, whatever the page's
+// own box and rotation happen to be. Turning that into the coordinates the page
+// is written in is this side's job, because it is pdfium's own layout that
+// decides it.
+using Matrix6 = std::tuple<double, double, double, double, double, double>;
+
+using Placement = std::tuple<fine::ResourcePtr<PDFDoc>, int64_t, Matrix6>;
+
+WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
+                  std::vector<Placement> placements, std::string output_path) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+
+    for (const auto &placement : placements) {
+        if (!std::get<0>(placement)->document) {
+            return fine::Error(document_closed);
+        }
+    }
+
+    std::map<int, std::vector<size_t>> by_page;
+
+    for (size_t index = 0; index < placements.size(); index++) {
+        by_page[static_cast<int>(std::get<1>(placements[index]))].push_back(index);
+    }
+
+    std::map<FPDF_DOCUMENT, FPDF_XOBJECT> templates;
+    std::optional<fine::Atom> failure;
+
+    for (const auto &entry : by_page) {
+        FPDF_PAGE page = FPDF_LoadPage(doc->document, entry.first);
+
+        if (!page) {
+            failure = page_load_failed;
+            break;
+        }
+
+        Matrix inverse = display_to_page(effective_box(page), FPDFPage_GetRotation(page));
+
+        for (size_t index : entry.second) {
+            FPDF_DOCUMENT overlay = std::get<0>(placements[index])->document;
+
+            if (templates.find(overlay) == templates.end()) {
+                FPDF_XOBJECT xobject = FPDF_NewXObjectFromPage(doc->document, overlay, 0);
+
+                if (!xobject) {
+                    failure = xobject_failed;
+                    break;
+                }
+
+                templates[overlay] = xobject;
+            }
+
+            FPDF_PAGEOBJECT form = FPDF_NewFormObjectFromXObject(templates[overlay]);
+
+            if (!form) {
+                failure = form_object_failed;
+                break;
+            }
+
+            const auto &[a, b, c, d, e, f] = std::get<2>(placements[index]);
+
+            FPDFPageObj_Transform(form, a * inverse.a + b * inverse.c, a * inverse.b + b * inverse.d,
+                                  c * inverse.a + d * inverse.c, c * inverse.b + d * inverse.d,
+                                  e * inverse.a + f * inverse.c + inverse.e,
+                                  e * inverse.b + f * inverse.d + inverse.f);
+
+            FPDFPage_InsertObject(page, form);
+        }
+
+        if (!failure && !FPDFPage_GenerateContent(page)) {
+            failure = generate_content_failed;
+        }
+
+        FPDF_ClosePage(page);
+
+        if (failure) {
+            break;
+        }
+    }
+
+    if (!failure) {
+        failure = write_document(doc->document, output_path);
+    }
+
+    for (const auto &entry : templates) {
+        FPDF_CloseXObject(entry.second);
+    }
+
+    if (failure) {
+        return fine::Error(*failure);
+    }
+
+    return fine::Ok(stamped);
+}
+
+FINE_NIF(stamp, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 FINE_INIT("Elixir.PDFium.NIF");

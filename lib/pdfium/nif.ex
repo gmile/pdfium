@@ -28,4 +28,6 @@ defmodule PDFium.NIF do
   def save(_document, _output_path), do: :erlang.nif_error(:nif_not_loaded)
 
   def import_pages(_dest, _src, _page_indices, _at), do: :erlang.nif_error(:nif_not_loaded)
+
+  def stamp(_document, _placements, _output_path), do: :erlang.nif_error(:nif_not_loaded)
 end
