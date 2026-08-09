@@ -18,6 +18,13 @@ defmodule PDFiumTest do
     path
   end
 
+  defp open!(path) do
+    {:ok, document} = PDFium.load_document(path)
+    on_exit(fn -> PDFium.close_document(document) end)
+
+    document
+  end
+
   describe "load_document/1" do
     test "opens a document" do
       assert {:ok, _document} = PDFium.load_document(@plain)
@@ -32,6 +39,28 @@ defmodule PDFiumTest do
 
     test "names the reason a file is not there" do
       assert {:error, :file} = PDFium.load_document("/nonexistent-directory/absent.pdf")
+    end
+  end
+
+  describe "get_page_bitmap/3" do
+    defp ink(path) do
+      document = open!(path)
+      {:ok, bitmap, _width, _height} = PDFium.get_page_bitmap(document, 0, 100)
+
+      for <<r::8, g::8, b::8, _a::8 <- bitmap>>, div(r + g + b, 3) < 200, reduce: 0 do
+        count -> count + 1
+      end
+    end
+
+    test "draws the annotations on the page" do
+      # The annotation on this page paints over what is under it, so drawing it
+      # covers ink rather than adding any. Flattening draws the same appearance
+      # into the page content, so the two have to come out identical.
+      flattened = tmp_path()
+      document = open!(@annotated)
+      assert {:ok, :flattened} = PDFium.flatten(document, flattened)
+
+      assert ink(@annotated) == ink(flattened)
     end
   end
 
