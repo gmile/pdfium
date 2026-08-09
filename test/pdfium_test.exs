@@ -2,6 +2,7 @@ defmodule PDFiumTest do
   use ExUnit.Case
 
   alias PDFium.Test.Document
+  alias PDFium.Toolbox
 
   @annotated Path.expand("fixtures/annotated.pdf", __DIR__)
   @plain Path.expand("../custom/test.pdf", __DIR__)
@@ -25,6 +26,19 @@ defmodule PDFiumTest do
     on_exit(fn -> PDFium.close_document(document) end)
 
     document
+  end
+
+  defp colour_at(path, across, up, page \\ 0) do
+    document = open!(path)
+    {:ok, bitmap, width, height} = PDFium.get_page_bitmap(document, page, 72)
+
+    x = trunc(across * width)
+    y = height - trunc(up * height) - 1
+    offset = (y * width + x) * 4
+
+    <<_::binary-size(^offset), red::8, green::8, blue::8, _alpha::8, _rest::binary>> = bitmap
+
+    {red, green, blue}
   end
 
   describe "load_document/1" do
@@ -269,6 +283,127 @@ defmodule PDFiumTest do
         assert {:error, :output_open_failed} =
                  PDFium.save(document, "/nonexistent-directory/out.pdf")
       end)
+    end
+  end
+
+  describe "extract_pages/3" do
+    setup do
+      pages = Enum.map([200, 300, 400, 500], &[box: {0, 0, &1, &1}])
+
+      {:ok, source: tmp_path() |> Document.write!(pages) |> open!()}
+    end
+
+    test "writes the pages it was given", %{source: source, output: output} do
+      assert {:ok, :extracted} = Toolbox.extract_pages(source, [1, 2], output)
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
+      assert Enum.map(boxes, & &1.right) == [300.0, 400.0]
+    end
+
+    test "writes them in the order it was given", %{source: source, output: output} do
+      assert {:ok, :extracted} = Toolbox.extract_pages(source, [3, 0], output)
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
+      assert Enum.map(boxes, & &1.right) == [500.0, 200.0]
+    end
+
+    test "writes a page named twice twice", %{source: source, output: output} do
+      assert {:ok, :extracted} = Toolbox.extract_pages(source, [0, 0], output)
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
+      assert Enum.map(boxes, & &1.right) == [200.0, 200.0]
+    end
+
+    test "keeps what is drawn on the page it took", %{output: output} do
+      source = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 100, 100}) |> open!()
+
+      assert {:ok, :extracted} = Toolbox.extract_pages(source, [0], output)
+
+      assert colour_at(output, 0.5, 0.5) == {255, 0, 0}
+    end
+
+    test "refuses to extract no pages at all", %{source: source, output: output} do
+      assert {:error, :no_pages} = Toolbox.extract_pages(source, [], output)
+      refute File.exists?(output)
+    end
+
+    test "reports a page that is not there", %{source: source, output: output} do
+      assert {:error, :import_failed} = Toolbox.extract_pages(source, [9], output)
+    end
+
+    test "reports a closed document", %{source: source, output: output} do
+      PDFium.close_document(source)
+
+      assert {:error, :document_closed} = Toolbox.extract_pages(source, [0], output)
+    end
+
+    test "reports an unwritable output path", %{source: source} do
+      assert {:error, :output_open_failed} =
+               Toolbox.extract_pages(source, [0], "/nonexistent-directory/out.pdf")
+    end
+  end
+
+  describe "merge/2" do
+    defp document!(pages), do: tmp_path() |> Document.write!(pages) |> open!()
+
+    test "writes the documents as one, in order", %{output: output} do
+      first = document!([[box: {0, 0, 100, 100}], [box: {0, 0, 200, 200}]])
+      second = document!([[box: {0, 0, 300, 300}]])
+
+      assert {:ok, :merged} = Toolbox.merge([first, second], output)
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
+      assert Enum.map(boxes, & &1.right) == [100.0, 200.0, 300.0]
+    end
+
+    test "writes a document given twice twice", %{output: output} do
+      document = document!([[box: {0, 0, 100, 100}]])
+
+      assert {:ok, :merged} = Toolbox.merge([document, document], output)
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
+      assert length(boxes) == 2
+    end
+
+    test "keeps what is drawn on each page", %{output: output} do
+      red = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 100, 100}) |> open!()
+      blue = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 100, 100}) |> open!()
+
+      assert {:ok, :merged} = Toolbox.merge([red, blue], output)
+
+      assert colour_at(output, 0.5, 0.5, 0) == {255, 0, 0}
+      assert colour_at(output, 0.5, 0.5, 1) == {0, 0, 255}
+    end
+
+    test "carries a document with no pages without complaint", %{output: output} do
+      empty = document!([])
+      page = document!([[box: {0, 0, 100, 100}]])
+
+      assert {:ok, :merged} = Toolbox.merge([empty, page, empty], output)
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
+      assert Enum.map(boxes, & &1.right) == [100.0]
+    end
+
+    test "refuses to merge nothing at all", %{output: output} do
+      assert {:error, :no_documents} = Toolbox.merge([], output)
+      refute File.exists?(output)
+    end
+
+    test "reports a closed document", %{output: output} do
+      first = document!([[box: {0, 0, 100, 100}]])
+      second = document!([[box: {0, 0, 100, 100}]])
+      PDFium.close_document(second)
+
+      assert {:error, :document_closed} = Toolbox.merge([first, second], output)
+      refute File.exists?(output)
+    end
+
+    test "reports an unwritable output path" do
+      document = document!([[box: {0, 0, 100, 100}]])
+
+      assert {:error, :output_open_failed} =
+               Toolbox.merge([document], "/nonexistent-directory/out.pdf")
     end
   end
 
