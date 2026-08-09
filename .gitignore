@@ -34,3 +34,6 @@ output
 .dagger/dagger_sdk
 .dagger/deps
 .dagger/_build
+
+# nix flake dev shell
+.nix-profile*
