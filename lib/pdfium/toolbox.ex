@@ -9,6 +9,40 @@ defmodule PDFium.Toolbox do
   """
 
   @doc """
+  Draws every annotation in a document into the page it sits on and writes the
+  result.
+
+  Answers `{:ok, :nothing_to_do}` without writing anything when no page had an
+  annotation to draw.
+  """
+  @spec flatten(reference(), Path.t()) ::
+          {:ok, :flattened | :nothing_to_do} | {:error, atom()}
+  @spec flatten(reference(), Path.t(), :display | :print) ::
+          {:ok, :flattened | :nothing_to_do} | {:error, atom()}
+  def flatten(document, output_path, usage \\ :display) do
+    with {:ok, page_count} <- PDFium.get_page_count(document),
+         {:ok, drawn?} <- flatten_each(document, page_count, usage) do
+      if drawn? do
+        with {:ok, :saved} <- PDFium.save(document, output_path), do: {:ok, :flattened}
+      else
+        {:ok, :nothing_to_do}
+      end
+    end
+  end
+
+  @spec flatten_each(reference(), non_neg_integer(), :display | :print) ::
+          {:ok, boolean()} | {:error, atom()}
+  defp flatten_each(document, page_count, usage) do
+    Enum.reduce_while(0..(page_count - 1)//1, {:ok, false}, fn index, {:ok, drawn?} ->
+      case PDFium.flatten_page(document, index, usage) do
+        {:ok, :flattened} -> {:cont, {:ok, true}}
+        {:ok, :nothing_to_do} -> {:cont, {:ok, drawn?}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  @doc """
   Writes the given documents as one, in the order given.
   """
   @spec merge([reference()], Path.t()) :: {:ok, :merged} | {:error, atom()}
