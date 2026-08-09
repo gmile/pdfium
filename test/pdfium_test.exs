@@ -11,6 +11,30 @@ defmodule PDFiumTest do
     {:ok, output: output}
   end
 
+  defp tmp_path do
+    path = Path.join(System.tmp_dir!(), "pdfium-test-#{System.unique_integer([:positive])}.pdf")
+    on_exit(fn -> File.rm(path) end)
+
+    path
+  end
+
+  describe "load_document/1" do
+    test "opens a document" do
+      assert {:ok, _document} = PDFium.load_document(@plain)
+    end
+
+    test "names the reason a file is not one it can read" do
+      path = tmp_path()
+      File.write!(path, "not a pdf at all")
+
+      assert {:error, :format} = PDFium.load_document(path)
+    end
+
+    test "names the reason a file is not there" do
+      assert {:error, :file} = PDFium.load_document("/nonexistent-directory/absent.pdf")
+    end
+  end
+
   describe "flatten/2" do
     test "renders annotations into the page and writes the result", %{output: output} do
       {:ok, document} = PDFium.load_document(@annotated)
