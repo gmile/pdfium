@@ -443,6 +443,203 @@ defmodule PDFiumTest do
     end
   end
 
+  describe "stamp/3, placed by matrix" do
+    test "puts the overlay where the matrix says", %{output: output} do
+      # A quarter page of blue in its own bottom left corner, placed into the
+      # top right quarter of a page four times its size.
+      overlay =
+        tmp_path()
+        |> Document.write!([[box: {0, 0, 200, 200}, content: "0 0 1 rg 0 0 100 100 re f"]])
+        |> open!()
+
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+
+      placement = {1.0, 0.0, 0.0, 1.0, 200.0, 200.0}
+
+      assert {:ok, :stamped} = PDFium.stamp(document, [{overlay, 0, placement}], output)
+
+      assert blue?(colour_at(output, 0.625, 0.625)), "moved into the top right quarter"
+      refute blue?(colour_at(output, 0.125, 0.125)), "not left in the bottom left"
+    end
+
+    test "scales by the matrix it was given", %{output: output} do
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 400, 400}) |> open!()
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+
+      assert {:ok, :stamped} =
+               PDFium.stamp(document, [{overlay, 0, {0.5, 0.0, 0.0, 0.5, 0.0, 0.0}}], output)
+
+      assert blue?(colour_at(output, 0.25, 0.25)), "the quarter it was scaled into"
+      refute blue?(colour_at(output, 0.75, 0.75)), "and nothing beyond it"
+    end
+
+    test "reads the matrix in the page as displayed, not as written", %{output: output} do
+      # The page is turned a quarter, so the bottom left of the page a reader
+      # sees is not the origin the page's own content is written from.
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 300, 300}) |> open!()
+
+      document =
+        tmp_path() |> Document.write!([[box: {0, 0, 400, 600}, rotation: 90]]) |> open!()
+
+      assert {:ok, :stamped} =
+               PDFium.stamp(document, [{overlay, 0, {1.0, 0.0, 0.0, 1.0, 0.0, 0.0}}], output)
+
+      assert blue?(colour_at(output, 0.1, 0.1)), "the corner a reader calls bottom left"
+    end
+  end
+
+  describe "Toolbox.stamp/3, fitted and centred" do
+    test "measures a many-paged overlay by its first page", %{output: output} do
+      # The header and footer of a contract is drawn as one page per page of the
+      # contract, and only the first of them is ever drawn over anything here.
+      overlay =
+        tmp_path()
+        |> Document.write!([
+          [box: {0, 0, 400, 400}, content: "0 0 1 rg 0 0 400 400 re f"],
+          [box: {0, 0, 400, 400}]
+        ])
+        |> open!()
+
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{overlay, 0}], output)
+      assert blue?(colour_at(output, 0.5, 0.5))
+    end
+
+    defp corner_overlay(box) do
+      {left, bottom, right, top} = box
+      width = (right - left) / 2
+      height = (top - bottom) / 2
+
+      content = "0 0 1 rg #{left} #{bottom} #{width} #{height} re f"
+
+      tmp_path() |> Document.write!([[box: box, content: content]]) |> open!()
+    end
+
+    defp blue?({red, green, blue}), do: blue > 200 and red < 100 and green < 100
+
+    test "draws the overlay where it was drawn", %{output: output} do
+      box = {0, 0, 400, 400}
+      document = tmp_path() |> Document.write!([[box: box]]) |> open!()
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{corner_overlay(box), 0}], output)
+
+      assert blue?(colour_at(output, 0.25, 0.25)), "the corner it was drawn in"
+      refute blue?(colour_at(output, 0.75, 0.75)), "the corner across from it"
+    end
+
+    test "keeps the content the page already had", %{output: output} do
+      box = {0, 0, 400, 400}
+      document = tmp_path() |> Document.filled({1, 0, 0}, box: box) |> open!()
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{corner_overlay(box), 0}], output)
+
+      assert blue?(colour_at(output, 0.25, 0.25))
+      assert colour_at(output, 0.75, 0.75) == {255, 0, 0}
+    end
+
+    test "draws over the page it was paired with and no other", %{output: output} do
+      box = {0, 0, 400, 400}
+      pages = [[box: box], [box: box], [box: box]]
+      document = tmp_path() |> Document.write!(pages) |> open!()
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{corner_overlay(box), 1}], output)
+
+      refute blue?(colour_at(output, 0.25, 0.25, 0))
+      assert blue?(colour_at(output, 0.25, 0.25, 1))
+      refute blue?(colour_at(output, 0.25, 0.25, 2))
+    end
+
+    test "draws one overlay over as many pages as it is given", %{output: output} do
+      box = {0, 0, 400, 400}
+      document = tmp_path() |> Document.write!([[box: box], [box: box]]) |> open!()
+      overlay = corner_overlay(box)
+
+      assert {:ok, :stamped} =
+               Toolbox.stamp(document, [{overlay, 0}, {overlay, 1}], output)
+
+      assert blue?(colour_at(output, 0.25, 0.25, 0))
+      assert blue?(colour_at(output, 0.25, 0.25, 1))
+    end
+
+    test "stacks overlays on one page in the order given", %{output: output} do
+      box = {0, 0, 400, 400}
+      document = tmp_path() |> Document.write!([[box: box]]) |> open!()
+
+      under = tmp_path() |> Document.filled({0, 1, 0}, box: box) |> open!()
+      over = tmp_path() |> Document.filled({1, 0, 0}, box: box) |> open!()
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{under, 0}, {over, 0}], output)
+
+      assert colour_at(output, 0.5, 0.5) == {255, 0, 0}
+    end
+
+    test "places against a box that does not start at the origin", %{output: output} do
+      box = {-100, -100, 300, 300}
+      document = tmp_path() |> Document.write!([[box: box]]) |> open!()
+      overlay = corner_overlay({0, 0, 400, 400})
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{overlay, 0}], output)
+
+      assert blue?(colour_at(output, 0.25, 0.25))
+      refute blue?(colour_at(output, 0.75, 0.75))
+    end
+
+    test "turns the overlay with the page it goes over", %{output: output} do
+      box = {0, 0, 400, 600}
+      document = tmp_path() |> Document.write!([[box: box, rotation: 90]]) |> open!()
+
+      overlay = corner_overlay({0, 0, 600, 400})
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{overlay, 0}], output)
+
+      assert blue?(colour_at(output, 0.25, 0.25))
+      refute blue?(colour_at(output, 0.75, 0.75))
+    end
+
+    test "scales an overlay of a different shape to fit, centred", %{output: output} do
+      box = {0, 0, 400, 400}
+      document = tmp_path() |> Document.write!([[box: box]]) |> open!()
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 400, 800}) |> open!()
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{overlay, 0}], output)
+
+      assert blue?(colour_at(output, 0.5, 0.5)), "the middle it was centred on"
+      refute blue?(colour_at(output, 0.1, 0.5)), "the strip left bare beside it"
+      refute blue?(colour_at(output, 0.9, 0.5)), "and the one on the other side"
+    end
+
+    test "reports a page that is not there", %{output: output} do
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+
+      assert {:error, :page_load_failed} =
+               Toolbox.stamp(document, [{corner_overlay({0, 0, 400, 400}), 9}], output)
+    end
+
+    test "reports an overlay with no pages", %{output: output} do
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+      overlay = tmp_path() |> Document.write!([]) |> open!()
+
+      assert {:error, :page_load_failed} = Toolbox.stamp(document, [{overlay, 0}], output)
+    end
+
+    test "reports a closed document", %{output: output} do
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+      overlay = corner_overlay({0, 0, 400, 400})
+      PDFium.close_document(overlay)
+
+      assert {:error, :document_closed} = Toolbox.stamp(document, [{overlay, 0}], output)
+    end
+
+    test "draws nothing when given nothing", %{output: output} do
+      document = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 400, 400}) |> open!()
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [], output)
+
+      assert colour_at(output, 0.5, 0.5) == {255, 0, 0}
+    end
+  end
+
   describe "flatten/2" do
     test "renders annotations into the page and writes the result", %{output: output} do
       {:ok, document} = PDFium.load_document(@annotated)

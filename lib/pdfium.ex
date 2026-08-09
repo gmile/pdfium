@@ -170,4 +170,36 @@ defmodule PDFium do
       end
     end
   end
+
+  @typedoc """
+  Where an overlay goes, as `{a, b, c, d, e, f}`.
+
+  The matrix is read in the page as displayed: the origin is the bottom left of
+  the page the way a reader shows it, whatever box the page is written in and
+  however far it is turned. `{1, 0, 0, 1, 0, 0}` leaves the overlay where it was
+  drawn, at the size it was drawn.
+  """
+  @type placement :: {number(), number(), number(), number(), number(), number()}
+
+  @doc """
+  Draws overlays over the pages of `document` and writes the result.
+
+  Each placement is `{overlay, page_index, matrix}`, drawing the overlay's first
+  page over that page of the document, numbered from zero. Placements landing on
+  the same page stack in the order given.
+
+  An overlay arrives the way a reader shows it: turned the right way up, with
+  its own box shifted onto the origin. The pages keep the content they already
+  had.
+  """
+  @spec stamp(reference(), [{reference(), non_neg_integer(), placement()}], Path.t()) ::
+          {:ok, :stamped} | {:error, atom()}
+  def stamp(document, placements, output_path) do
+    placements =
+      Enum.map(placements, fn {overlay, page_index, {a, b, c, d, e, f}} ->
+        {overlay, page_index, {a / 1, b / 1, c / 1, d / 1, e / 1, f / 1}}
+      end)
+
+    PDFium.NIF.stamp(document, placements, output_path)
+  end
 end
