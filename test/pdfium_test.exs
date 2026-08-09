@@ -74,7 +74,7 @@ defmodule PDFiumTest do
       # into the page content, so the two have to come out identical.
       flattened = tmp_path()
       document = open!(@annotated)
-      assert {:ok, :flattened} = PDFium.flatten(document, flattened)
+      assert {:ok, :flattened} = Toolbox.flatten(document, flattened)
 
       assert ink(@annotated) == ink(flattened)
     end
@@ -407,11 +407,47 @@ defmodule PDFiumTest do
     end
   end
 
+  describe "flatten_page/3" do
+    test "draws the annotations on the page it names" do
+      document = open!(@annotated)
+
+      assert {:ok, :flattened} = PDFium.flatten_page(document, 0)
+      assert {:ok, [0]} = PDFium.get_annotation_counts(document)
+    end
+
+    test "says when a page had nothing to draw" do
+      document = tmp_path() |> Document.write!([[]]) |> open!()
+
+      assert {:ok, :nothing_to_do} = PDFium.flatten_page(document, 0)
+    end
+
+    test "leaves the pages it was not asked about", %{output: output} do
+      pages = tmp_path() |> Document.write!([[], []]) |> open!()
+      assert {:ok, :saved} = PDFium.save(pages, output)
+
+      document = open!(@annotated)
+      assert {:ok, [1]} = PDFium.get_annotation_counts(document)
+    end
+
+    test "reports a page that is not there" do
+      document = open!(@annotated)
+
+      assert {:error, :page_load_failed} = PDFium.flatten_page(document, 9)
+    end
+
+    test "reports a closed document" do
+      document = open!(@plain)
+      PDFium.close_document(document)
+
+      assert {:error, :document_closed} = PDFium.flatten_page(document, 0)
+    end
+  end
+
   describe "flatten/2" do
     test "renders annotations into the page and writes the result", %{output: output} do
       {:ok, document} = PDFium.load_document(@annotated)
 
-      assert {:ok, :flattened} = PDFium.flatten(document, output)
+      assert {:ok, :flattened} = Toolbox.flatten(document, output)
       assert File.exists?(output)
 
       PDFium.close_document(document)
@@ -424,7 +460,7 @@ defmodule PDFiumTest do
     test "leaves the output alone when there is nothing to flatten", %{output: output} do
       {:ok, document} = PDFium.load_document(@plain)
 
-      assert {:ok, :nothing_to_do} = PDFium.flatten(document, output)
+      assert {:ok, :nothing_to_do} = Toolbox.flatten(document, output)
       refute File.exists?(output)
 
       PDFium.close_document(document)
@@ -432,14 +468,14 @@ defmodule PDFiumTest do
 
     test "is idempotent", %{output: output} do
       {:ok, document} = PDFium.load_document(@annotated)
-      assert {:ok, :flattened} = PDFium.flatten(document, output)
+      assert {:ok, :flattened} = Toolbox.flatten(document, output)
       PDFium.close_document(document)
 
       {:ok, flattened} = PDFium.load_document(output)
       second = output <> ".2"
       on_exit(fn -> File.rm(second) end)
 
-      assert {:ok, :nothing_to_do} = PDFium.flatten(flattened, second)
+      assert {:ok, :nothing_to_do} = Toolbox.flatten(flattened, second)
       PDFium.close_document(flattened)
     end
 
@@ -447,14 +483,14 @@ defmodule PDFiumTest do
       {:ok, document} = PDFium.load_document(@annotated)
       PDFium.close_document(document)
 
-      assert {:error, :document_closed} = PDFium.flatten(document, output)
+      assert {:error, :document_closed} = Toolbox.flatten(document, output)
     end
 
     test "reports an unwritable output path" do
       {:ok, document} = PDFium.load_document(@annotated)
 
       assert {:error, :output_open_failed} =
-               PDFium.flatten(document, "/nonexistent-directory/out.pdf")
+               Toolbox.flatten(document, "/nonexistent-directory/out.pdf")
 
       PDFium.close_document(document)
     end

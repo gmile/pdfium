@@ -109,7 +109,22 @@ defmodule PDFium do
   @spec get_annotation_counts(reference()) :: {:ok, [non_neg_integer()]} | {:error, atom()}
   defdelegate get_annotation_counts(document), to: PDFium.NIF
 
-  defdelegate flatten(document, output_path), to: PDFium.NIF
+  @doc """
+  Draws a page's annotations into its content and drops them.
+
+  `usage` says which appearance to draw: `:display` is the one a reader shows,
+  `:print` the one it would print. The page is changed where it sits, so the
+  document has to be written out for it to keep.
+  """
+  @spec flatten_page(reference(), non_neg_integer(), :display | :print) ::
+          {:ok, :flattened | :nothing_to_do} | {:error, atom()}
+  def flatten_page(document, page_index, usage \\ :display)
+
+  def flatten_page(document, page_index, :display),
+    do: PDFium.NIF.flatten_page(document, page_index, 0)
+
+  def flatten_page(document, page_index, :print),
+    do: PDFium.NIF.flatten_page(document, page_index, 1)
 
   @doc """
   Makes an empty document.

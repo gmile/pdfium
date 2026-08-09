@@ -412,47 +412,36 @@ std::optional<fine::Atom> write_document(FPDF_DOCUMENT document, const std::stri
 
 using FlattenResult = std::variant<fine::Ok<fine::Atom>, fine::Error<fine::Atom>>;
 
-FlattenResult flatten(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
-                      std::string output_path) {
+// `usage` is one of pdfium's FLAT_ values: 0 to flatten for display, 1 for
+// print.
+FlattenResult flatten_page(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, int64_t page_index,
+                           int64_t usage) {
     std::unique_lock lock(*pdfium_mutex);
 
     if (!doc->document) {
         return fine::Error(document_closed);
     }
 
-    int page_count = FPDF_GetPageCount(doc->document);
-    bool changed = false;
+    FPDF_PAGE page = FPDF_LoadPage(doc->document, static_cast<int>(page_index));
 
-    for (int index = 0; index < page_count; index++) {
-        FPDF_PAGE page = FPDF_LoadPage(doc->document, index);
-        if (!page) {
-            return fine::Error(page_load_failed);
-        }
-
-        int result = FPDFPage_Flatten(page, FLAT_NORMALDISPLAY);
-        FPDF_ClosePage(page);
-
-        if (result == FLATTEN_FAIL) {
-            return fine::Error(flatten_failed);
-        }
-
-        if (result == FLATTEN_SUCCESS) {
-            changed = true;
-        }
+    if (!page) {
+        return fine::Error(page_load_failed);
     }
 
-    if (!changed) {
+    int result = FPDFPage_Flatten(page, static_cast<int>(usage));
+    FPDF_ClosePage(page);
+
+    switch (result) {
+    case FLATTEN_SUCCESS:
+        return fine::Ok(flattened);
+    case FLATTEN_NOTHINGTODO:
         return fine::Ok(nothing_to_do);
+    default:
+        return fine::Error(flatten_failed);
     }
-
-    if (auto error = write_document(doc->document, output_path)) {
-        return fine::Error(*error);
-    }
-
-    return fine::Ok(flattened);
 }
 
-FINE_NIF(flatten, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(flatten_page, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 using WriteResult = std::variant<fine::Ok<fine::Atom>, fine::Error<fine::Atom>>;
 
