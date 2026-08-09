@@ -1,6 +1,8 @@
 defmodule PDFiumTest do
   use ExUnit.Case
 
+  alias PDFium.Test.Document
+
   @annotated Path.expand("fixtures/annotated.pdf", __DIR__)
   @plain Path.expand("../custom/test.pdf", __DIR__)
 
@@ -61,6 +63,134 @@ defmodule PDFiumTest do
       assert {:ok, :flattened} = PDFium.flatten(document, flattened)
 
       assert ink(@annotated) == ink(flattened)
+    end
+  end
+
+  describe "get_page_boxes/1" do
+    test "reports the box of every page, in order" do
+      pages = [
+        [box: {0, 0, 200, 300}],
+        [box: {0, 0, 400, 500}]
+      ]
+
+      document = tmp_path() |> Document.write!(pages) |> open!()
+
+      assert {:ok, [first, second]} = PDFium.get_page_boxes(document)
+
+      assert %{left: +0.0, bottom: +0.0, right: 200.0, top: 300.0, rotation: 0} = first
+      assert %{left: +0.0, bottom: +0.0, right: 400.0, top: 500.0, rotation: 0} = second
+    end
+
+    test "reports a box that does not start at the origin" do
+      document = tmp_path() |> Document.write!([[box: {-10, -20, 590, 772}]]) |> open!()
+
+      assert {:ok, [box]} = PDFium.get_page_boxes(document)
+      assert %{left: -10.0, bottom: -20.0, right: 590.0, top: 772.0} = box
+    end
+
+    test "sorts the corners it was given" do
+      document = tmp_path() |> Document.write!([[box: {590, 772, -10, -20}]]) |> open!()
+
+      assert {:ok, [box]} = PDFium.get_page_boxes(document)
+      assert %{left: -10.0, bottom: -20.0, right: 590.0, top: 772.0} = box
+    end
+
+    test "reports rotation in degrees" do
+      pages = Enum.map([0, 90, 180, 270], &[rotation: &1])
+      document = tmp_path() |> Document.write!(pages) |> open!()
+
+      assert {:ok, boxes} = PDFium.get_page_boxes(document)
+      assert Enum.map(boxes, & &1.rotation) == [0, 90, 180, 270]
+    end
+
+    test "reports the box the page is turned from, not the one it displays as" do
+      document = tmp_path() |> Document.write!([[box: {0, 0, 612, 792}, rotation: 90]]) |> open!()
+
+      assert {:ok, [box]} = PDFium.get_page_boxes(document)
+      assert %{right: 612.0, top: 792.0, rotation: 90} = box
+    end
+
+    test "reports nothing for a document with no pages" do
+      document = tmp_path() |> Document.write!([]) |> open!()
+
+      assert {:ok, []} = PDFium.get_page_boxes(document)
+    end
+
+    test "reports a closed document" do
+      document = open!(@plain)
+      PDFium.close_document(document)
+
+      assert {:error, :document_closed} = PDFium.get_page_boxes(document)
+    end
+  end
+
+  describe "get_annotation_counts/1" do
+    test "counts the annotations on each page, in order" do
+      {:ok, document} = PDFium.load_document(@annotated)
+      on_exit(fn -> PDFium.close_document(document) end)
+
+      assert {:ok, [1]} = PDFium.get_annotation_counts(document)
+    end
+
+    test "counts a page with no annotations as none" do
+      document = tmp_path() |> Document.write!([[], []]) |> open!()
+
+      assert {:ok, [0, 0]} = PDFium.get_annotation_counts(document)
+    end
+
+    test "counts nothing for a document with no pages" do
+      document = tmp_path() |> Document.write!([]) |> open!()
+
+      assert {:ok, []} = PDFium.get_annotation_counts(document)
+    end
+
+    test "reports a closed document" do
+      document = open!(@plain)
+      PDFium.close_document(document)
+
+      assert {:error, :document_closed} = PDFium.get_annotation_counts(document)
+    end
+  end
+
+  describe "get_meta_text/2" do
+    test "reads an entry the specification names" do
+      document =
+        tmp_path() |> Document.write!([[]], Title: "A contract", Author: "Someone") |> open!()
+
+      assert {:ok, "A contract"} = PDFium.get_meta_text(document, "Title")
+      assert {:ok, "Someone"} = PDFium.get_meta_text(document, "Author")
+    end
+
+    test "reads an entry the specification does not name" do
+      document =
+        tmp_path() |> Document.write!([[]], SignedBy: ~s([{"name":"Someone"}])) |> open!()
+
+      assert {:ok, ~s([{"name":"Someone"}])} = PDFium.get_meta_text(document, "SignedBy")
+    end
+
+    test "reads a value stored as text rather than as bytes" do
+      document = tmp_path() |> Document.write!([[]], Author: "Stanisław Lem") |> open!()
+
+      assert {:ok, "Stanisław Lem"} = PDFium.get_meta_text(document, "Author")
+    end
+
+    test "reads an entry that is not there as nothing" do
+      document = tmp_path() |> Document.write!([[]], Title: "A contract") |> open!()
+
+      assert {:ok, ""} = PDFium.get_meta_text(document, "Author")
+    end
+
+    test "reads a document with no entries at all as nothing" do
+      document = tmp_path() |> Document.write!([[]]) |> open!()
+
+      assert {:ok, ""} = PDFium.get_meta_text(document, "Title")
+    end
+
+    test "reports a closed document" do
+      document = open!(@plain)
+      PDFium.close_document(document)
+
+      assert {:error, :document_closed} = PDFium.get_meta_text(document, "Title")
     end
   end
 

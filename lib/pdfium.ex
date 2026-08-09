@@ -40,5 +40,74 @@ defmodule PDFium do
           {:ok, binary(), non_neg_integer(), non_neg_integer()} | {:error, atom()}
   defdelegate get_page_bitmap(document, page_number, dpi), to: PDFium.NIF
 
+  @typedoc """
+  The MediaBox of a page, in points, and how far the page is turned, in degrees.
+
+  A box is written in the file as any two opposite corners; this one is sorted,
+  so `left` never passes `right` nor `bottom` `top`. Neither corner is required
+  to sit at the origin.
+  """
+  @type page_box :: %{
+          left: float(),
+          bottom: float(),
+          right: float(),
+          top: float(),
+          rotation: 0 | 90 | 180 | 270
+        }
+
+  @doc """
+  The MediaBox and rotation of every page, in order.
+  """
+  @spec get_page_boxes(reference()) :: {:ok, [page_box()]} | {:error, atom()}
+  def get_page_boxes(document) do
+    with {:ok, boxes} <- PDFium.NIF.get_page_boxes(document) do
+      {:ok, Enum.map(boxes, &to_page_box/1)}
+    end
+  end
+
+  defp to_page_box({left, bottom, right, top, rotation}) do
+    %{left: left, bottom: bottom, right: right, top: top, rotation: rotation}
+  end
+
+  @typedoc """
+  How large a page is as a reader shows it, in points.
+
+  This is the box the page is laid out in rather than the one written down, so
+  a page turned a quarter has already had the two swapped.
+  """
+  @type page_size :: %{width: float(), height: float()}
+
+  @doc """
+  The displayed size of every page of every document given, in order.
+
+  Documents are asked about together because each call over this boundary waits
+  its turn on the same lock, and placing anything on a page wants the size of
+  that page and of what is going onto it.
+  """
+  @spec get_page_sizes([reference()]) :: {:ok, [[page_size()]]} | {:error, atom()}
+  def get_page_sizes(documents) do
+    with {:ok, sizes} <- PDFium.NIF.get_page_sizes(documents) do
+      {:ok, Enum.map(sizes, fn pages -> Enum.map(pages, &to_page_size/1) end)}
+    end
+  end
+
+  defp to_page_size({width, height}), do: %{width: width, height: height}
+
+  @doc """
+  An entry of the document's Info dictionary, as text.
+
+  Any key may be asked for, not only the ones the specification names, and the
+  answer is decoded whichever of the two encodings a PDF is allowed to store it
+  in. A key the document does not carry reads as an empty string.
+  """
+  @spec get_meta_text(reference(), binary()) :: {:ok, binary()} | {:error, atom()}
+  defdelegate get_meta_text(document, key), to: PDFium.NIF
+
+  @doc """
+  How many annotations each page carries, in order.
+  """
+  @spec get_annotation_counts(reference()) :: {:ok, [non_neg_integer()]} | {:error, atom()}
+  defdelegate get_annotation_counts(document), to: PDFium.NIF
+
   defdelegate flatten(document, output_path), to: PDFium.NIF
 end
