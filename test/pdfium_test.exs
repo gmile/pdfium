@@ -58,6 +58,41 @@ defmodule PDFiumTest do
     end
   end
 
+  describe "with_document/2" do
+    test "runs the function with the document it opened" do
+      path = tmp_path() |> Document.write!([[box: {0, 0, 100, 100}], []])
+
+      assert {:ok, 2} = PDFium.with_document(path, &PDFium.get_page_count/1)
+    end
+
+    test "closes the document afterwards" do
+      document = PDFium.with_document(@plain, & &1)
+
+      assert {:error, :document_closed} = PDFium.get_page_count(document)
+    end
+
+    test "closes the document even when the work raises" do
+      test = self()
+
+      assert_raise RuntimeError, "the work failed", fn ->
+        PDFium.with_document(@plain, fn document ->
+          send(test, {:document, document})
+          raise "the work failed"
+        end)
+      end
+
+      assert_received {:document, document}
+      assert {:error, :document_closed} = PDFium.get_page_count(document)
+    end
+
+    test "answers the reason it could not open the document, and does not run" do
+      assert {:error, :file} =
+               PDFium.with_document("/nonexistent-directory/absent.pdf", fn _document ->
+                 flunk("ran against a document that was never opened")
+               end)
+    end
+  end
+
   describe "get_page_bitmap/3" do
     defp ink(path) do
       document = open!(path)

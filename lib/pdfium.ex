@@ -27,6 +27,26 @@ defmodule PDFium do
 
   defdelegate close_document(document), to: PDFium.NIF
 
+  @doc """
+  Opens the document at `path`, runs `function` with it, and closes it again.
+
+  Closing is what hands back the memory a document holds at a known moment
+  rather than whenever the reference is collected, and it happens even if the
+  work raises: a caller that answers its own errors would otherwise hold onto
+  the document for as long as the process lives.
+  """
+  @spec with_document(Path.t(), (reference() -> result)) :: result | {:error, load_error()}
+        when result: term()
+  def with_document(path, function) do
+    with {:ok, document} <- load_document(path) do
+      try do
+        function.(document)
+      after
+        close_document(document)
+      end
+    end
+  end
+
   defdelegate get_page_count(document), to: PDFium.NIF
 
   @doc """
