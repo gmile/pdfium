@@ -6,6 +6,10 @@ defmodule PDFium.Toolbox do
   here because more than one caller wanted it. Where a job has to decide
   something the library cannot know — where an overlay belongs on a page, say —
   it is decided here rather than in the binding.
+
+  A job names its documents by path rather than taking them open, and opens and
+  closes them itself. Reach for `PDFium` when you want to hold a document open
+  across several pieces of work.
   """
 
   @doc """
@@ -19,16 +23,21 @@ defmodule PDFium.Toolbox do
   goes over land exactly where it was drawn. `PDFium.stamp/3` takes the matrix
   itself for anywhere else.
   """
-  @spec stamp(reference(), [{reference(), non_neg_integer()}], Path.t()) ::
+  @spec stamp(Path.t(), [{Path.t(), non_neg_integer()}], Path.t()) ::
           {:ok, :stamped} | {:error, atom()}
-  def stamp(document, placements, output_path) do
-    overlays = placements |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+  def stamp(path, placements, output_path) do
+    overlay_paths = placements |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
 
-    with {:ok, [pages | overlay_pages]} <- PDFium.get_page_sizes([document | overlays]),
-         sizes = overlays |> Enum.zip(overlay_pages) |> Map.new(),
-         {:ok, placed} <- fit_each(placements, pages, sizes) do
-      PDFium.stamp(document, placed, output_path)
-    end
+    with_documents([path | overlay_paths], fn [document | overlays] ->
+      by_path = Map.new(Enum.zip(overlay_paths, overlays))
+      named = Enum.map(placements, fn {path, page} -> {Map.fetch!(by_path, path), page} end)
+
+      with {:ok, [pages | overlay_pages]} <- PDFium.get_page_sizes([document | overlays]),
+           sizes = overlays |> Enum.zip(overlay_pages) |> Map.new(),
+           {:ok, placed} <- fit_each(named, pages, sizes) do
+        PDFium.stamp(document, placed, output_path)
+      end
+    end)
   end
 
   @spec fit_each([{reference(), non_neg_integer()}], [PDFium.page_size()], map()) ::
@@ -74,19 +83,21 @@ defmodule PDFium.Toolbox do
   Answers `{:ok, :nothing_to_do}` without writing anything when no page had an
   annotation to draw.
   """
-  @spec flatten(reference(), Path.t()) ::
+  @spec flatten(Path.t(), Path.t()) ::
           {:ok, :flattened | :nothing_to_do} | {:error, atom()}
-  @spec flatten(reference(), Path.t(), :display | :print) ::
+  @spec flatten(Path.t(), Path.t(), :display | :print) ::
           {:ok, :flattened | :nothing_to_do} | {:error, atom()}
-  def flatten(document, output_path, usage \\ :display) do
-    with {:ok, page_count} <- PDFium.get_page_count(document),
-         {:ok, drawn?} <- flatten_each(document, page_count, usage) do
-      if drawn? do
-        with {:ok, :saved} <- PDFium.save(document, output_path), do: {:ok, :flattened}
-      else
-        {:ok, :nothing_to_do}
+  def flatten(path, output_path, usage \\ :display) do
+    PDFium.with_document(path, fn document ->
+      with {:ok, page_count} <- PDFium.get_page_count(document),
+           {:ok, drawn?} <- flatten_each(document, page_count, usage) do
+        if drawn? do
+          with {:ok, :saved} <- PDFium.save(document, output_path), do: {:ok, :flattened}
+        else
+          {:ok, :nothing_to_do}
+        end
       end
-    end
+    end)
   end
 
   @spec flatten_each(reference(), non_neg_integer(), :display | :print) ::
@@ -102,17 +113,21 @@ defmodule PDFium.Toolbox do
   end
 
   @doc """
-  Writes the given documents as one, in the order given.
+  Writes the named documents as one, in the order named.
+
+  A document named twice is written twice.
   """
-  @spec merge([reference()], Path.t()) :: {:ok, :merged} | {:error, atom()}
+  @spec merge([Path.t()], Path.t()) :: {:ok, :merged} | {:error, atom()}
   def merge([], _output_path), do: {:error, :no_documents}
 
-  def merge(documents, output_path) do
-    PDFium.with_new_document(fn output ->
-      with {:ok, _at} <- import_each(output, documents),
-           {:ok, :saved} <- PDFium.save(output, output_path) do
-        {:ok, :merged}
-      end
+  def merge(paths, output_path) do
+    with_documents(paths, fn documents ->
+      PDFium.with_new_document(fn output ->
+        with {:ok, _at} <- import_each(output, documents),
+             {:ok, :saved} <- PDFium.save(output, output_path) do
+          {:ok, :merged}
+        end
+      end)
     end)
   end
 
@@ -134,14 +149,35 @@ defmodule PDFium.Toolbox do
   Pages are numbered from zero. Naming one twice writes it twice; naming none
   is refused rather than taken to mean all of them.
   """
-  @spec extract_pages(reference(), [non_neg_integer()], Path.t()) ::
+  @spec extract_pages(Path.t(), [non_neg_integer()], Path.t()) ::
           {:ok, :extracted} | {:error, atom()}
-  def extract_pages(document, page_indices, output_path) do
-    PDFium.with_new_document(fn output ->
-      with {:ok, :imported} <- PDFium.import_pages(output, document, page_indices, 0),
-           {:ok, :saved} <- PDFium.save(output, output_path) do
-        {:ok, :extracted}
-      end
+  def extract_pages(path, page_indices, output_path) do
+    PDFium.with_document(path, fn document ->
+      PDFium.with_new_document(fn output ->
+        with {:ok, :imported} <- PDFium.import_pages(output, document, page_indices, 0),
+             {:ok, :saved} <- PDFium.save(output, output_path) do
+          {:ok, :extracted}
+        end
+      end)
     end)
+  end
+
+  @spec with_documents([Path.t()], ([reference()] -> result)) ::
+          result | {:error, PDFium.load_error()}
+        when result: term()
+  defp with_documents(paths, function) do
+    opened = Enum.map(paths, &PDFium.load_document/1)
+
+    try do
+      case Enum.find(opened, &match?({:error, _reason}, &1)) do
+        nil -> function.(Enum.map(opened, fn {:ok, document} -> document end))
+        {:error, reason} -> {:error, reason}
+      end
+    after
+      Enum.each(opened, fn
+        {:ok, document} -> PDFium.close_document(document)
+        {:error, _reason} -> :ok
+      end)
+    end
   end
 end
