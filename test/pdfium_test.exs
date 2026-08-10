@@ -108,8 +108,7 @@ defmodule PDFiumTest do
       # covers ink rather than adding any. Flattening draws the same appearance
       # into the page content, so the two have to come out identical.
       flattened = tmp_path()
-      document = open!(@annotated)
-      assert {:ok, :flattened} = Toolbox.flatten(document, flattened)
+      assert {:ok, :flattened} = Toolbox.flatten(@annotated, flattened)
 
       assert ink(@annotated) == ink(flattened)
     end
@@ -325,7 +324,7 @@ defmodule PDFiumTest do
     setup do
       pages = Enum.map([200, 300, 400, 500], &[box: {0, 0, &1, &1}])
 
-      {:ok, source: tmp_path() |> Document.write!(pages) |> open!()}
+      {:ok, source: tmp_path() |> Document.write!(pages)}
     end
 
     test "writes the pages it was given", %{source: source, output: output} do
@@ -350,7 +349,7 @@ defmodule PDFiumTest do
     end
 
     test "keeps what is drawn on the page it took", %{output: output} do
-      source = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 100, 100}) |> open!()
+      source = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 100, 100})
 
       assert {:ok, :extracted} = Toolbox.extract_pages(source, [0], output)
 
@@ -366,10 +365,9 @@ defmodule PDFiumTest do
       assert {:error, :import_failed} = Toolbox.extract_pages(source, [9], output)
     end
 
-    test "reports a closed document", %{source: source, output: output} do
-      PDFium.close_document(source)
-
-      assert {:error, :document_closed} = Toolbox.extract_pages(source, [0], output)
+    test "reports a document it cannot open", %{output: output} do
+      assert {:error, :file} =
+               Toolbox.extract_pages("/nonexistent-directory/absent.pdf", [0], output)
     end
 
     test "reports an unwritable output path", %{source: source} do
@@ -379,7 +377,7 @@ defmodule PDFiumTest do
   end
 
   describe "merge/2" do
-    defp document!(pages), do: tmp_path() |> Document.write!(pages) |> open!()
+    defp document!(pages), do: tmp_path() |> Document.write!(pages)
 
     test "writes the documents as one, in order", %{output: output} do
       first = document!([[box: {0, 0, 100, 100}], [box: {0, 0, 200, 200}]])
@@ -401,8 +399,8 @@ defmodule PDFiumTest do
     end
 
     test "keeps what is drawn on each page", %{output: output} do
-      red = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 100, 100}) |> open!()
-      blue = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 100, 100}) |> open!()
+      red = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 100, 100})
+      blue = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 100, 100})
 
       assert {:ok, :merged} = Toolbox.merge([red, blue], output)
 
@@ -425,12 +423,10 @@ defmodule PDFiumTest do
       refute File.exists?(output)
     end
 
-    test "reports a closed document", %{output: output} do
+    test "reports a document it cannot open", %{output: output} do
       first = document!([[box: {0, 0, 100, 100}]])
-      second = document!([[box: {0, 0, 100, 100}]])
-      PDFium.close_document(second)
 
-      assert {:error, :document_closed} = Toolbox.merge([first, second], output)
+      assert {:error, :file} = Toolbox.merge([first, "/nonexistent-directory/absent.pdf"], output)
       refute File.exists?(output)
     end
 
@@ -533,9 +529,8 @@ defmodule PDFiumTest do
           [box: {0, 0, 400, 400}, content: "0 0 1 rg 0 0 400 400 re f"],
           [box: {0, 0, 400, 400}]
         ])
-        |> open!()
 
-      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]])
 
       assert {:ok, :stamped} = Toolbox.stamp(document, [{overlay, 0}], output)
       assert blue?(colour_at(output, 0.5, 0.5))
@@ -548,14 +543,14 @@ defmodule PDFiumTest do
 
       content = "0 0 1 rg #{left} #{bottom} #{width} #{height} re f"
 
-      tmp_path() |> Document.write!([[box: box, content: content]]) |> open!()
+      tmp_path() |> Document.write!([[box: box, content: content]])
     end
 
     defp blue?({red, green, blue}), do: blue > 200 and red < 100 and green < 100
 
     test "draws the overlay where it was drawn", %{output: output} do
       box = {0, 0, 400, 400}
-      document = tmp_path() |> Document.write!([[box: box]]) |> open!()
+      document = tmp_path() |> Document.write!([[box: box]])
 
       assert {:ok, :stamped} = Toolbox.stamp(document, [{corner_overlay(box), 0}], output)
 
@@ -565,7 +560,7 @@ defmodule PDFiumTest do
 
     test "keeps the content the page already had", %{output: output} do
       box = {0, 0, 400, 400}
-      document = tmp_path() |> Document.filled({1, 0, 0}, box: box) |> open!()
+      document = tmp_path() |> Document.filled({1, 0, 0}, box: box)
 
       assert {:ok, :stamped} = Toolbox.stamp(document, [{corner_overlay(box), 0}], output)
 
@@ -576,7 +571,7 @@ defmodule PDFiumTest do
     test "draws over the page it was paired with and no other", %{output: output} do
       box = {0, 0, 400, 400}
       pages = [[box: box], [box: box], [box: box]]
-      document = tmp_path() |> Document.write!(pages) |> open!()
+      document = tmp_path() |> Document.write!(pages)
 
       assert {:ok, :stamped} = Toolbox.stamp(document, [{corner_overlay(box), 1}], output)
 
@@ -587,7 +582,7 @@ defmodule PDFiumTest do
 
     test "draws one overlay over as many pages as it is given", %{output: output} do
       box = {0, 0, 400, 400}
-      document = tmp_path() |> Document.write!([[box: box], [box: box]]) |> open!()
+      document = tmp_path() |> Document.write!([[box: box], [box: box]])
       overlay = corner_overlay(box)
 
       assert {:ok, :stamped} =
@@ -599,10 +594,10 @@ defmodule PDFiumTest do
 
     test "stacks overlays on one page in the order given", %{output: output} do
       box = {0, 0, 400, 400}
-      document = tmp_path() |> Document.write!([[box: box]]) |> open!()
+      document = tmp_path() |> Document.write!([[box: box]])
 
-      under = tmp_path() |> Document.filled({0, 1, 0}, box: box) |> open!()
-      over = tmp_path() |> Document.filled({1, 0, 0}, box: box) |> open!()
+      under = tmp_path() |> Document.filled({0, 1, 0}, box: box)
+      over = tmp_path() |> Document.filled({1, 0, 0}, box: box)
 
       assert {:ok, :stamped} = Toolbox.stamp(document, [{under, 0}, {over, 0}], output)
 
@@ -611,7 +606,7 @@ defmodule PDFiumTest do
 
     test "places against a box that does not start at the origin", %{output: output} do
       box = {-100, -100, 300, 300}
-      document = tmp_path() |> Document.write!([[box: box]]) |> open!()
+      document = tmp_path() |> Document.write!([[box: box]])
       overlay = corner_overlay({0, 0, 400, 400})
 
       assert {:ok, :stamped} = Toolbox.stamp(document, [{overlay, 0}], output)
@@ -622,7 +617,7 @@ defmodule PDFiumTest do
 
     test "turns the overlay with the page it goes over", %{output: output} do
       box = {0, 0, 400, 600}
-      document = tmp_path() |> Document.write!([[box: box, rotation: 90]]) |> open!()
+      document = tmp_path() |> Document.write!([[box: box, rotation: 90]])
 
       overlay = corner_overlay({0, 0, 600, 400})
 
@@ -634,8 +629,8 @@ defmodule PDFiumTest do
 
     test "scales an overlay of a different shape to fit, centred", %{output: output} do
       box = {0, 0, 400, 400}
-      document = tmp_path() |> Document.write!([[box: box]]) |> open!()
-      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 400, 800}) |> open!()
+      document = tmp_path() |> Document.write!([[box: box]])
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 400, 800})
 
       assert {:ok, :stamped} = Toolbox.stamp(document, [{overlay, 0}], output)
 
@@ -645,29 +640,28 @@ defmodule PDFiumTest do
     end
 
     test "reports a page that is not there", %{output: output} do
-      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]])
 
       assert {:error, :page_load_failed} =
                Toolbox.stamp(document, [{corner_overlay({0, 0, 400, 400}), 9}], output)
     end
 
     test "reports an overlay with no pages", %{output: output} do
-      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
-      overlay = tmp_path() |> Document.write!([]) |> open!()
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]])
+      overlay = tmp_path() |> Document.write!([])
 
       assert {:error, :page_load_failed} = Toolbox.stamp(document, [{overlay, 0}], output)
     end
 
-    test "reports a closed document", %{output: output} do
-      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
-      overlay = corner_overlay({0, 0, 400, 400})
-      PDFium.close_document(overlay)
+    test "reports an overlay it cannot open", %{output: output} do
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]])
+      absent = "/nonexistent-directory/absent.pdf"
 
-      assert {:error, :document_closed} = Toolbox.stamp(document, [{overlay, 0}], output)
+      assert {:error, :file} = Toolbox.stamp(document, [{absent, 0}], output)
     end
 
     test "draws nothing when given nothing", %{output: output} do
-      document = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 400, 400}) |> open!()
+      document = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 400, 400})
 
       assert {:ok, :stamped} = Toolbox.stamp(document, [], output)
 
@@ -677,54 +671,33 @@ defmodule PDFiumTest do
 
   describe "flatten/2" do
     test "renders annotations into the page and writes the result", %{output: output} do
-      {:ok, document} = PDFium.load_document(@annotated)
-
-      assert {:ok, :flattened} = Toolbox.flatten(document, output)
+      assert {:ok, :flattened} = Toolbox.flatten(@annotated, output)
       assert File.exists?(output)
 
-      PDFium.close_document(document)
-
-      {:ok, flattened} = PDFium.load_document(output)
-      assert {:ok, 1} = PDFium.get_page_count(flattened)
-      PDFium.close_document(flattened)
+      assert {:ok, 1} = PDFium.get_page_count(open!(output))
     end
 
     test "leaves the output alone when there is nothing to flatten", %{output: output} do
-      {:ok, document} = PDFium.load_document(@plain)
-
-      assert {:ok, :nothing_to_do} = Toolbox.flatten(document, output)
+      assert {:ok, :nothing_to_do} = Toolbox.flatten(@plain, output)
       refute File.exists?(output)
-
-      PDFium.close_document(document)
     end
 
     test "is idempotent", %{output: output} do
-      {:ok, document} = PDFium.load_document(@annotated)
-      assert {:ok, :flattened} = Toolbox.flatten(document, output)
-      PDFium.close_document(document)
+      assert {:ok, :flattened} = Toolbox.flatten(@annotated, output)
 
-      {:ok, flattened} = PDFium.load_document(output)
       second = output <> ".2"
       on_exit(fn -> File.rm(second) end)
 
-      assert {:ok, :nothing_to_do} = Toolbox.flatten(flattened, second)
-      PDFium.close_document(flattened)
+      assert {:ok, :nothing_to_do} = Toolbox.flatten(output, second)
     end
 
-    test "reports a closed document", %{output: output} do
-      {:ok, document} = PDFium.load_document(@annotated)
-      PDFium.close_document(document)
-
-      assert {:error, :document_closed} = Toolbox.flatten(document, output)
+    test "reports a document it cannot open", %{output: output} do
+      assert {:error, :file} = Toolbox.flatten("/nonexistent-directory/absent.pdf", output)
     end
 
     test "reports an unwritable output path" do
-      {:ok, document} = PDFium.load_document(@annotated)
-
       assert {:error, :output_open_failed} =
-               Toolbox.flatten(document, "/nonexistent-directory/out.pdf")
-
-      PDFium.close_document(document)
+               Toolbox.flatten(@annotated, "/nonexistent-directory/out.pdf")
     end
   end
 end
