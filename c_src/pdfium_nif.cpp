@@ -576,7 +576,7 @@ Matrix display_to_page(const Box &box, int rotation) {
 // decides it.
 using Matrix6 = std::tuple<double, double, double, double, double, double>;
 
-using Placement = std::tuple<fine::ResourcePtr<PDFDoc>, int64_t, Matrix6>;
+using Placement = std::tuple<fine::ResourcePtr<PDFDoc>, int64_t, int64_t, Matrix6>;
 
 WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
                   std::vector<Placement> placements, std::string output_path) {
@@ -595,10 +595,10 @@ WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
     std::map<int, std::vector<size_t>> by_page;
 
     for (size_t index = 0; index < placements.size(); index++) {
-        by_page[static_cast<int>(std::get<1>(placements[index]))].push_back(index);
+        by_page[static_cast<int>(std::get<2>(placements[index]))].push_back(index);
     }
 
-    std::map<FPDF_DOCUMENT, FPDF_XOBJECT> templates;
+    std::map<std::pair<FPDF_DOCUMENT, int>, FPDF_XOBJECT> templates;
     std::optional<fine::Atom> failure;
 
     for (const auto &entry : by_page) {
@@ -613,26 +613,29 @@ WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
 
         for (size_t index : entry.second) {
             FPDF_DOCUMENT overlay = std::get<0>(placements[index])->document;
+            int overlay_page = static_cast<int>(std::get<1>(placements[index]));
+            auto key = std::make_pair(overlay, overlay_page);
 
-            if (templates.find(overlay) == templates.end()) {
-                FPDF_XOBJECT xobject = FPDF_NewXObjectFromPage(doc->document, overlay, 0);
+            if (templates.find(key) == templates.end()) {
+                FPDF_XOBJECT xobject =
+                    FPDF_NewXObjectFromPage(doc->document, overlay, overlay_page);
 
                 if (!xobject) {
                     failure = xobject_failed;
                     break;
                 }
 
-                templates[overlay] = xobject;
+                templates[key] = xobject;
             }
 
-            FPDF_PAGEOBJECT form = FPDF_NewFormObjectFromXObject(templates[overlay]);
+            FPDF_PAGEOBJECT form = FPDF_NewFormObjectFromXObject(templates[key]);
 
             if (!form) {
                 failure = form_object_failed;
                 break;
             }
 
-            const auto &[a, b, c, d, e, f] = std::get<2>(placements[index]);
+            const auto &[a, b, c, d, e, f] = std::get<3>(placements[index]);
 
             FPDFPageObj_Transform(form, a * inverse.a + b * inverse.c, a * inverse.b + b * inverse.d,
                                   c * inverse.a + d * inverse.c, c * inverse.b + d * inverse.d,
