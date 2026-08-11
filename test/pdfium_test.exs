@@ -487,7 +487,7 @@ defmodule PDFiumTest do
 
       placement = {1.0, 0.0, 0.0, 1.0, 200.0, 200.0}
 
-      assert {:ok, :stamped} = PDFium.stamp(document, [{overlay, 0, placement}], output)
+      assert {:ok, :stamped} = PDFium.stamp(document, [{overlay, 0, 0, placement}], output)
 
       assert blue?(colour_at(output, 0.625, 0.625)), "moved into the top right quarter"
       refute blue?(colour_at(output, 0.125, 0.125)), "not left in the bottom left"
@@ -498,7 +498,7 @@ defmodule PDFiumTest do
       document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
 
       assert {:ok, :stamped} =
-               PDFium.stamp(document, [{overlay, 0, {0.5, 0.0, 0.0, 0.5, 0.0, 0.0}}], output)
+               PDFium.stamp(document, [{overlay, 0, 0, {0.5, 0.0, 0.0, 0.5, 0.0, 0.0}}], output)
 
       assert blue?(colour_at(output, 0.25, 0.25)), "the quarter it was scaled into"
       refute blue?(colour_at(output, 0.75, 0.75)), "and nothing beyond it"
@@ -513,7 +513,7 @@ defmodule PDFiumTest do
         tmp_path() |> Document.write!([[box: {0, 0, 400, 600}, rotation: 90]]) |> open!()
 
       assert {:ok, :stamped} =
-               PDFium.stamp(document, [{overlay, 0, {1.0, 0.0, 0.0, 1.0, 0.0, 0.0}}], output)
+               PDFium.stamp(document, [{overlay, 0, 0, {1.0, 0.0, 0.0, 1.0, 0.0, 0.0}}], output)
 
       assert blue?(colour_at(output, 0.1, 0.1)), "the corner a reader calls bottom left"
     end
@@ -658,6 +658,32 @@ defmodule PDFiumTest do
       absent = "/nonexistent-directory/absent.pdf"
 
       assert {:error, :file} = Toolbox.stamp(document, [{absent, 0}], output)
+    end
+
+    test "draws each page of the overlay over the page in the same place" do
+      # A header and footer is drawn as one overlay page per page of the
+      # document, each carrying that page's own number.
+      overlay =
+        tmp_path()
+        |> Document.write!([
+          [box: {0, 0, 400, 400}, content: "1 0 0 rg 0 0 400 400 re f"],
+          [box: {0, 0, 400, 400}, content: "0 0 1 rg 0 0 400 400 re f"]
+        ])
+
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}], [box: {0, 0, 400, 400}]])
+      output = tmp_path()
+
+      assert {:ok, :stamped} = Toolbox.overlay(document, overlay, output)
+
+      assert colour_at(output, 0.5, 0.5, 0) == {255, 0, 0}, "page one takes overlay page one"
+      assert colour_at(output, 0.5, 0.5, 1) == {0, 0, 255}, "page two takes overlay page two"
+    end
+
+    test "refuses an overlay rendered for a document of another length" do
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}], [box: {0, 0, 400, 400}]])
+      overlay = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]])
+
+      assert {:error, :page_count_mismatch} = Toolbox.overlay(document, overlay, tmp_path())
     end
 
     test "draws nothing when given nothing", %{output: output} do

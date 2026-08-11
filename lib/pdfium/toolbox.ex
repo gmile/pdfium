@@ -16,8 +16,11 @@ defmodule PDFium.Toolbox do
   Draws overlays over the pages of `document`, each scaled to fit and centred,
   and writes the result.
 
-  Each placement is `{overlay, page_index}`, with pages counted from zero.
-  Placements landing on the same page stack in the order given.
+  Each placement is `{overlay, page_index}`, with pages counted from zero, and
+  each overlay is drawn by its first page. Placements landing on the same page
+  stack in the order given.
+
+  `overlay/3` is for an overlay with a page per page of the document.
 
   Fitting and centring is what makes an overlay drawn at the size of the page it
   goes over land exactly where it was drawn. `PDFium.stamp/3` takes the matrix
@@ -30,7 +33,8 @@ defmodule PDFium.Toolbox do
 
     with_documents([path | overlay_paths], fn [document | overlays] ->
       by_path = Map.new(Enum.zip(overlay_paths, overlays))
-      named = Enum.map(placements, fn {path, page} -> {Map.fetch!(by_path, path), page} end)
+
+      named = Enum.map(placements, fn {path, page} -> {Map.fetch!(by_path, path), 0, page} end)
 
       with {:ok, [pages | overlay_pages]} <- PDFium.get_page_sizes([document | overlays]),
            sizes = overlays |> Enum.zip(overlay_pages) |> Map.new(),
@@ -40,31 +44,31 @@ defmodule PDFium.Toolbox do
     end)
   end
 
-  @spec fit_each([{reference(), non_neg_integer()}], [PDFium.page_size()], map()) ::
-          {:ok, [{reference(), non_neg_integer(), PDFium.placement()}]} | {:error, atom()}
+  @spec fit_each(
+          [{reference(), non_neg_integer(), non_neg_integer()}],
+          [PDFium.page_size()],
+          map()
+        ) ::
+          {:ok, [{reference(), non_neg_integer(), non_neg_integer(), PDFium.placement()}]}
+          | {:error, atom()}
   defp fit_each(placements, pages, sizes) do
-    Enum.reduce_while(placements, {:ok, []}, fn {overlay, page_index}, {:ok, placed} ->
-      with {:ok, overlay_size} <- first_page(Map.fetch!(sizes, overlay)),
+    Enum.reduce_while(placements, {:ok, []}, fn {overlay, overlay_page, page_index},
+                                                {:ok, placed} ->
+      with {:ok, overlay_size} <- page_at(Map.fetch!(sizes, overlay), overlay_page),
            {:ok, page} <- page_at(pages, page_index) do
-        {:cont, {:ok, placed ++ [{overlay, page_index, fit(overlay_size, page)}]}}
+        {:cont, {:ok, placed ++ [{overlay, overlay_page, page_index, fit(overlay_size, page)}]}}
       else
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
   end
 
-  @spec first_page([PDFium.page_size()]) :: {:ok, PDFium.page_size()} | {:error, atom()}
-  defp first_page([%{width: width, height: height} = size | _]) when width > 0 and height > 0,
-    do: {:ok, size}
-
-  defp first_page([_ | _]), do: {:error, :empty_overlay}
-  defp first_page([]), do: {:error, :page_load_failed}
-
   @spec page_at([PDFium.page_size()], non_neg_integer()) ::
           {:ok, PDFium.page_size()} | {:error, atom()}
   defp page_at(pages, index) do
     case Enum.at(pages, index) do
       nil -> {:error, :page_load_failed}
+      %{width: width, height: height} when width <= 0 or height <= 0 -> {:error, :empty_overlay}
       page -> {:ok, page}
     end
   end
@@ -74,6 +78,45 @@ defmodule PDFium.Toolbox do
     scale = min(page_width / width, page_height / height)
 
     {scale, 0.0, 0.0, scale, (page_width - width * scale) / 2, (page_height - height * scale) / 2}
+  end
+
+  @doc """
+  Draws each page of `overlay` over the page of `document` in the same place.
+
+  This is what a header and footer is: one page per page of the document, each
+  carrying that page's own number, and a header only where one belongs. Naming
+  the pairing is what the caller would otherwise have to spell out for every
+  page, and get right.
+
+  The two must have the same number of pages, which is refused rather than
+  guessed at - a mismatch means the overlay was rendered for a different
+  document.
+  """
+  @spec overlay(Path.t(), Path.t(), Path.t()) :: {:ok, :stamped} | {:error, atom()}
+  def overlay(path, overlay_path, output_path) do
+    with_documents([path, overlay_path], fn [document, overlay] ->
+      with {:ok, [pages, overlay_pages]} <- PDFium.get_page_sizes([document, overlay]),
+           true <- length(pages) == length(overlay_pages) || {:error, :page_count_mismatch},
+           {:ok, placed} <- fit_pairwise(overlay, pages, overlay_pages) do
+        PDFium.stamp(document, placed, output_path)
+      end
+    end)
+  end
+
+  @spec fit_pairwise(reference(), [PDFium.page_size()], [PDFium.page_size()]) ::
+          {:ok, [{reference(), non_neg_integer(), non_neg_integer(), PDFium.placement()}]}
+          | {:error, atom()}
+  defp fit_pairwise(overlay, pages, overlay_pages) do
+    pages
+    |> Enum.zip(overlay_pages)
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {{page, overlay_page}, index}, {:ok, placed} ->
+      if page.width > 0 and page.height > 0 and overlay_page.width > 0 and overlay_page.height > 0 do
+        {:cont, {:ok, placed ++ [{overlay, index, index, fit(overlay_page, page)}]}}
+      else
+        {:halt, {:error, :page_load_failed}}
+      end
+    end)
   end
 
   @doc """

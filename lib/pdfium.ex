@@ -204,20 +204,26 @@ defmodule PDFium do
   @doc """
   Draws overlays over the pages of `document` and writes the result.
 
-  Each placement is `{overlay, page_index, matrix}`, drawing the overlay's first
-  page over that page of the document, numbered from zero. Placements landing on
-  the same page stack in the order given.
+  Each placement is `{overlay, overlay_page, page_index, matrix}`, drawing that
+  page of the overlay over that page of the document, both numbered from zero.
+  Placements landing on the same page stack in the order given.
+
+  An overlay with a page per page of the document - a header and footer carrying
+  its own page numbers, say - is drawn by naming the page that belongs to each.
 
   An overlay arrives the way a reader shows it: turned the right way up, with
   its own box shifted onto the origin. The pages keep the content they already
   had.
   """
-  @spec stamp(reference(), [{reference(), non_neg_integer(), placement()}], Path.t()) ::
-          {:ok, :stamped} | {:error, atom()}
+  @spec stamp(
+          reference(),
+          [{reference(), non_neg_integer(), non_neg_integer(), placement()}],
+          Path.t()
+        ) :: {:ok, :stamped} | {:error, atom()}
   def stamp(document, placements, output_path) do
     placements =
-      Enum.map(placements, fn {overlay, page_index, {a, b, c, d, e, f}} ->
-        {overlay, page_index, {a / 1, b / 1, c / 1, d / 1, e / 1, f / 1}}
+      Enum.map(placements, fn {overlay, overlay_page, page_index, {a, b, c, d, e, f}} ->
+        {overlay, overlay_page, page_index, {a / 1, b / 1, c / 1, d / 1, e / 1, f / 1}}
       end)
 
     PDFium.NIF.stamp(document, placements, output_path)
