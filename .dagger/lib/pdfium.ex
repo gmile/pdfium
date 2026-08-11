@@ -156,7 +156,6 @@ defmodule Pdfium do
 
     compile = ~w(
       g++
-      -march=native
       -Wall
       -Wextra
       -Werror
