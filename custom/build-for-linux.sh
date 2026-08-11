@@ -41,7 +41,6 @@ tar --extract --gunzip --directory=$pdfium_directory_name --file=$pdfium_archive
 
 # 4. Compile
 gcc \
-  -march=native \
   -Wall \
   -Wextra \
   -Werror \
