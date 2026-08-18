@@ -58,6 +58,69 @@ defmodule PDFiumTest do
     end
   end
 
+  describe "load_memory_document/1" do
+    test "opens a document from its contents" do
+      {:ok, from_path} = PDFium.load_document(@plain)
+      {:ok, pages} = PDFium.get_page_count(from_path)
+
+      assert {:ok, document} = PDFium.load_memory_document(File.read!(@plain))
+      assert {:ok, ^pages} = PDFium.get_page_count(document)
+    end
+
+    test "keeps the contents for as long as the document is open" do
+      assert {:ok, document} = PDFium.load_memory_document(File.read!(@plain))
+
+      :erlang.garbage_collect()
+
+      assert {:ok, pages} = PDFium.get_page_count(document)
+      assert pages > 0
+    end
+
+    test "names the reason contents are not a document it can read" do
+      assert {:error, :format} = PDFium.load_memory_document("not a pdf at all")
+    end
+  end
+
+  describe "with_memory_document/2" do
+    test "runs the function with the document it opened" do
+      assert {:ok, pages} =
+               PDFium.with_memory_document(File.read!(@plain), &PDFium.get_page_count/1)
+
+      assert pages > 0
+    end
+
+    test "closes the document even when the function raises" do
+      assert_raise RuntimeError, fn ->
+        PDFium.with_memory_document(File.read!(@plain), fn _document -> raise "boom" end)
+      end
+    end
+  end
+
+  describe "save_to_binary/1" do
+    test "answers with the document as it would have been written" do
+      {:ok, document} = PDFium.load_document(@plain)
+
+      assert {:ok, saved} = PDFium.save_to_binary(document)
+      assert String.starts_with?(saved, "%PDF-")
+    end
+
+    test "answers with a document that can be opened again" do
+      {:ok, document} = PDFium.load_memory_document(File.read!(@annotated))
+      {:ok, pages} = PDFium.get_page_count(document)
+
+      assert {:ok, saved} = PDFium.save_to_binary(document)
+      assert {:ok, reopened} = PDFium.load_memory_document(saved)
+      assert {:ok, ^pages} = PDFium.get_page_count(reopened)
+    end
+
+    test "refuses a document that has been closed" do
+      {:ok, document} = PDFium.load_document(@plain)
+      :ok = PDFium.close_document(document)
+
+      assert {:error, :document_closed} = PDFium.save_to_binary(document)
+    end
+  end
+
   describe "with_document/2" do
     test "runs the function with the document it opened" do
       path = tmp_path() |> Document.write!([[box: {0, 0, 100, 100}], []])
