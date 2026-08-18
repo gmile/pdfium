@@ -17,6 +17,8 @@ defmodule PDFium.NIF do
 
   def load_document(_filename), do: :erlang.nif_error(:nif_not_loaded)
 
+  def load_memory_document(_contents), do: :erlang.nif_error(:nif_not_loaded)
+
   def close_document(_document), do: :erlang.nif_error(:nif_not_loaded)
 
   def get_page_count(_document), do: :erlang.nif_error(:nif_not_loaded)
@@ -36,7 +38,11 @@ defmodule PDFium.NIF do
 
   def save(_document, _output_path), do: :erlang.nif_error(:nif_not_loaded)
 
+  def save_to_binary(_document), do: :erlang.nif_error(:nif_not_loaded)
+
   def import_pages(_dest, _src, _page_indices, _at), do: :erlang.nif_error(:nif_not_loaded)
 
   def stamp(_document, _placements, _output_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  def stamp_in_place(_document, _placements), do: :erlang.nif_error(:nif_not_loaded)
 end

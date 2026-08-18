@@ -25,7 +25,31 @@ defmodule PDFium do
   @spec load_document(Path.t()) :: {:ok, reference()} | {:error, load_error()}
   defdelegate load_document(filename), to: PDFium.NIF
 
+  @doc """
+  Opens a document from its contents.
+
+  PDFium reads the bytes where they lie for as long as the document is open, so
+  the document holds onto them itself.
+  """
+  @spec load_memory_document(binary()) :: {:ok, reference()} | {:error, load_error()}
+  defdelegate load_memory_document(contents), to: PDFium.NIF
+
   defdelegate close_document(document), to: PDFium.NIF
+
+  @doc """
+  Opens `contents`, runs `function` with the document, and closes it again.
+  """
+  @spec with_memory_document(binary(), (reference() -> result)) :: result | {:error, load_error()}
+        when result: term()
+  def with_memory_document(contents, function) do
+    with {:ok, document} <- load_memory_document(contents) do
+      try do
+        function.(document)
+      after
+        close_document(document)
+      end
+    end
+  end
 
   @doc """
   Opens the document at `path`, runs `function` with it, and closes it again.
@@ -159,6 +183,12 @@ defmodule PDFium do
   defdelegate save(document, output_path), to: PDFium.NIF
 
   @doc """
+  Answers with the document as it would have been written.
+  """
+  @spec save_to_binary(reference()) :: {:ok, binary()} | {:error, atom()}
+  defdelegate save_to_binary(document), to: PDFium.NIF
+
+  @doc """
   Copies pages of `source` into `destination`, starting at page `at`.
 
   `pages` is `:all` or a list of page indexes counted from zero, in the order
@@ -221,11 +251,27 @@ defmodule PDFium do
           Path.t()
         ) :: {:ok, :stamped} | {:error, atom()}
   def stamp(document, placements, output_path) do
-    placements =
-      Enum.map(placements, fn {overlay, overlay_page, page_index, {a, b, c, d, e, f}} ->
-        {overlay, overlay_page, page_index, {a / 1, b / 1, c / 1, d / 1, e / 1, f / 1}}
-      end)
+    PDFium.NIF.stamp(document, as_floats(placements), output_path)
+  end
 
-    PDFium.NIF.stamp(document, placements, output_path)
+  @doc """
+  Stamps as `stamp/3` does, leaving the result in the document rather than
+  writing it out.
+  """
+  @spec stamp_in_place(
+          reference(),
+          [{reference(), non_neg_integer(), non_neg_integer(), placement()}]
+        ) :: {:ok, :stamped} | {:error, atom()}
+  def stamp_in_place(document, placements) do
+    PDFium.NIF.stamp_in_place(document, as_floats(placements))
+  end
+
+  @spec as_floats([{reference(), non_neg_integer(), non_neg_integer(), placement()}]) :: [
+          {reference(), non_neg_integer(), non_neg_integer(), placement()}
+        ]
+  defp as_floats(placements) do
+    Enum.map(placements, fn {overlay, overlay_page, page_index, {a, b, c, d, e, f}} ->
+      {overlay, overlay_page, page_index, {a / 1, b / 1, c / 1, d / 1, e / 1, f / 1}}
+    end)
   end
 end

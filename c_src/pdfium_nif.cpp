@@ -47,8 +47,10 @@ static fine::Atom save_failed("save_failed");
 
 struct PDFDoc {
     FPDF_DOCUMENT document;
+    std::string buffer;
 
     PDFDoc(FPDF_DOCUMENT doc) : document(doc) {}
+    PDFDoc(FPDF_DOCUMENT doc, std::string data) : document(doc), buffer(std::move(data)) {}
 
     void destructor(ErlNifEnv *env) {
         std::unique_lock lock(*pdfium_mutex);
@@ -116,6 +118,26 @@ DocResult load_document(ErlNifEnv *env, std::string filename) {
 }
 
 FINE_NIF(load_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+DocResult load_memory_document(ErlNifEnv *env, std::string data) {
+    auto doc = fine::make_resource<PDFDoc>(nullptr, std::move(data));
+
+    std::unique_lock lock(*pdfium_mutex);
+    FPDF_DOCUMENT document =
+        FPDF_LoadMemDocument64(doc->buffer.data(), doc->buffer.size(), nullptr);
+    unsigned long error = document ? 0 : FPDF_GetLastError();
+    lock.unlock();
+
+    if (!document) {
+        return fine::Error(last_error_name(error));
+    }
+
+    doc->document = document;
+
+    return fine::Ok(doc);
+}
+
+FINE_NIF(load_memory_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 fine::Ok<> close_document(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
     std::unique_lock lock(*pdfium_mutex);
@@ -389,6 +411,16 @@ struct FileWriter : FPDF_FILEWRITE {
     std::FILE *file;
 };
 
+struct BufferWriter : FPDF_FILEWRITE {
+    std::string *buffer;
+};
+
+int append_block(FPDF_FILEWRITE *self, const void *data, unsigned long size) {
+    auto *writer = static_cast<BufferWriter *>(self);
+    writer->buffer->append(static_cast<const char *>(data), size);
+    return 1;
+}
+
 int write_block(FPDF_FILEWRITE *self, const void *data, unsigned long size) {
     auto *writer = static_cast<FileWriter *>(self);
     return std::fwrite(data, 1, size, writer->file) == size ? 1 : 0;
@@ -480,6 +512,30 @@ WriteResult save(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string outp
 }
 
 FINE_NIF(save, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+using SaveToBinaryResult = std::variant<fine::Ok<std::string>, fine::Error<fine::Atom>>;
+
+SaveToBinaryResult save_to_binary(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+
+    std::string out;
+    BufferWriter writer{};
+    writer.version = 1;
+    writer.WriteBlock = append_block;
+    writer.buffer = &out;
+
+    if (!FPDF_SaveAsCopy(doc->document, &writer, 0)) {
+        return fine::Error(save_failed);
+    }
+
+    return fine::Ok(std::move(out));
+}
+
+FINE_NIF(save_to_binary, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 // An empty list of pages is pdfium's way of asking for all of them.
 WriteResult import_pages(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> dest,
@@ -578,17 +634,15 @@ using Matrix6 = std::tuple<double, double, double, double, double, double>;
 
 using Placement = std::tuple<fine::ResourcePtr<PDFDoc>, int64_t, int64_t, Matrix6>;
 
-WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
-                  std::vector<Placement> placements, std::string output_path) {
-    std::unique_lock lock(*pdfium_mutex);
-
+std::optional<fine::Atom> apply_stamps(fine::ResourcePtr<PDFDoc> doc,
+                                       const std::vector<Placement> &placements) {
     if (!doc->document) {
-        return fine::Error(document_closed);
+        return document_closed;
     }
 
     for (const auto &placement : placements) {
         if (!std::get<0>(placement)->document) {
-            return fine::Error(document_closed);
+            return document_closed;
         }
     }
 
@@ -656,12 +710,21 @@ WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
         }
     }
 
-    if (!failure) {
-        failure = write_document(doc->document, output_path);
-    }
-
     for (const auto &entry : templates) {
         FPDF_CloseXObject(entry.second);
+    }
+
+    return failure;
+}
+
+WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
+                  std::vector<Placement> placements, std::string output_path) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    auto failure = apply_stamps(doc, placements);
+
+    if (!failure) {
+        failure = write_document(doc->document, output_path);
     }
 
     if (failure) {
@@ -672,5 +735,18 @@ WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
 }
 
 FINE_NIF(stamp, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
+WriteResult stamp_in_place(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
+                           std::vector<Placement> placements) {
+    std::unique_lock lock(*pdfium_mutex);
+
+    if (auto failure = apply_stamps(doc, placements)) {
+        return fine::Error(*failure);
+    }
+
+    return fine::Ok(stamped);
+}
+
+FINE_NIF(stamp_in_place, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 FINE_INIT("Elixir.PDFium.NIF");
