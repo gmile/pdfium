@@ -103,6 +103,23 @@ defmodule PDFium.Toolbox do
     end)
   end
 
+  @doc """
+  Overlays as `overlay/3` does, answering with the document rather than writing
+  it out.
+  """
+  @spec overlay_to_binary(PDFium.source(), PDFium.source()) ::
+          {:ok, binary()} | {:error, atom()}
+  def overlay_to_binary(source, overlay_source) do
+    with_documents([source, overlay_source], fn [document, overlay] ->
+      with {:ok, [pages, overlay_pages]} <- PDFium.get_page_sizes([document, overlay]),
+           true <- length(pages) == length(overlay_pages) || {:error, :page_count_mismatch},
+           {:ok, placed} <- fit_pairwise(overlay, pages, overlay_pages),
+           {:ok, :stamped} <- PDFium.stamp_in_place(document, placed) do
+        PDFium.save_to_binary(document)
+      end
+    end)
+  end
+
   @spec fit_pairwise(reference(), [PDFium.page_size()], [PDFium.page_size()]) ::
           {:ok, [{reference(), non_neg_integer(), non_neg_integer(), PDFium.placement()}]}
           | {:error, atom()}
@@ -208,8 +225,8 @@ defmodule PDFium.Toolbox do
   @spec with_documents([Path.t()], ([reference()] -> result)) ::
           result | {:error, PDFium.load_error()}
         when result: term()
-  defp with_documents(paths, function) do
-    opened = Enum.map(paths, &PDFium.load_document/1)
+  defp with_documents(sources, function) do
+    opened = Enum.map(sources, &open/1)
 
     try do
       case Enum.find(opened, &match?({:error, _reason}, &1)) do
@@ -223,4 +240,8 @@ defmodule PDFium.Toolbox do
       end)
     end
   end
+
+  @spec open(PDFium.source()) :: {:ok, reference()} | {:error, atom()}
+  defp open({:bytes, contents}), do: PDFium.load_memory_document(contents)
+  defp open(path), do: PDFium.load_document(path)
 end
