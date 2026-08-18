@@ -749,6 +749,44 @@ defmodule PDFiumTest do
       assert {:error, :page_count_mismatch} = Toolbox.overlay(document, overlay, tmp_path())
     end
 
+    test "takes an overlay as contents, drawing what it would have from a file" do
+      overlay =
+        tmp_path()
+        |> Document.write!([
+          [box: {0, 0, 400, 400}, content: "1 0 0 rg 0 0 400 400 re f"],
+          [box: {0, 0, 400, 400}, content: "0 0 1 rg 0 0 400 400 re f"]
+        ])
+
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}], [box: {0, 0, 400, 400}]])
+
+      from_file = tmp_path()
+      assert {:ok, :stamped} = Toolbox.overlay(document, overlay, from_file)
+
+      assert {:ok, stamped} =
+               Toolbox.overlay_to_binary(document, {:bytes, File.read!(overlay)})
+
+      from_contents = tmp_path()
+      File.write!(from_contents, stamped)
+
+      assert colour_at(from_contents, 0.5, 0.5, 0) == colour_at(from_file, 0.5, 0.5, 0)
+      assert colour_at(from_contents, 0.5, 0.5, 1) == colour_at(from_file, 0.5, 0.5, 1)
+    end
+
+    test "answers with a document rather than writing one" do
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 400, 400})
+      document = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 400, 400})
+
+      assert {:ok, stamped} = Toolbox.overlay_to_binary({:bytes, File.read!(document)}, overlay)
+      assert String.starts_with?(stamped, "%PDF-")
+      assert {:ok, 1} = PDFium.with_memory_document(stamped, &PDFium.get_page_count/1)
+    end
+
+    test "refuses contents that are not a document" do
+      document = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 400, 400})
+
+      assert {:error, :format} = Toolbox.overlay_to_binary(document, {:bytes, "not a pdf"})
+    end
+
     test "draws nothing when given nothing", %{output: output} do
       document = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 400, 400})
 
