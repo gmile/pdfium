@@ -827,4 +827,62 @@ defmodule PDFiumTest do
                Toolbox.flatten(@annotated, "/nonexistent-directory/out.pdf")
     end
   end
+
+  describe "jobs given documents as contents" do
+    test "flattens contents to a file as it would a path", %{output: output} do
+      assert {:ok, :flattened} = Toolbox.flatten({:bytes, File.read!(@annotated)}, output)
+      assert {:ok, 1} = PDFium.get_page_count(open!(output))
+    end
+
+    test "flattens, answering with the document" do
+      assert {:ok, flattened} = Toolbox.flatten_to_binary({:bytes, File.read!(@annotated)})
+      assert String.starts_with?(flattened, "%PDF-")
+      assert {:ok, 1} = PDFium.with_memory_document(flattened, &PDFium.get_page_count/1)
+    end
+
+    test "still says when there was nothing to flatten" do
+      assert {:ok, :nothing_to_do} = Toolbox.flatten_to_binary({:bytes, File.read!(@plain)})
+    end
+
+    test "merges contents alongside paths, answering with the document" do
+      first = document!([[box: {0, 0, 100, 100}], [box: {0, 0, 200, 200}]])
+      second = document!([[box: {0, 0, 300, 300}]])
+
+      assert {:ok, merged} = Toolbox.merge_to_binary([{:bytes, File.read!(first)}, second])
+
+      assert {:ok, boxes} = PDFium.with_memory_document(merged, &PDFium.get_page_boxes/1)
+      assert Enum.map(boxes, & &1.right) == [100.0, 200.0, 300.0]
+    end
+
+    test "refuses to merge nothing" do
+      assert {:error, :no_documents} = Toolbox.merge_to_binary([])
+    end
+
+    test "extracts pages, answering with the document" do
+      source = document!(Enum.map([200, 300, 400, 500], &[box: {0, 0, &1, &1}]))
+
+      assert {:ok, extracted} =
+               Toolbox.extract_pages_to_binary({:bytes, File.read!(source)}, [1, 2])
+
+      assert {:ok, boxes} = PDFium.with_memory_document(extracted, &PDFium.get_page_boxes/1)
+      assert Enum.map(boxes, & &1.right) == [300.0, 400.0]
+    end
+
+    test "stamps from contents, drawing what it would have from files", %{output: output} do
+      document = tmp_path() |> Document.filled({1, 0, 0}, box: {0, 0, 400, 400})
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 200, 200})
+
+      assert {:ok, :stamped} = Toolbox.stamp(document, [{overlay, 0}], output)
+
+      assert {:ok, stamped} =
+               Toolbox.stamp_to_binary({:bytes, File.read!(document)}, [
+                 {{:bytes, File.read!(overlay)}, 0}
+               ])
+
+      from_contents = tmp_path()
+      File.write!(from_contents, stamped)
+
+      assert colour_at(from_contents, 0.5, 0.5) == colour_at(output, 0.5, 0.5)
+    end
+  end
 end

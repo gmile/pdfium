@@ -7,9 +7,14 @@ defmodule PDFium.Toolbox do
   something the library cannot know — where an overlay belongs on a page, say —
   it is decided here rather than in the binding.
 
-  A job names its documents by path rather than taking them open, and opens and
-  closes them itself. Reach for `PDFium` when you want to hold a document open
+  A job names its documents rather than taking them open, and opens and closes
+  them itself. It names them either way it has them: a path to read, or the
+  contents in hand. Reach for `PDFium` when you want to hold a document open
   across several pieces of work.
+
+  Every job writes its result where it is told to. The `_to_binary` twin of each
+  answers with the document instead, for a caller with nowhere to put it and
+  nothing to read it back with.
   """
 
   @doc """
@@ -26,20 +31,45 @@ defmodule PDFium.Toolbox do
   goes over land exactly where it was drawn. `PDFium.stamp/3` takes the matrix
   itself for anywhere else.
   """
-  @spec stamp(Path.t(), [{Path.t(), non_neg_integer()}], Path.t()) ::
+  @spec stamp(PDFium.source(), [{PDFium.source(), non_neg_integer()}], Path.t()) ::
           {:ok, :stamped} | {:error, atom()}
-  def stamp(path, placements, output_path) do
-    overlay_paths = placements |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+  def stamp(source, placements, output_path) do
+    stamped(source, placements, &PDFium.stamp(&1, &2, output_path))
+  end
 
-    with_documents([path | overlay_paths], fn [document | overlays] ->
-      by_path = Map.new(Enum.zip(overlay_paths, overlays))
+  @doc """
+  Stamps as `stamp/3` does, answering with the document rather than writing it
+  out.
+  """
+  @spec stamp_to_binary(PDFium.source(), [{PDFium.source(), non_neg_integer()}]) ::
+          {:ok, binary()} | {:error, atom()}
+  def stamp_to_binary(source, placements) do
+    stamped(source, placements, fn document, placed ->
+      with {:ok, :stamped} <- PDFium.stamp_in_place(document, placed) do
+        PDFium.save_to_binary(document)
+      end
+    end)
+  end
 
-      named = Enum.map(placements, fn {path, page} -> {Map.fetch!(by_path, path), 0, page} end)
+  @spec stamped(
+          PDFium.source(),
+          [{PDFium.source(), non_neg_integer()}],
+          (reference(), list() -> result)
+        ) :: result | {:error, atom()}
+        when result: term()
+  defp stamped(source, placements, finish) do
+    overlay_sources = placements |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+
+    with_documents([source | overlay_sources], fn [document | overlays] ->
+      by_source = Map.new(Enum.zip(overlay_sources, overlays))
+
+      named =
+        Enum.map(placements, fn {overlay, page} -> {Map.fetch!(by_source, overlay), 0, page} end)
 
       with {:ok, [pages | overlay_pages]} <- PDFium.get_page_sizes([document | overlays]),
            sizes = overlays |> Enum.zip(overlay_pages) |> Map.new(),
            {:ok, placed} <- fit_each(named, pages, sizes) do
-        PDFium.stamp(document, placed, output_path)
+        finish.(document, placed)
       end
     end)
   end
@@ -92,15 +122,10 @@ defmodule PDFium.Toolbox do
   guessed at - a mismatch means the overlay was rendered for a different
   document.
   """
-  @spec overlay(Path.t(), Path.t(), Path.t()) :: {:ok, :stamped} | {:error, atom()}
-  def overlay(path, overlay_path, output_path) do
-    with_documents([path, overlay_path], fn [document, overlay] ->
-      with {:ok, [pages, overlay_pages]} <- PDFium.get_page_sizes([document, overlay]),
-           true <- length(pages) == length(overlay_pages) || {:error, :page_count_mismatch},
-           {:ok, placed} <- fit_pairwise(overlay, pages, overlay_pages) do
-        PDFium.stamp(document, placed, output_path)
-      end
-    end)
+  @spec overlay(PDFium.source(), PDFium.source(), Path.t()) ::
+          {:ok, :stamped} | {:error, atom()}
+  def overlay(source, overlay_source, output_path) do
+    overlaid(source, overlay_source, &PDFium.stamp(&1, &2, output_path))
   end
 
   @doc """
@@ -110,12 +135,22 @@ defmodule PDFium.Toolbox do
   @spec overlay_to_binary(PDFium.source(), PDFium.source()) ::
           {:ok, binary()} | {:error, atom()}
   def overlay_to_binary(source, overlay_source) do
+    overlaid(source, overlay_source, fn document, placed ->
+      with {:ok, :stamped} <- PDFium.stamp_in_place(document, placed) do
+        PDFium.save_to_binary(document)
+      end
+    end)
+  end
+
+  @spec overlaid(PDFium.source(), PDFium.source(), (reference(), list() -> result)) ::
+          result | {:error, atom()}
+        when result: term()
+  defp overlaid(source, overlay_source, finish) do
     with_documents([source, overlay_source], fn [document, overlay] ->
       with {:ok, [pages, overlay_pages]} <- PDFium.get_page_sizes([document, overlay]),
            true <- length(pages) == length(overlay_pages) || {:error, :page_count_mismatch},
-           {:ok, placed} <- fit_pairwise(overlay, pages, overlay_pages),
-           {:ok, :stamped} <- PDFium.stamp_in_place(document, placed) do
-        PDFium.save_to_binary(document)
+           {:ok, placed} <- fit_pairwise(overlay, pages, overlay_pages) do
+        finish.(document, placed)
       end
     end)
   end
@@ -143,19 +178,40 @@ defmodule PDFium.Toolbox do
   Answers `{:ok, :nothing_to_do}` without writing anything when no page had an
   annotation to draw.
   """
-  @spec flatten(Path.t(), Path.t()) ::
+  @spec flatten(PDFium.source(), Path.t()) ::
           {:ok, :flattened | :nothing_to_do} | {:error, atom()}
-  @spec flatten(Path.t(), Path.t(), :display | :print) ::
+  @spec flatten(PDFium.source(), Path.t(), :display | :print) ::
           {:ok, :flattened | :nothing_to_do} | {:error, atom()}
-  def flatten(path, output_path, usage \\ :display) do
-    PDFium.with_document(path, fn document ->
+  def flatten(source, output_path, usage \\ :display) do
+    flattened(source, usage, fn document ->
+      with {:ok, :saved} <- PDFium.save(document, output_path), do: {:ok, :flattened}
+    end)
+  end
+
+  @doc """
+  Flattens as `flatten/3` does, answering with the document rather than writing
+  it out.
+
+  Still answers `{:ok, :nothing_to_do}` when no page had an annotation to draw,
+  so a caller that already holds the document keeps what it has rather than
+  being handed a copy of it.
+  """
+  @spec flatten_to_binary(PDFium.source()) ::
+          {:ok, binary()} | {:ok, :nothing_to_do} | {:error, atom()}
+  @spec flatten_to_binary(PDFium.source(), :display | :print) ::
+          {:ok, binary()} | {:ok, :nothing_to_do} | {:error, atom()}
+  def flatten_to_binary(source, usage \\ :display) do
+    flattened(source, usage, &PDFium.save_to_binary/1)
+  end
+
+  @spec flattened(PDFium.source(), :display | :print, (reference() -> result)) ::
+          result | {:ok, :nothing_to_do} | {:error, atom()}
+        when result: term()
+  defp flattened(source, usage, save) do
+    with_documents([source], fn [document] ->
       with {:ok, page_count} <- PDFium.get_page_count(document),
            {:ok, drawn?} <- flatten_each(document, page_count, usage) do
-        if drawn? do
-          with {:ok, :saved} <- PDFium.save(document, output_path), do: {:ok, :flattened}
-        else
-          {:ok, :nothing_to_do}
-        end
+        if drawn?, do: save.(document), else: {:ok, :nothing_to_do}
       end
     end)
   end
@@ -177,16 +233,30 @@ defmodule PDFium.Toolbox do
 
   A document named twice is written twice.
   """
-  @spec merge([Path.t()], Path.t()) :: {:ok, :merged} | {:error, atom()}
+  @spec merge([PDFium.source()], Path.t()) :: {:ok, :merged} | {:error, atom()}
   def merge([], _output_path), do: {:error, :no_documents}
 
-  def merge(paths, output_path) do
-    with_documents(paths, fn documents ->
+  def merge(sources, output_path) do
+    merged(sources, fn output ->
+      with {:ok, :saved} <- PDFium.save(output, output_path), do: {:ok, :merged}
+    end)
+  end
+
+  @doc """
+  Merges as `merge/2` does, answering with the document rather than writing it
+  out.
+  """
+  @spec merge_to_binary([PDFium.source()]) :: {:ok, binary()} | {:error, atom()}
+  def merge_to_binary([]), do: {:error, :no_documents}
+
+  def merge_to_binary(sources), do: merged(sources, &PDFium.save_to_binary/1)
+
+  @spec merged([PDFium.source()], (reference() -> result)) :: result | {:error, atom()}
+        when result: term()
+  defp merged(sources, save) do
+    with_documents(sources, fn documents ->
       PDFium.with_new_document(fn output ->
-        with {:ok, _at} <- import_each(output, documents),
-             {:ok, :saved} <- PDFium.save(output, output_path) do
-          {:ok, :merged}
-        end
+        with {:ok, _at} <- import_each(output, documents), do: save.(output)
       end)
     end)
   end
@@ -209,20 +279,38 @@ defmodule PDFium.Toolbox do
   Pages are numbered from zero. Naming one twice writes it twice; naming none
   is refused rather than taken to mean all of them.
   """
-  @spec extract_pages(Path.t(), [non_neg_integer()], Path.t()) ::
+  @spec extract_pages(PDFium.source(), [non_neg_integer()], Path.t()) ::
           {:ok, :extracted} | {:error, atom()}
-  def extract_pages(path, page_indices, output_path) do
-    PDFium.with_document(path, fn document ->
+  def extract_pages(source, page_indices, output_path) do
+    extracted(source, page_indices, fn output ->
+      with {:ok, :saved} <- PDFium.save(output, output_path), do: {:ok, :extracted}
+    end)
+  end
+
+  @doc """
+  Extracts as `extract_pages/3` does, answering with the document rather than
+  writing it out.
+  """
+  @spec extract_pages_to_binary(PDFium.source(), [non_neg_integer()]) ::
+          {:ok, binary()} | {:error, atom()}
+  def extract_pages_to_binary(source, page_indices) do
+    extracted(source, page_indices, &PDFium.save_to_binary/1)
+  end
+
+  @spec extracted(PDFium.source(), [non_neg_integer()], (reference() -> result)) ::
+          result | {:error, atom()}
+        when result: term()
+  defp extracted(source, page_indices, save) do
+    with_documents([source], fn [document] ->
       PDFium.with_new_document(fn output ->
-        with {:ok, :imported} <- PDFium.import_pages(output, document, page_indices, 0),
-             {:ok, :saved} <- PDFium.save(output, output_path) do
-          {:ok, :extracted}
+        with {:ok, :imported} <- PDFium.import_pages(output, document, page_indices, 0) do
+          save.(output)
         end
       end)
     end)
   end
 
-  @spec with_documents([Path.t()], ([reference()] -> result)) ::
+  @spec with_documents([PDFium.source()], ([reference()] -> result)) ::
           result | {:error, PDFium.load_error()}
         when result: term()
   defp with_documents(sources, function) do
