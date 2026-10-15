@@ -45,6 +45,10 @@ static fine::Atom flatten_failed("flatten_failed");
 static fine::Atom output_open_failed("output_open_failed");
 static fine::Atom save_failed("save_failed");
 
+static std::unique_lock<fine::Mutex> lock_pdfium() {
+    return std::unique_lock(*pdfium_mutex);
+}
+
 struct PDFDoc {
     FPDF_DOCUMENT document;
     std::string buffer;
@@ -53,7 +57,7 @@ struct PDFDoc {
     PDFDoc(FPDF_DOCUMENT doc, std::string data) : document(doc), buffer(std::move(data)) {}
 
     void destructor(ErlNifEnv *env) {
-        std::unique_lock lock(*pdfium_mutex);
+        auto lock = lock_pdfium();
         if (document) {
             FPDF_CloseDocument(document);
             document = nullptr;
@@ -105,7 +109,7 @@ fine::Atom last_error_name(unsigned long error) {
 using DocResult = std::variant<fine::Ok<fine::ResourcePtr<PDFDoc>>, fine::Error<fine::Atom>>;
 
 DocResult load_document(ErlNifEnv *env, std::string filename) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
     FPDF_DOCUMENT document = FPDF_LoadDocument(filename.c_str(), nullptr);
     unsigned long error = document ? 0 : FPDF_GetLastError();
     lock.unlock();
@@ -122,7 +126,7 @@ FINE_NIF(load_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 DocResult load_memory_document(ErlNifEnv *env, std::string data) {
     auto doc = fine::make_resource<PDFDoc>(nullptr, std::move(data));
 
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
     FPDF_DOCUMENT document =
         FPDF_LoadMemDocument64(doc->buffer.data(), doc->buffer.size(), nullptr);
     unsigned long error = document ? 0 : FPDF_GetLastError();
@@ -140,7 +144,7 @@ DocResult load_memory_document(ErlNifEnv *env, std::string data) {
 FINE_NIF(load_memory_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 fine::Ok<> close_document(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
     if (doc->document) {
         FPDF_CloseDocument(doc->document);
         doc->document = nullptr;
@@ -153,7 +157,7 @@ FINE_NIF(close_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 using CountResult = std::variant<fine::Ok<int64_t>, fine::Error<fine::Atom>>;
 
 CountResult get_page_count(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
     if (!doc->document) {
         return fine::Error(document_closed);
     }
@@ -166,7 +170,7 @@ using BitmapResult = std::variant<fine::Ok<std::string, int64_t, int64_t>, fine:
 
 BitmapResult get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
                              int64_t page_index, int64_t dpi) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (!doc->document) {
         return fine::Error(document_closed);
@@ -223,7 +227,7 @@ using PageBox = std::tuple<double, double, double, double, int64_t>;
 using BoxesResult = std::variant<fine::Ok<std::vector<PageBox>>, fine::Error<fine::Atom>>;
 
 BoxesResult get_page_boxes(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (!doc->document) {
         return fine::Error(document_closed);
@@ -278,7 +282,7 @@ using SizesResult =
 // page it goes on and of the overlay going there, and each call over this
 // boundary waits its turn on the same lock.
 SizesResult get_page_sizes(ErlNifEnv *env, std::vector<fine::ResourcePtr<PDFDoc>> docs) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     std::vector<std::vector<PageSize>> documents;
     documents.reserve(docs.size());
@@ -315,7 +319,7 @@ FINE_NIF(get_page_sizes, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 using CountsResult = std::variant<fine::Ok<std::vector<int64_t>>, fine::Error<fine::Atom>>;
 
 CountsResult get_annotation_counts(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (!doc->document) {
         return fine::Error(document_closed);
@@ -385,7 +389,7 @@ std::string from_utf16(const std::vector<unsigned short> &utf16) {
 using MetaResult = std::variant<fine::Ok<std::string>, fine::Error<fine::Atom>>;
 
 MetaResult get_meta_text(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string key) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (!doc->document) {
         return fine::Error(document_closed);
@@ -454,7 +458,7 @@ using FlattenResult = std::variant<fine::Ok<fine::Atom>, fine::Error<fine::Atom>
 // print.
 FlattenResult flatten_page(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, int64_t page_index,
                            int64_t usage) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (!doc->document) {
         return fine::Error(document_closed);
@@ -484,7 +488,7 @@ FINE_NIF(flatten_page, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 using WriteResult = std::variant<fine::Ok<fine::Atom>, fine::Error<fine::Atom>>;
 
 DocResult create_document(ErlNifEnv *env) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     FPDF_DOCUMENT document = FPDF_CreateNewDocument();
 
@@ -498,7 +502,7 @@ DocResult create_document(ErlNifEnv *env) {
 FINE_NIF(create_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 WriteResult save(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string output_path) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (!doc->document) {
         return fine::Error(document_closed);
@@ -516,7 +520,7 @@ FINE_NIF(save, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 using SaveToBinaryResult = std::variant<fine::Ok<std::string>, fine::Error<fine::Atom>>;
 
 SaveToBinaryResult save_to_binary(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (!doc->document) {
         return fine::Error(document_closed);
@@ -541,7 +545,7 @@ FINE_NIF(save_to_binary, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 WriteResult import_pages(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> dest,
                          fine::ResourcePtr<PDFDoc> src, std::vector<int64_t> page_indices,
                          int64_t at) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (!dest->document || !src->document) {
         return fine::Error(document_closed);
@@ -719,7 +723,7 @@ std::optional<fine::Atom> apply_stamps(fine::ResourcePtr<PDFDoc> doc,
 
 WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
                   std::vector<Placement> placements, std::string output_path) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     auto failure = apply_stamps(doc, placements);
 
@@ -738,7 +742,7 @@ FINE_NIF(stamp, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 WriteResult stamp_in_place(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
                            std::vector<Placement> placements) {
-    std::unique_lock lock(*pdfium_mutex);
+    auto lock = lock_pdfium();
 
     if (auto failure = apply_stamps(doc, placements)) {
         return fine::Error(*failure);
