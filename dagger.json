@@ -1,6 +1,6 @@
 {
   "name": "pdfium",
-  "engineVersion": "v0.20.6",
+  "engineVersion": "v0.21.9",
   "sdk": {
     "source": "elixir"
   },
