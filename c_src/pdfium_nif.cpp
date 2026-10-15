@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <variant>
+#include <vector>
 
 static std::unique_ptr<fine::Mutex> pdfium_mutex;
 
@@ -45,8 +46,29 @@ static fine::Atom flatten_failed("flatten_failed");
 static fine::Atom output_open_failed("output_open_failed");
 static fine::Atom save_failed("save_failed");
 
+struct PendingClose {
+    FPDF_DOCUMENT document;
+    std::string buffer;
+};
+
+static std::mutex pending_close_mutex;
+static std::vector<PendingClose> pending_close;
+
+static void close_pending_documents() {
+    std::vector<PendingClose> documents;
+    {
+        std::lock_guard guard(pending_close_mutex);
+        documents.swap(pending_close);
+    }
+    for (auto &pending : documents) {
+        FPDF_CloseDocument(pending.document);
+    }
+}
+
 static std::unique_lock<fine::Mutex> lock_pdfium() {
-    return std::unique_lock(*pdfium_mutex);
+    std::unique_lock lock(*pdfium_mutex);
+    close_pending_documents();
+    return lock;
 }
 
 struct PDFDoc {
@@ -57,11 +79,12 @@ struct PDFDoc {
     PDFDoc(FPDF_DOCUMENT doc, std::string data) : document(doc), buffer(std::move(data)) {}
 
     void destructor(ErlNifEnv *env) {
-        auto lock = lock_pdfium();
-        if (document) {
-            FPDF_CloseDocument(document);
-            document = nullptr;
+        if (!document) {
+            return;
         }
+        std::lock_guard guard(pending_close_mutex);
+        pending_close.push_back({document, std::move(buffer)});
+        document = nullptr;
     }
 };
 
@@ -75,6 +98,7 @@ static auto load_reg = fine::Registration::register_load(
 
 static auto unload_reg = fine::Registration::register_unload(
     [](ErlNifEnv *, void *) noexcept {
+        close_pending_documents();
         pdfium_mutex.reset();
         FPDF_DestroyLibrary();
     });
