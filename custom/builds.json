@@ -3,23 +3,23 @@
     {
       "os": "macos",
       "arch": "arm64",
-      "otp": "29.0.3",
+      "otp": "29.1.2",
       "fine_tag": "v0.2.0",
       "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7961/pdfium-mac-arm64.tgz",
       "pdfium_sha256sum": "1193a771e0bd934530afa3df73a0d44551d8f4078442e290054e6dd38ded960f",
-      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-29.0.3/OTP-29.0.3-macos-arm64.tar.gz",
-      "otp_sha256sum": "bfb187843b00fdff9a9eb79f15f17ffcd48d89150212f77206279fcd51136706",
+      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-29.1.2/OTP-29.1.2-macos-arm64.tar.gz",
+      "otp_sha256sum": "579af3bb043e0692503f7f24c6e65b620bdf1802a13567a7247d1d18f1ec5470",
       "nif_version": "2.18"
     },
     {
       "os": "macos",
       "arch": "x86_64",
-      "otp": "29.0.3",
+      "otp": "29.1.2",
       "fine_tag": "v0.2.0",
       "pdfium_download_link": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7961/pdfium-mac-x64.tgz",
       "pdfium_sha256sum": "17f069d7012ab83898ad5eddebd139b240f05d7411c220775d507a0e3e285536",
-      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-29.0.3/OTP-29.0.3-macos-amd64.tar.gz",
-      "otp_sha256sum": "9fb73031da37363200df4459ef57e16bb4e00134ec94bfb92b7a1b4db640dcca",
+      "otp_download_link": "https://github.com/erlef/otp_builds/releases/download/OTP-29.1.2/OTP-29.1.2-macos-amd64.tar.gz",
+      "otp_sha256sum": "bac2e78f48c30ecfdbe2b2ea219856f0225530f978b344ef8bbd6a8f7e5f58c0",
       "nif_version": "2.18"
     }
   ]

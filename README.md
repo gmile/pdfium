@@ -126,11 +126,11 @@ nix develop
 ## Updating OTP version (for macOS)
 
 ```sh
-wget https://github.com/erlef/otp_builds/releases/download/OTP-29.0.3/OTP-29.0.3-macos-amd64.tar.gz /tmp
-wget https://github.com/erlef/otp_builds/releases/download/OTP-29.0.3/OTP-29.0.3-macos-arm64.tar.gz /tmp
+wget https://github.com/erlef/otp_builds/releases/download/OTP-29.1.2/OTP-29.1.2-macos-amd64.tar.gz /tmp
+wget https://github.com/erlef/otp_builds/releases/download/OTP-29.1.2/OTP-29.1.2-macos-arm64.tar.gz /tmp
 
-shasum -a 256 /tmp/OTP-29.0.3-macos-amd64.tar.gz
-shasum -a 256 /tmp/OTP-29.0.3-macos-arm64.tar.gz
+shasum -a 256 /tmp/OTP-29.1.2-macos-amd64.tar.gz
+shasum -a 256 /tmp/OTP-29.1.2-macos-arm64.tar.gz
 
 # Then edit custom/build.json by inserting the hashes
 ```
