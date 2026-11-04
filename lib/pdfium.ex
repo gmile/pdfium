@@ -154,6 +154,18 @@ defmodule PDFium do
   defdelegate get_annotation_counts(document), to: PDFium.NIF
 
   @doc """
+  The revision of the standard security handler the document is encrypted
+  with, or `nil` when it is not encrypted.
+  """
+  @spec get_security_handler_revision(reference()) ::
+          {:ok, pos_integer() | nil} | {:error, atom()}
+  def get_security_handler_revision(document) do
+    with {:ok, revision} <- PDFium.NIF.get_security_handler_revision(document) do
+      {:ok, if(revision < 0, do: nil, else: revision)}
+    end
+  end
+
+  @doc """
   Draws a page's annotations into its content and drops them.
 
   `usage` says which appearance to draw: `:display` is the one a reader shows,

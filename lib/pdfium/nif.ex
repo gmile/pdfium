@@ -33,6 +33,8 @@ defmodule PDFium.NIF do
 
   def get_meta_text(_document, _key), do: :erlang.nif_error(:nif_not_loaded)
 
+  def get_security_handler_revision(_document), do: :erlang.nif_error(:nif_not_loaded)
+
   def flatten_page(_document, _page_index, _usage), do: :erlang.nif_error(:nif_not_loaded)
   def create_document, do: :erlang.nif_error(:nif_not_loaded)
 
