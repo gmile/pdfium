@@ -37,65 +37,37 @@ defmodule Pdfium do
   end
 
   defn prepare_release_pull_request(
-         base: String.t(),
-         package_version: String.t() | nil,
-         libpdfium_tag: String.t(),
-         github_token: Dagger.Secret.t(),
-         actor: String.t()
-       ) :: Dagger.Container.t() do
-    pdfium =
-      dag()
-      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
-      |> Dagger.GitRepository.branch(base)
-      |> Dagger.GitRef.tree()
-
-    package_version =
-      if package_version do
-        package_version
-      else
-        {:ok, package_version} =
-          pdfium
-          |> Dagger.Directory.file("VERSION")
-          |> Dagger.File.contents()
-
-        package_version
-        |> String.trim_trailing()
-        |> Version.parse!()
-        |> Map.update!(:patch, &(&1 + 1))
-        |> Version.to_string()
-      end
-
+    base: String.t(),
+    package_version: String.t() | nil,
+    libpdfium_tag: String.t(),
+    github_token: Dagger.Secret.t(),
+    actor: String.t()
+  ) :: Dagger.Void.t() do
+    repository = Dagger.Client.git(dag(), @repository_url, http_auth_token: github_token)
+    base_ref = Dagger.GitRepository.branch(repository, base)
+    base_tree = Dagger.GitRef.tree(base_ref)
+    package_version = package_version || next_patch_version(base_tree)
     new_branch_name = "update-libpdfium-to-#{libpdfium_tag}"
 
-    dag()
-    |> Dagger.Client.container()
-    |> Dagger.Container.from(@alpine_image)
-    |> Dagger.Container.with_exec(~w"apk add git github-cli")
-    |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
-    |> Dagger.Container.with_directory("/pdfium", pdfium)
-    |> Dagger.Container.with_workdir("/pdfium")
-    |> Dagger.Container.with_exec(~w"gh auth setup-git")
-    |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
-    |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
-    |> Dagger.Container.with_exec(~w"git fetch origin #{base}")
-    |> Dagger.Container.with_exec(~w"git switch --create #{new_branch_name} origin/#{base}")
-    |> Dagger.Container.with_new_file("/pdfium/LIBPDFIUM_TAG", libpdfium_tag)
-    |> Dagger.Container.with_exec(~w"git add LIBPDFIUM_TAG")
-    |> Dagger.Container.with_exec(
-      ~w"git commit --message" ++ ["Update libpdfium tag to #{libpdfium_tag}"]
-    )
-    |> Dagger.Container.with_new_file("/pdfium/VERSION", package_version)
-    |> Dagger.Container.with_exec(~w"git add VERSION")
-    |> Dagger.Container.with_exec(
-      ~w"git commit --message" ++ ["Update package to version #{package_version}"]
-    )
-    |> Dagger.Container.with_exec(~w"git push origin #{new_branch_name}")
-    |> Dagger.Container.with_exec(
-      ~w"gh pr create --base stable --reviewer gmile --fill --repo #{@repository_slug}" ++
-        ["--title", "Bump libpdfium to #{libpdfium_tag} tag"]
-    )
+    with_tag = Dagger.Directory.with_new_file(base_tree, "LIBPDFIUM_TAG", libpdfium_tag)
+    with_version = Dagger.Directory.with_new_file(with_tag, "VERSION", package_version)
 
-    # |> Dagger.Container.with_exec(~w"gh pr merge #{new_branch_name} --auto --delete-branch --rebase")
+    {:ok, _} =
+      base_ref
+      |> commit(Dagger.Directory.changes(with_tag, base_tree), "Update libpdfium tag to #{libpdfium_tag}", actor)
+      |> commit(Dagger.Directory.changes(with_version, with_tag), "Update package to version #{package_version}", actor)
+      |> Dagger.GitRef.push(to: repository, branch: new_branch_name)
+      |> Dagger.GitPushResult.sha()
+
+    {:ok, _} =
+      gh(github_token)
+      |> Dagger.Container.with_exec(
+        ~w"gh pr create --repo #{@repository_slug} --base #{base} --head #{new_branch_name} --reviewer gmile" ++
+          ["--title", "Bump libpdfium to #{libpdfium_tag} tag", "--body", ""]
+      )
+      |> Dagger.Container.sync()
+
+    :ok
   end
 
   def collect_build_info(src_dir, platform_name, abi) do
@@ -267,25 +239,16 @@ defmodule Pdfium do
     check(ws, "linux/arm64", "musl")
   end
 
-  defn create_release(
-         pr: String.t(),
-         actor: String.t(),
-         github_token: Dagger.Secret.t(),
-         hex_api_key: Dagger.Secret.t()
-       ) :: Dagger.Container.t() do
-    gh =
-      dag()
-      |> Dagger.Client.container()
-      |> Dagger.Container.from(@alpine_image)
-      |> Dagger.Container.with_exec(~w"apk add github-cli")
-      |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
+  defn create_release(pr: String.t(), actor: String.t(), github_token: Dagger.Secret.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Void.t() do
+    {:ok, now} = Dagger.Client.current_timestamp(dag())
 
-    {:ok, <<head_ref::binary-size(40), "\n", base_ref_name::binary>>} =
+    gh =
+      gh(github_token)
+      |> Dagger.Container.with_env_variable("CACHE_BUSTER", now)
+
+    {:ok, <<head_ref::binary-size(40), "\n", base_ref_name::binary >>} =
       gh
-      |> Dagger.Container.with_exec(~w"echo #{DateTime.utc_now()}")
-      |> Dagger.Container.with_exec(
-        ~w"gh pr view #{pr} --json headRefOid,baseRefName --jq .headRefOid,.baseRefName --repo #{@repository_slug}"
-      )
+      |> Dagger.Container.with_exec(~w"gh pr view #{pr} --json headRefOid,baseRefName --jq .headRefOid,.baseRefName --repo #{@repository_slug}")
       |> Dagger.Container.stdout()
 
     base_ref_name = String.trim_trailing(base_ref_name)
@@ -306,21 +269,15 @@ defmodule Pdfium do
       |> Dagger.Container.with_exec(run_id)
       |> Dagger.Container.stdout()
 
-    gh =
-      Dagger.Container.with_exec(
-        gh,
-        ~w"gh run download #{run_id} --dir /artifacts --repo #{@repository_slug}"
-      )
-
+    gh = Dagger.Container.with_exec(gh, ~w"gh run download #{run_id} --dir /artifacts --repo #{@repository_slug}")
     artifacts = Dagger.Container.directory(gh, "/artifacts")
 
     {:ok, entries} = Dagger.Directory.glob(artifacts, "**/*.tar.gz")
-    entries = Enum.map_join(entries, " ", &"/artifacts/#{&1}")
+    entries = Enum.map(entries, &"/artifacts/#{&1}")
 
     {:ok, checksums} =
       gh
-      |> Dagger.Container.with_exec(~w"apk add perl-utils")
-      |> Dagger.Container.with_exec(~w"shasum --algorithm 256 #{entries}")
+      |> Dagger.Container.with_exec(~w"sha256sum" ++ entries)
       |> Dagger.Container.stdout()
 
     checksums =
@@ -330,44 +287,44 @@ defmodule Pdfium do
       |> Enum.map(fn [hash, path] -> {Path.basename(path), "sha256:" <> hash} end)
       |> Map.new()
 
-    pdfium =
-      dag()
-      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
-      |> Dagger.GitRepository.branch(base_ref_name)
-      |> Dagger.GitRef.tree()
+    repository = Dagger.Client.git(dag(), @repository_url, http_auth_token: github_token)
+    base_ref = Dagger.GitRepository.branch(repository, base_ref_name)
+    base_tree = Dagger.GitRef.tree(base_ref)
 
     {:ok, package_version} =
-      pdfium
+      base_tree
       |> Dagger.Directory.file("VERSION")
       |> Dagger.File.contents()
 
-    dag()
-    |> Dagger.Client.container()
-    |> Dagger.Container.from(@musl_image)
-    |> Dagger.Container.with_exec(~w"apk add git github-cli")
-    |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
-    |> Dagger.Container.with_directory("/pdfium", pdfium)
-    |> Dagger.Container.with_directory("/artifacts", artifacts)
-    |> Dagger.Container.with_workdir("/pdfium")
-    |> Dagger.Container.with_exec(~w"gh auth setup-git")
-    |> Dagger.Container.with_exec(~w"git config user.name #{actor}")
-    |> Dagger.Container.with_exec(~w"git config user.email #{actor}@users.noreply.github.com")
-    |> Dagger.Container.with_exec(~w"git fetch origin #{base_ref_name}")
-    |> Dagger.Container.with_exec(~w"git checkout #{base_ref_name}")
-    |> Dagger.Container.with_new_file("/pdfium/checksum.exs", inspect(checksums, pretty: true))
-    |> Dagger.Container.with_exec(~w"git add checksum.exs")
-    |> Dagger.Container.with_exec(~w"git commit --message" ++ ["Update checksums"])
-    |> Dagger.Container.with_exec(
-      ~w"git tag v#{package_version} --message" ++ ["Tagging v#{package_version} release"]
-    )
-    |> Dagger.Container.with_exec(~w"git push origin HEAD:#{base_ref_name} v#{package_version}")
-    |> Dagger.Container.with_exec(
-      ~w"gh release create v#{package_version} --repo #{@repository_slug} #{entries}"
-    )
-    |> Dagger.Container.with_exec(~w"mix local.hex --force")
-    |> Dagger.Container.with_exec(~w"mix do deps.get + deps.compile")
-    |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
-    |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
+    with_checksums = Dagger.Directory.with_new_file(base_tree, "checksum.exs", inspect(checksums, pretty: true))
+
+    {:ok, release_sha} =
+      base_ref
+      |> commit(Dagger.Directory.changes(with_checksums, base_tree), "Update checksums", actor)
+      |> Dagger.GitRef.push(to: repository, branch: base_ref_name)
+      |> Dagger.GitPushResult.sha()
+
+    {:ok, _} =
+      gh
+      |> Dagger.Container.with_exec(
+        ~w"gh release create v#{package_version} --repo #{@repository_slug} --target #{release_sha}" ++
+          ["--title", "v#{package_version}"] ++ entries
+      )
+      |> Dagger.Container.sync()
+
+    {:ok, _} =
+      dag()
+      |> Dagger.Client.container()
+      |> Dagger.Container.from(@musl_image)
+      |> Dagger.Container.with_directory("/pdfium", with_checksums)
+      |> Dagger.Container.with_workdir("/pdfium")
+      |> Dagger.Container.with_exec(~w"mix local.hex --force")
+      |> Dagger.Container.with_exec(~w"mix do deps.get + deps.compile")
+      |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
+      |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
+      |> Dagger.Container.sync()
+
+    :ok
   end
 
   def test_script do
@@ -413,6 +370,33 @@ defmodule Pdfium do
       {:ok, _} -> :ok
       error -> error
     end
+  end
+
+  defp commit(ref, changes, message, actor) do
+    {:ok, now} = Dagger.Client.current_timestamp(dag())
+
+    Dagger.GitRef.with_commit(ref, changes, message, now, actor, "#{actor}@users.noreply.github.com")
+  end
+
+  defp gh(github_token) do
+    dag()
+    |> Dagger.Client.container()
+    |> Dagger.Container.from(@alpine_image)
+    |> Dagger.Container.with_exec(~w"apk add github-cli")
+    |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
+  end
+
+  defp next_patch_version(tree) do
+    {:ok, package_version} =
+      tree
+      |> Dagger.Directory.file("VERSION")
+      |> Dagger.File.contents()
+
+    package_version
+    |> String.trim_trailing()
+    |> Version.parse!()
+    |> Map.update!(:patch, & &1 + 1)
+    |> Version.to_string()
   end
 
   defp tag_number("chromium/" <> number), do: String.to_integer(number)
