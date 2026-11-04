@@ -13,7 +13,7 @@ defmodule Pdfium do
   @nif_version "2.18"
 
   defn check_latest_tag(github_token: Dagger.Secret.t()) :: String.t() do
-    known_tag =
+    {:ok, known_tag} =
       dag()
       |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
       |> Dagger.GitRepository.branch("stable")
@@ -26,9 +26,9 @@ defmodule Pdfium do
       |> Dagger.Client.git(@libpdfium_binaries_url)
       |> Dagger.GitRepository.tags(patterns: ~w(chromium/*))
 
-    [latest_tag | _] = Enum.sort(all_tags, :desc)
+    latest_tag = Enum.max_by(all_tags, &tag_number/1)
 
-    if latest_tag > known_tag do
+    if tag_number(latest_tag) > tag_number(String.trim(known_tag)) do
       Jason.encode!(%{new_tag_available: true, tag: latest_tag})
     else
       Jason.encode!(%{new_tag_available: false})
@@ -62,18 +62,6 @@ defmodule Pdfium do
         |> Version.parse!()
         |> Map.update!(:patch, &(&1 + 1))
         |> Version.to_string()
-      end
-
-    libpdfium_tag =
-      if libpdfium_tag do
-        libpdfium_tag
-      else
-        {:ok, libpdfium_tag} =
-          pdfium
-          |> Dagger.Directory.file("PDFIUM_VERSION")
-          |> Dagger.File.contents()
-
-        libpdfium_tag
       end
 
     new_branch_name = "update-libpdfium-to-#{libpdfium_tag}"
@@ -421,6 +409,8 @@ defmodule Pdfium do
   # todo: in principle it should be possible to move all file-related operations and utilities
   #       (tar/wget and tar/coreutils) to a generic busybox so the disappear here
   #
+  defp tag_number("chromium/" <> number), do: String.to_integer(number)
+
   defp image("glibc"), do: @glibc_image
   defp image("musl"), do: @musl_image
 
