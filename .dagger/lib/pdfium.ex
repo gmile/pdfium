@@ -5,7 +5,7 @@ defmodule Pdfium do
   @repository_slug "gmile/pdfium"
   @libpdfium_binaries_url "https://github.com/bblanchon/pdfium-binaries"
   @fine_url "https://github.com/elixir-nx/fine"
-  @fine_tag "v0.1.6"
+  @fine_tag "v0.2.0"
   @alpine_image "alpine:3.23.4"
   @gcc_image "gcc:14-bookworm"
   @glibc_image "hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610"
