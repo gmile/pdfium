@@ -197,6 +197,11 @@ defmodule Pdfium do
       |> Dagger.GitRef.tree()
       |> Dagger.Directory.directory("c_include")
 
+    libpdfium =
+      dag()
+      |> Dagger.Client.http(pdfium_download_url)
+      |> Dagger.File.extract()
+
     dag()
     |> with_build_image(platform_name, abi, build_image_name)
     |> Dagger.Container.with_workdir("/build")
@@ -205,23 +210,11 @@ defmodule Pdfium do
       Dagger.Directory.file(src_dir, "c_src/pdfium_nif.cpp")
     )
     |> Dagger.Container.with_directory(fine_include_path, fine_headers)
-    |> Dagger.Container.with_file(
-      "/build/pdfium.tar",
-      Dagger.Client.http(dag(), pdfium_download_url)
-    )
-    |> Dagger.Container.with_exec(~w"mkdir #{libpdfium_extract_path}")
-    |> Dagger.Container.with_exec(
-      ~w"tar --extract --gunzip --directory=#{libpdfium_extract_path} --file=/build/pdfium.tar"
-    )
+    |> Dagger.Container.with_directory(libpdfium_extract_path, libpdfium)
     |> Dagger.Container.with_exec(compile)
     |> Dagger.Container.with_exec(link)
     |> Dagger.Container.with_exec(pack)
     |> Dagger.Container.file(output_path)
-
-    # Note: consider removing call to .file and return object instead, see:
-    # https://discord.com/channels/707636530424053791/1318250927056097363/1318507837986705439
-    #
-    # Doing so could potentially make it possible to enter a container in "debug" mode
   end
 
   defn test(
@@ -230,22 +223,19 @@ defmodule Pdfium do
          platform_name: String.t(),
          abi: String.t()
        ) :: Dagger.File.t() do
-    {:ok, filename} = Dagger.File.name(precompiled)
-    precompiled_path = "/test/#{filename}"
+    {:ok, _} =
+      dag()
+      |> Dagger.Client.container(platform: platform_name)
+      |> Dagger.Container.from(image(abi))
+      |> Dagger.Container.with_workdir("/test")
+      |> Dagger.Container.with_directory("/test", Dagger.File.extract(precompiled))
+      |> Dagger.Container.with_file("/test/nif.ex", Dagger.Directory.file(src_dir, "lib/pdfium/nif.ex"))
+      |> Dagger.Container.with_new_file("/test/test.exs", test_script())
+      |> Dagger.Container.with_new_file("/test/test.pdf", test_pdf())
+      |> Dagger.Container.with_exec(~w"elixir test.exs")
+      |> Dagger.Container.sync()
 
-    dag()
-    |> with_test_image(platform_name, abi)
-    |> Dagger.Container.with_workdir("/test")
-    |> Dagger.Container.with_file(precompiled_path, precompiled)
-    |> Dagger.Container.with_exec(~w"tar --extract --directory=/test/ --file=#{precompiled_path}")
-    |> Dagger.Container.with_file(
-      "/test/nif.ex",
-      Dagger.Directory.file(src_dir, "lib/pdfium/nif.ex")
-    )
-    |> Dagger.Container.with_new_file("/test/test.exs", test_script())
-    |> Dagger.Container.with_new_file("/test/test.pdf", test_pdf())
-    |> Dagger.Container.with_exec(~w"elixir test.exs")
-    |> Dagger.Container.file(precompiled_path)
+    precompiled
   end
 
   defn ci(
@@ -406,9 +396,6 @@ defmodule Pdfium do
     """
   end
 
-  # todo: in principle it should be possible to move all file-related operations and utilities
-  #       (tar/wget and tar/coreutils) to a generic busybox so the disappear here
-  #
   defp tag_number("chromium/" <> number), do: String.to_integer(number)
 
   defp image("glibc"), do: @glibc_image
@@ -431,19 +418,6 @@ defmodule Pdfium do
     dag
     |> Dagger.Client.container(platform: platform_name)
     |> Dagger.Container.from(build_image_name)
-    |> Dagger.Container.with_exec(~w"apk add build-base tar jq coreutils")
-  end
-
-  defp with_test_image(dag, platform_name, "glibc") do
-    dag
-    |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from(@glibc_image)
-  end
-
-  defp with_test_image(dag, platform_name, "musl") do
-    dag
-    |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from(@musl_image)
-    |> Dagger.Container.with_exec(~w"apk add tar")
+    |> Dagger.Container.with_exec(~w"apk add build-base tar")
   end
 end
