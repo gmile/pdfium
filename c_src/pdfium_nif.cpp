@@ -464,7 +464,10 @@ int write_block(FPDF_FILEWRITE *self, const void *data, unsigned long size) {
     return std::fwrite(data, 1, size, writer->file) == size ? 1 : 0;
 }
 
-std::optional<fine::Atom> write_document(FPDF_DOCUMENT document, const std::string &path) {
+FPDF_DWORD save_flags(bool remove_security) { return remove_security ? FPDF_REMOVE_SECURITY : 0; }
+
+std::optional<fine::Atom> write_document(FPDF_DOCUMENT document, const std::string &path,
+                                         bool remove_security) {
     FileWriter writer{};
     writer.version = 1;
     writer.WriteBlock = write_block;
@@ -474,7 +477,7 @@ std::optional<fine::Atom> write_document(FPDF_DOCUMENT document, const std::stri
         return output_open_failed;
     }
 
-    FPDF_BOOL saved = FPDF_SaveAsCopy(document, &writer, 0);
+    FPDF_BOOL saved = FPDF_SaveAsCopy(document, &writer, save_flags(remove_security));
     std::fclose(writer.file);
 
     if (!saved) {
@@ -535,14 +538,15 @@ DocResult create_document(ErlNifEnv *env) {
 
 FINE_NIF(create_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-WriteResult save(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string output_path) {
+WriteResult save(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string output_path,
+                 bool remove_security) {
     auto lock = lock_pdfium();
 
     if (!doc->document) {
         return fine::Error(document_closed);
     }
 
-    if (auto error = write_document(doc->document, output_path)) {
+    if (auto error = write_document(doc->document, output_path, remove_security)) {
         return fine::Error(*error);
     }
 
@@ -553,7 +557,8 @@ FINE_NIF(save, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 using SaveToBinaryResult = std::variant<fine::Ok<std::string>, fine::Error<fine::Atom>>;
 
-SaveToBinaryResult save_to_binary(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
+SaveToBinaryResult save_to_binary(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
+                                  bool remove_security) {
     auto lock = lock_pdfium();
 
     if (!doc->document) {
@@ -566,7 +571,7 @@ SaveToBinaryResult save_to_binary(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc)
     writer.WriteBlock = append_block;
     writer.buffer = &out;
 
-    if (!FPDF_SaveAsCopy(doc->document, &writer, 0)) {
+    if (!FPDF_SaveAsCopy(doc->document, &writer, save_flags(remove_security))) {
         return fine::Error(save_failed);
     }
 
@@ -756,13 +761,14 @@ std::optional<fine::Atom> apply_stamps(fine::ResourcePtr<PDFDoc> doc,
 }
 
 WriteResult stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
-                  std::vector<Placement> placements, std::string output_path) {
+                  std::vector<Placement> placements, std::string output_path,
+                  bool remove_security) {
     auto lock = lock_pdfium();
 
     auto failure = apply_stamps(doc, placements);
 
     if (!failure) {
-        failure = write_document(doc->document, output_path);
+        failure = write_document(doc->document, output_path, remove_security);
     }
 
     if (failure) {

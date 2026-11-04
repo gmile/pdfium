@@ -141,6 +141,53 @@ defmodule PDFiumTest do
     end
   end
 
+  describe "writing with security removed" do
+    defp revision_of(path) do
+      {:ok, revision} = PDFium.get_security_handler_revision(open!(path))
+      revision
+    end
+
+    test "save/3 keeps the encryption unless told otherwise", %{output: output} do
+      assert {:ok, :saved} = PDFium.save(open!(@encrypted_r5), output)
+      assert revision_of(output) == 5
+    end
+
+    test "save/3 writes the document without its encryption", %{output: output} do
+      assert {:ok, :saved} = PDFium.save(open!(@encrypted_r5), output, :remove)
+      assert revision_of(output) == nil
+      assert {:ok, 1} = PDFium.get_page_count(open!(output))
+    end
+
+    test "save_to_binary/2 answers with the document without its encryption" do
+      assert {:ok, saved} = PDFium.save_to_binary(open!(@encrypted_r6), :remove)
+      assert {:ok, reopened} = PDFium.load_memory_document(saved)
+      assert {:ok, nil} = PDFium.get_security_handler_revision(reopened)
+    end
+
+    test "stamp/4 writes the document without its encryption", %{output: output} do
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 200, 200}) |> open!()
+      placement = {1.0, 0.0, 0.0, 1.0, 0.0, 0.0}
+
+      assert {:ok, :stamped} =
+               PDFium.stamp(open!(@encrypted_r5), [{overlay, 0, 0, placement}], output, :remove)
+
+      assert revision_of(output) == nil
+      assert blue?(colour_at(output, 0.5, 0.5))
+    end
+
+    test "Toolbox.flatten/4 writes a document with nothing to draw", %{output: output} do
+      assert {:ok, :flattened} = Toolbox.flatten(@encrypted_r5, output, :display, :remove)
+      assert revision_of(output) == nil
+    end
+
+    test "Toolbox.stamp/4 writes the document without its encryption", %{output: output} do
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 200, 200})
+
+      assert {:ok, :stamped} = Toolbox.stamp(@encrypted_r5, [{overlay, 0}], output, :remove)
+      assert revision_of(output) == nil
+    end
+  end
+
   describe "with_document/2" do
     test "runs the function with the document it opened" do
       path = tmp_path() |> Document.write!([[box: {0, 0, 100, 100}], []])
