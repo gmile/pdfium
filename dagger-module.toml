@@ -1,0 +1,6 @@
+name = "pdfium"
+engineVersion = "v1.0.0-beta.25"
+source = ".dagger"
+
+[runtime]
+source = "elixir"
