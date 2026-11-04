@@ -1,10 +1,21 @@
 defmodule Pdfium do
   use Dagger.Mod.Object, name: "Pdfium"
 
+  @repository_url "https://github.com/gmile/pdfium"
+  @repository_slug "gmile/pdfium"
+  @libpdfium_binaries_url "https://github.com/bblanchon/pdfium-binaries"
+  @fine_url "https://github.com/elixir-nx/fine"
+  @fine_tag "v0.1.6"
+  @alpine_image "alpine:3.23.4"
+  @gcc_image "gcc:14-bookworm"
+  @glibc_image "hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610"
+  @musl_image "hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5"
+  @nif_version "2.18"
+
   defn check_latest_tag(github_token: Dagger.Secret.t()) :: String.t() do
     known_tag =
       dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium", http_auth_token: github_token)
+      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
       |> Dagger.GitRepository.branch("stable")
       |> Dagger.GitRef.tree()
       |> Dagger.Directory.file("LIBPDFIUM_TAG")
@@ -12,7 +23,7 @@ defmodule Pdfium do
 
     {:ok, all_tags} =
       dag()
-      |> Dagger.Client.git("https://github.com/bblanchon/pdfium-binaries")
+      |> Dagger.Client.git(@libpdfium_binaries_url)
       |> Dagger.GitRepository.tags(patterns: ~w(chromium/*))
 
     [latest_tag | _] = Enum.sort(all_tags, :desc)
@@ -33,7 +44,7 @@ defmodule Pdfium do
        ) :: Dagger.Container.t() do
     pdfium =
       dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium", http_auth_token: github_token)
+      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
       |> Dagger.GitRepository.branch(base)
       |> Dagger.GitRef.tree()
 
@@ -69,7 +80,7 @@ defmodule Pdfium do
 
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("alpine:3.23.4")
+    |> Dagger.Container.from(@alpine_image)
     |> Dagger.Container.with_exec(~w"apk add git github-cli")
     |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
     |> Dagger.Container.with_directory("/pdfium", pdfium)
@@ -91,7 +102,7 @@ defmodule Pdfium do
     )
     |> Dagger.Container.with_exec(~w"git push origin #{new_branch_name}")
     |> Dagger.Container.with_exec(
-      ~w"gh pr create --base stable --reviewer gmile --fill --repo gmile/pdfium" ++
+      ~w"gh pr create --base stable --reviewer gmile --fill --repo #{@repository_slug}" ++
         ["--title", "Bump libpdfium to #{libpdfium_tag} tag"]
     )
 
@@ -121,20 +132,14 @@ defmodule Pdfium do
       |> Dagger.Directory.file("VERSION")
       |> Dagger.File.contents()
 
-    {build_image_name, nif_version} =
-      case abi do
-        "glibc" -> {"hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610", "2.18"}
-        "musl" -> {"hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5", "2.18"}
-      end
-
     pdfium_download_url =
       "https://github.com/bblanchon/pdfium-binaries/releases/download/#{URI.encode_www_form(pdfium_tag)}/pdfium-#{pdfium_abi_name}-#{pdfium_platform_name}.tgz"
 
     output_filename =
-      "pdfium-nif-#{nif_version}-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
+      "pdfium-nif-#{@nif_version}-#{erlang_platform_name}-#{erlang_abi_name}-#{package_version}.tar.gz"
 
     {
-      build_image_name,
+      image(abi),
       pdfium_download_url,
       output_filename
     }
@@ -199,8 +204,8 @@ defmodule Pdfium do
 
     fine_headers =
       dag()
-      |> Dagger.Client.git("https://github.com/elixir-nx/fine")
-      |> Dagger.GitRepository.tag("v0.1.6")
+      |> Dagger.Client.git(@fine_url)
+      |> Dagger.GitRepository.tag(@fine_tag)
       |> Dagger.GitRef.tree()
       |> Dagger.Directory.directory("c_include")
 
@@ -263,7 +268,7 @@ defmodule Pdfium do
        ) :: Dagger.File.t() do
     src_dir =
       dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium", http_auth_token: github_token)
+      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
       |> Dagger.GitRepository.ref(ref)
       |> Dagger.GitRef.tree()
 
@@ -281,7 +286,7 @@ defmodule Pdfium do
     gh =
       dag()
       |> Dagger.Client.container()
-      |> Dagger.Container.from("alpine:3.23.4")
+      |> Dagger.Container.from(@alpine_image)
       |> Dagger.Container.with_exec(~w"apk add github-cli")
       |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
 
@@ -289,7 +294,7 @@ defmodule Pdfium do
       gh
       |> Dagger.Container.with_exec(~w"echo #{DateTime.utc_now()}")
       |> Dagger.Container.with_exec(
-        ~w"gh pr view #{pr} --json headRefOid,baseRefName --jq .headRefOid,.baseRefName --repo gmile/pdfium"
+        ~w"gh pr view #{pr} --json headRefOid,baseRefName --jq .headRefOid,.baseRefName --repo #{@repository_slug}"
       )
       |> Dagger.Container.stdout()
 
@@ -302,7 +307,7 @@ defmodule Pdfium do
         --status success
         --limit 1
         --json databaseId
-        --repo gmile/pdfium
+        --repo #{@repository_slug}
         --jq .[0].databaseId
     "
 
@@ -314,7 +319,7 @@ defmodule Pdfium do
     gh =
       Dagger.Container.with_exec(
         gh,
-        ~w"gh run download #{run_id} --dir /artifacts --repo gmile/pdfium"
+        ~w"gh run download #{run_id} --dir /artifacts --repo #{@repository_slug}"
       )
 
     artifacts = Dagger.Container.directory(gh, "/artifacts")
@@ -337,7 +342,7 @@ defmodule Pdfium do
 
     pdfium =
       dag()
-      |> Dagger.Client.git("https://github.com/gmile/pdfium", http_auth_token: github_token)
+      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
       |> Dagger.GitRepository.branch(base_ref_name)
       |> Dagger.GitRef.tree()
 
@@ -348,7 +353,7 @@ defmodule Pdfium do
 
     dag()
     |> Dagger.Client.container()
-    |> Dagger.Container.from("hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5")
+    |> Dagger.Container.from(@musl_image)
     |> Dagger.Container.with_exec(~w"apk add git github-cli")
     |> Dagger.Container.with_secret_variable("GITHUB_TOKEN", github_token)
     |> Dagger.Container.with_directory("/pdfium", pdfium)
@@ -367,7 +372,7 @@ defmodule Pdfium do
     )
     |> Dagger.Container.with_exec(~w"git push origin HEAD:#{base_ref_name} v#{package_version}")
     |> Dagger.Container.with_exec(
-      ~w"gh release create v#{package_version} --repo gmile/pdfium #{entries}"
+      ~w"gh release create v#{package_version} --repo #{@repository_slug} #{entries}"
     )
     |> Dagger.Container.with_exec(~w"mix local.hex --force")
     |> Dagger.Container.with_exec(~w"mix do deps.get + deps.compile")
@@ -416,6 +421,9 @@ defmodule Pdfium do
   # todo: in principle it should be possible to move all file-related operations and utilities
   #       (tar/wget and tar/coreutils) to a generic busybox so the disappear here
   #
+  defp image("glibc"), do: @glibc_image
+  defp image("musl"), do: @musl_image
+
   defp with_build_image(dag, platform_name, "glibc", otp_image_name) do
     otp_directory =
       dag
@@ -425,7 +433,7 @@ defmodule Pdfium do
 
     dag
     |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("gcc:14-bookworm")
+    |> Dagger.Container.from(@gcc_image)
     |> Dagger.Container.with_directory("/usr/local/lib/erlang", otp_directory)
   end
 
@@ -439,13 +447,13 @@ defmodule Pdfium do
   defp with_test_image(dag, platform_name, "glibc") do
     dag
     |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610")
+    |> Dagger.Container.from(@glibc_image)
   end
 
   defp with_test_image(dag, platform_name, "musl") do
     dag
     |> Dagger.Client.container(platform: platform_name)
-    |> Dagger.Container.from("hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5")
+    |> Dagger.Container.from(@musl_image)
     |> Dagger.Container.with_exec(~w"apk add tar")
   end
 end
