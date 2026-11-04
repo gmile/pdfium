@@ -11,6 +11,7 @@ defmodule Pdfium do
   @glibc_image "hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610"
   @musl_image "hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5"
   @nif_version "2.18"
+  @source_paths ~w(c_src/** lib/pdfium/nif.ex LIBPDFIUM_TAG VERSION)
 
   defn check_latest_tag(github_token: Dagger.Secret.t()) :: String.t() do
     {:ok, known_tag} =
@@ -238,21 +239,32 @@ defmodule Pdfium do
     precompiled
   end
 
-  defn ci(
-         ref: String.t(),
-         platform_name: String.t(),
-         abi: String.t(),
-         github_token: Dagger.Secret.t()
-       ) :: Dagger.File.t() do
-    src_dir =
-      dag()
-      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
-      |> Dagger.GitRepository.ref(ref)
-      |> Dagger.GitRef.tree()
+  defn ci(ws: Dagger.Workspace.t(), platform_name: String.t(), abi: String.t()) :: Dagger.File.t() do
+    src_dir = Dagger.Workspace.directory(ws, "/", include: @source_paths)
 
     src_dir
     |> precompile(platform_name, abi)
     |> test(src_dir, platform_name, abi)
+  end
+
+  @check true
+  defn amd64_glibc(ws: Dagger.Workspace.t()) :: Dagger.Void.t() do
+    check(ws, "linux/amd64", "glibc")
+  end
+
+  @check true
+  defn amd64_musl(ws: Dagger.Workspace.t()) :: Dagger.Void.t() do
+    check(ws, "linux/amd64", "musl")
+  end
+
+  @check true
+  defn arm64_glibc(ws: Dagger.Workspace.t()) :: Dagger.Void.t() do
+    check(ws, "linux/arm64", "glibc")
+  end
+
+  @check true
+  defn arm64_musl(ws: Dagger.Workspace.t()) :: Dagger.Void.t() do
+    check(ws, "linux/arm64", "musl")
   end
 
   defn create_release(
@@ -394,6 +406,13 @@ defmodule Pdfium do
     194
     %%EOF
     """
+  end
+
+  defp check(ws, platform_name, abi) do
+    case Dagger.File.sync(ci(ws, platform_name, abi)) do
+      {:ok, _} -> :ok
+      error -> error
+    end
   end
 
   defp tag_number("chromium/" <> number), do: String.to_integer(number)
