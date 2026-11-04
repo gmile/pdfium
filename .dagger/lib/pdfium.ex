@@ -6,10 +6,10 @@ defmodule Pdfium do
   @libpdfium_binaries_url "https://github.com/bblanchon/pdfium-binaries"
   @fine_url "https://github.com/elixir-nx/fine"
   @fine_tag "v0.2.0"
-  @alpine_image "alpine:3.23.4"
-  @gcc_image "gcc:14-bookworm"
-  @glibc_image "hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610"
-  @musl_image "hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5"
+  @alpine_image "alpine:3.24.3"
+  @gcc_image "gcc:16.2-trixie"
+  @glibc_image "hexpm/elixir:1.20.5-erlang-29.1.2-ubuntu-noble-20261024.1"
+  @musl_image "hexpm/elixir:1.20.5-erlang-29.1.2-alpine-3.24.3"
   @nif_version "2.18"
   @source_paths ~w(c_src/** lib/pdfium/nif.ex LIBPDFIUM_TAG VERSION)
 
