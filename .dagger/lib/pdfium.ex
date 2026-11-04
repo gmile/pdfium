@@ -13,37 +13,32 @@ defmodule Pdfium do
   @nif_version "2.18"
   @source_paths ~w(c_src/** lib/pdfium/nif.ex LIBPDFIUM_TAG VERSION)
 
-  defn check_latest_tag(github_token: Dagger.Secret.t()) :: String.t() do
-    {:ok, known_tag} =
-      dag()
-      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
-      |> Dagger.GitRepository.branch("stable")
-      |> Dagger.GitRef.tree()
-      |> Dagger.Directory.file("LIBPDFIUM_TAG")
-      |> Dagger.File.contents()
-
-    {:ok, all_tags} =
-      dag()
-      |> Dagger.Client.git(@libpdfium_binaries_url)
-      |> Dagger.GitRepository.tags(patterns: ~w(chromium/*))
-
-    latest_tag = Enum.max_by(all_tags, &tag_number/1)
-
-    if tag_number(latest_tag) > tag_number(String.trim(known_tag)) do
-      Jason.encode!(%{new_tag_available: true, tag: latest_tag})
-    else
-      Jason.encode!(%{new_tag_available: false})
-    end
-  end
-
   defn prepare_release_pull_request(
     base: String.t(),
     package_version: String.t() | nil,
-    libpdfium_tag: String.t(),
+    libpdfium_tag: String.t() | nil,
     github_token: Dagger.Secret.t(),
     actor: String.t()
-  ) :: Dagger.Void.t() do
+  ) :: String.t() do
     repository = Dagger.Client.git(dag(), @repository_url, http_auth_token: github_token)
+    base_ref = Dagger.GitRepository.branch(repository, base)
+    base_tree = Dagger.GitRef.tree(base_ref)
+
+    {:ok, known_tag} =
+      base_tree
+      |> Dagger.Directory.file("LIBPDFIUM_TAG")
+      |> Dagger.File.contents()
+
+    libpdfium_tag = libpdfium_tag || latest_libpdfium_tag()
+
+    if libpdfium_tag == String.trim(known_tag) do
+      "#{base} is already on #{libpdfium_tag}"
+    else
+      open_release_pull_request(repository, base, libpdfium_tag, package_version, github_token, actor)
+    end
+  end
+
+  defp open_release_pull_request(repository, base, libpdfium_tag, package_version, github_token, actor) do
     base_ref = Dagger.GitRepository.branch(repository, base)
     base_tree = Dagger.GitRef.tree(base_ref)
     package_version = package_version || next_patch_version(base_tree)
@@ -67,7 +62,7 @@ defmodule Pdfium do
       )
       |> Dagger.Container.sync()
 
-    :ok
+    "opened #{new_branch_name} against #{base}"
   end
 
   def collect_build_info(src_dir, platform_name, abi) do
@@ -397,6 +392,15 @@ defmodule Pdfium do
     |> Version.parse!()
     |> Map.update!(:patch, & &1 + 1)
     |> Version.to_string()
+  end
+
+  defp latest_libpdfium_tag do
+    {:ok, tags} =
+      dag()
+      |> Dagger.Client.git(@libpdfium_binaries_url)
+      |> Dagger.GitRepository.tags(patterns: ~w(chromium/*))
+
+    Enum.max_by(tags, &tag_number/1)
   end
 
   defp tag_number("chromium/" <> number), do: String.to_integer(number)
