@@ -6,6 +6,8 @@ defmodule PDFiumTest do
 
   @annotated Path.expand("fixtures/annotated.pdf", __DIR__)
   @plain Path.expand("../custom/test.pdf", __DIR__)
+  @encrypted_r5 Path.expand("fixtures/encrypted-r5.pdf", __DIR__)
+  @encrypted_r6 Path.expand("fixtures/encrypted-r6.pdf", __DIR__)
 
   setup do
     output = Path.join(System.tmp_dir!(), "pdfium-test-#{System.unique_integer([:positive])}.pdf")
@@ -118,6 +120,24 @@ defmodule PDFiumTest do
       :ok = PDFium.close_document(document)
 
       assert {:error, :document_closed} = PDFium.save_to_binary(document)
+    end
+  end
+
+  describe "get_security_handler_revision/1" do
+    test "names the revision of the standard security handler" do
+      assert {:ok, 5} = PDFium.get_security_handler_revision(open!(@encrypted_r5))
+      assert {:ok, 6} = PDFium.get_security_handler_revision(open!(@encrypted_r6))
+    end
+
+    test "answers nil for a document that is not encrypted" do
+      assert {:ok, nil} = PDFium.get_security_handler_revision(open!(@plain))
+    end
+
+    test "reports a closed document" do
+      document = open!(@plain)
+      PDFium.close_document(document)
+
+      assert {:error, :document_closed} = PDFium.get_security_handler_revision(document)
     end
   end
 

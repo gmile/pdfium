@@ -190,6 +190,16 @@ CountResult get_page_count(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
 
 FINE_NIF(get_page_count, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
+CountResult get_security_handler_revision(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
+    auto lock = lock_pdfium();
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+    return fine::Ok(static_cast<int64_t>(FPDF_GetSecurityHandlerRevision(doc->document)));
+}
+
+FINE_NIF(get_security_handler_revision, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
 using BitmapResult = std::variant<fine::Ok<std::string, int64_t, int64_t>, fine::Error<fine::Atom>>;
 
 BitmapResult get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
