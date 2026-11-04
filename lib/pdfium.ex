@@ -165,6 +165,12 @@ defmodule PDFium do
     end
   end
 
+  @typedoc """
+  What to do with a document's encryption when writing it: `:keep` writes it
+  encrypted as it was opened, `:remove` writes it in the clear.
+  """
+  @type security :: :keep | :remove
+
   @doc """
   Draws a page's annotations into its content and drops them.
 
@@ -191,14 +197,16 @@ defmodule PDFium do
   @doc """
   Writes a document out.
   """
-  @spec save(reference(), Path.t()) :: {:ok, :saved} | {:error, atom()}
-  defdelegate save(document, output_path), to: PDFium.NIF
+  @spec save(reference(), Path.t(), security()) :: {:ok, :saved} | {:error, atom()}
+  def save(document, output_path, security \\ :keep),
+    do: PDFium.NIF.save(document, output_path, security == :remove)
 
   @doc """
   Answers with the document as it would have been written.
   """
-  @spec save_to_binary(reference()) :: {:ok, binary()} | {:error, atom()}
-  defdelegate save_to_binary(document), to: PDFium.NIF
+  @spec save_to_binary(reference(), security()) :: {:ok, binary()} | {:error, atom()}
+  def save_to_binary(document, security \\ :keep),
+    do: PDFium.NIF.save_to_binary(document, security == :remove)
 
   @doc """
   Copies pages of `source` into `destination`, starting at page `at`.
@@ -260,10 +268,11 @@ defmodule PDFium do
   @spec stamp(
           reference(),
           [{reference(), non_neg_integer(), non_neg_integer(), placement()}],
-          Path.t()
+          Path.t(),
+          security()
         ) :: {:ok, :stamped} | {:error, atom()}
-  def stamp(document, placements, output_path) do
-    PDFium.NIF.stamp(document, as_floats(placements), output_path)
+  def stamp(document, placements, output_path, security \\ :keep) do
+    PDFium.NIF.stamp(document, as_floats(placements), output_path, security == :remove)
   end
 
   @doc """

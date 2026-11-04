@@ -28,25 +28,32 @@ defmodule PDFium.Toolbox do
   `overlay/3` is for an overlay with a page per page of the document.
 
   Fitting and centring is what makes an overlay drawn at the size of the page it
-  goes over land exactly where it was drawn. `PDFium.stamp/3` takes the matrix
+  goes over land exactly where it was drawn. `PDFium.stamp/4` takes the matrix
   itself for anywhere else.
   """
-  @spec stamp(PDFium.source(), [{PDFium.source(), non_neg_integer()}], Path.t()) ::
-          {:ok, :stamped} | {:error, atom()}
-  def stamp(source, placements, output_path) do
-    stamped(source, placements, &PDFium.stamp(&1, &2, output_path))
+  @spec stamp(
+          PDFium.source(),
+          [{PDFium.source(), non_neg_integer()}],
+          Path.t(),
+          PDFium.security()
+        ) :: {:ok, :stamped} | {:error, atom()}
+  def stamp(source, placements, output_path, security \\ :keep) do
+    stamped(source, placements, &PDFium.stamp(&1, &2, output_path, security))
   end
 
   @doc """
-  Stamps as `stamp/3` does, answering with the document rather than writing it
+  Stamps as `stamp/4` does, answering with the document rather than writing it
   out.
   """
-  @spec stamp_to_binary(PDFium.source(), [{PDFium.source(), non_neg_integer()}]) ::
-          {:ok, binary()} | {:error, atom()}
-  def stamp_to_binary(source, placements) do
+  @spec stamp_to_binary(
+          PDFium.source(),
+          [{PDFium.source(), non_neg_integer()}],
+          PDFium.security()
+        ) :: {:ok, binary()} | {:error, atom()}
+  def stamp_to_binary(source, placements, security \\ :keep) do
     stamped(source, placements, fn document, placed ->
       with {:ok, :stamped} <- PDFium.stamp_in_place(document, placed) do
-        PDFium.save_to_binary(document)
+        PDFium.save_to_binary(document, security)
       end
     end)
   end
@@ -176,42 +183,43 @@ defmodule PDFium.Toolbox do
   result.
 
   Answers `{:ok, :nothing_to_do}` without writing anything when no page had an
-  annotation to draw.
+  annotation to draw, unless `security` is `:remove`: then the document is
+  written either way, since removing the encryption is itself something to do.
   """
-  @spec flatten(PDFium.source(), Path.t()) ::
+  @spec flatten(PDFium.source(), Path.t(), :display | :print, PDFium.security()) ::
           {:ok, :flattened | :nothing_to_do} | {:error, atom()}
-  @spec flatten(PDFium.source(), Path.t(), :display | :print) ::
-          {:ok, :flattened | :nothing_to_do} | {:error, atom()}
-  def flatten(source, output_path, usage \\ :display) do
-    flattened(source, usage, fn document ->
-      with {:ok, :saved} <- PDFium.save(document, output_path), do: {:ok, :flattened}
+  def flatten(source, output_path, usage \\ :display, security \\ :keep) do
+    flattened(source, usage, security, fn document ->
+      with {:ok, :saved} <- PDFium.save(document, output_path, security), do: {:ok, :flattened}
     end)
   end
 
   @doc """
-  Flattens as `flatten/3` does, answering with the document rather than writing
+  Flattens as `flatten/4` does, answering with the document rather than writing
   it out.
 
   Still answers `{:ok, :nothing_to_do}` when no page had an annotation to draw,
   so a caller that already holds the document keeps what it has rather than
   being handed a copy of it.
   """
-  @spec flatten_to_binary(PDFium.source()) ::
+  @spec flatten_to_binary(PDFium.source(), :display | :print, PDFium.security()) ::
           {:ok, binary()} | {:ok, :nothing_to_do} | {:error, atom()}
-  @spec flatten_to_binary(PDFium.source(), :display | :print) ::
-          {:ok, binary()} | {:ok, :nothing_to_do} | {:error, atom()}
-  def flatten_to_binary(source, usage \\ :display) do
-    flattened(source, usage, &PDFium.save_to_binary/1)
+  def flatten_to_binary(source, usage \\ :display, security \\ :keep) do
+    flattened(source, usage, security, &PDFium.save_to_binary(&1, security))
   end
 
-  @spec flattened(PDFium.source(), :display | :print, (reference() -> result)) ::
-          result | {:ok, :nothing_to_do} | {:error, atom()}
+  @spec flattened(
+          PDFium.source(),
+          :display | :print,
+          PDFium.security(),
+          (reference() -> result)
+        ) :: result | {:ok, :nothing_to_do} | {:error, atom()}
         when result: term()
-  defp flattened(source, usage, save) do
+  defp flattened(source, usage, security, save) do
     with_documents([source], fn [document] ->
       with {:ok, page_count} <- PDFium.get_page_count(document),
            {:ok, drawn?} <- flatten_each(document, page_count, usage) do
-        if drawn?, do: save.(document), else: {:ok, :nothing_to_do}
+        if drawn? or security == :remove, do: save.(document), else: {:ok, :nothing_to_do}
       end
     end)
   end
