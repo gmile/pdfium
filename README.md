@@ -110,7 +110,7 @@ nix develop
       --base stable \
       --libpdfium-tag chromium/7506 \
       --actor 41898282+github-actions[bot] \
-      --github-token GITHUB_TOKEN
+      --github-token env://GITHUB_TOKEN
     ```
 
 2. wait until the PR is green, then merge it and release a package on hex:
@@ -119,8 +119,8 @@ nix develop
     HEX_API_KEY=483a... GITHUB_TOKEN=(gh auth token) dagger call create-release \
       --pr 99 \
       --actor gmile \
-      --github-token GITHUB_TOKEN \
-      --hex-api-key HEX_API_KEY
+      --github-token env://GITHUB_TOKEN \
+      --hex-api-key env://HEX_API_KEY
     ```
 
 ## Updating OTP version (for macOS)

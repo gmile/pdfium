@@ -1,8 +1,0 @@
-{
-  "name": "pdfium",
-  "engineVersion": "v0.21.9",
-  "sdk": {
-    "source": "elixir"
-  },
-  "source": ".dagger"
-}

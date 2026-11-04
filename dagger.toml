@@ -1,0 +1,13 @@
+[modules.elixir-sdk]
+source = "dagger.io/sdk/elixir"
+
+[modules.pdfium]
+source = "."
+main = true
+
+[sdks.elixir]
+module = "elixir-sdk"
+
+[sdks.elixir.scopes."."]
+is-module = true
+name = "pdfium"
