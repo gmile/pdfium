@@ -1,6 +1,6 @@
 .{
     .name = .pdfium,
-    .version = "0.1.46",
+    .version = "0.1.47",
     .fingerprint = 0xee52b5c923e23d9a,
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
