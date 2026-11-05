@@ -13,56 +13,42 @@ defmodule Pdfium do
   @nif_version "2.18"
   @source_paths ~w(c_src/** lib/pdfium/nif.ex LIBPDFIUM_TAG VERSION)
 
-  defn prepare_release_pull_request(
-    base: String.t(),
-    package_version: String.t() | nil,
-    libpdfium_tag: String.t() | nil,
+  defn prepare_release(
     github_token: Dagger.Secret.t(),
-    actor: String.t()
-  ) :: String.t() do
-    repository = Dagger.Client.git(dag(), @repository_url, http_auth_token: github_token)
-    base_ref = Dagger.GitRepository.branch(repository, base)
-    base_tree = Dagger.GitRef.tree(base_ref)
+    actor: String.t(),
+    libpdfium_tag: String.t() | nil,
+    package_version: String.t() | nil
+  ) :: Dagger.GitRef.t() do
+    main =
+      dag()
+      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
+      |> Dagger.GitRepository.branch("main")
 
-    {:ok, known_tag} =
-      base_tree
+    tree = Dagger.GitRef.tree(main)
+    libpdfium_tag = libpdfium_tag || latest_libpdfium_tag()
+    package_version = package_version || next_patch_version(tree)
+    with_tag = Dagger.Directory.with_new_file(tree, "LIBPDFIUM_TAG", libpdfium_tag)
+    with_version = Dagger.Directory.with_new_file(with_tag, "VERSION", package_version)
+
+    main
+    |> commit(Dagger.Directory.changes(with_tag, tree), "Update libpdfium tag to #{libpdfium_tag}", actor)
+    |> commit(Dagger.Directory.changes(with_version, with_tag), "Update package to version #{package_version}", actor)
+  end
+
+  defn open_pull_request(head: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
+    {:ok, libpdfium_tag} =
+      dag()
+      |> Dagger.Client.git(@repository_url)
+      |> Dagger.GitRepository.branch(head)
+      |> Dagger.GitRef.tree()
       |> Dagger.Directory.file("LIBPDFIUM_TAG")
       |> Dagger.File.contents()
 
-    libpdfium_tag = libpdfium_tag || latest_libpdfium_tag()
-
-    if libpdfium_tag == String.trim(known_tag) do
-      "#{base} is already on #{libpdfium_tag}"
-    else
-      open_release_pull_request(repository, base, libpdfium_tag, package_version, github_token, actor)
-    end
-  end
-
-  defp open_release_pull_request(repository, base, libpdfium_tag, package_version, github_token, actor) do
-    base_ref = Dagger.GitRepository.branch(repository, base)
-    base_tree = Dagger.GitRef.tree(base_ref)
-    package_version = package_version || next_patch_version(base_tree)
-    new_branch_name = "update-libpdfium-to-#{libpdfium_tag}"
-
-    with_tag = Dagger.Directory.with_new_file(base_tree, "LIBPDFIUM_TAG", libpdfium_tag)
-    with_version = Dagger.Directory.with_new_file(with_tag, "VERSION", package_version)
-
-    {:ok, _} =
-      base_ref
-      |> commit(Dagger.Directory.changes(with_tag, base_tree), "Update libpdfium tag to #{libpdfium_tag}", actor)
-      |> commit(Dagger.Directory.changes(with_version, with_tag), "Update package to version #{package_version}", actor)
-      |> Dagger.GitRef.push(to: repository, branch: new_branch_name)
-      |> Dagger.GitPushResult.sha()
-
-    {:ok, _} =
-      gh(github_token)
-      |> Dagger.Container.with_exec(
-        ~w"gh pr create --repo #{@repository_slug} --base #{base} --head #{new_branch_name} --reviewer gmile" ++
-          ["--title", "Bump libpdfium to #{libpdfium_tag} tag", "--body", ""]
-      )
-      |> Dagger.Container.sync()
-
-    "opened #{new_branch_name} against #{base}"
+    gh(github_token)
+    |> Dagger.Container.with_exec(
+      ~w"gh pr create --repo #{@repository_slug} --base main --head #{head} --reviewer gmile" ++
+        ["--title", "Bump libpdfium to #{libpdfium_tag}", "--body", ""]
+    )
   end
 
   def collect_build_info(src_dir, platform_name, abi) do
@@ -381,14 +367,18 @@ defmodule Pdfium do
     |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
   end
 
-  defp next_patch_version(tree) do
+  defp package_version(tree) do
     {:ok, package_version} =
       tree
       |> Dagger.Directory.file("VERSION")
       |> Dagger.File.contents()
 
-    package_version
-    |> String.trim_trailing()
+    String.trim_trailing(package_version)
+  end
+
+  defp next_patch_version(tree) do
+    tree
+    |> package_version()
     |> Version.parse!()
     |> Map.update!(:patch, & &1 + 1)
     |> Version.to_string()
