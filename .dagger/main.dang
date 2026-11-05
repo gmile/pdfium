@@ -4,7 +4,6 @@ let libpdfiumBinariesUrl = "https://github.com/bblanchon/pdfium-binaries"
 let fineUrl = "https://github.com/elixir-nx/fine"
 let fineTag = "v0.2.0"
 let alpineImage = "alpine:3.24.3"
-let gccImage = "gcc:16.2-trixie"
 let images: Map[String!]! = ["glibc": "hexpm/elixir:1.20.5-erlang-29.1.2-ubuntu-noble-20261024.1", "musl": "hexpm/elixir:1.20.5-erlang-29.1.2-alpine-3.24.3"]
 let zigVersion = "0.17.1"
 let nifVersion = "2.18"
@@ -36,14 +35,12 @@ type Pdfium {
     let outputPath = `/build/pdfium-nif-${nifVersion}-${target}-${packageVersion}.tar.gz`
     let fineHeaders = git(url: fineUrl).tag(fineTag).tree.directory("c_include")
     let libpdfium = http(url: `${libpdfiumBinariesUrl}/releases/download/${pdfiumTag}/pdfium-${archive}.tgz`).extract
-    let prepared = buildImage(target)
+    let prepared = buildImage
       .withWorkdir("/build")
       .withFile("/build/pdfium_nif.cpp", srcDir.file("c_src/pdfium_nif.cpp"))
       .withDirectory("/fine", fineHeaders)
       .withDirectory("/pdfium", libpdfium)
-    let built = if (darwin(target)) linkDarwin(prepared, target) else linkLinux(prepared)
-
-    built
+    link(prepared, target)
       .withExec([
         "tar", "--create", "--verbose", `--file=${outputPath}`,
         "--directory", "/build", "pdfium_nif.so", "--directory", "/pdfium/lib", library,
@@ -156,55 +153,41 @@ let testImage(target: String!): Container! {
   if (target.hasSuffix("gnu")) base.withFile(cacerts, container.from(images["musl"]!).file(cacerts)) else base
 }
 
-let buildImage(target: String!): Container! {
-  if (darwin(target)) {
-    let arch = ["linux/arm64": "aarch64", "linux/amd64": "x86_64"][defaultPlatform :: String!]!
-    let zig = `zig-${arch}-linux-${zigVersion}`
+let buildImage: Container! {
+  let arch = ["linux/arm64": "aarch64", "linux/amd64": "x86_64"][defaultPlatform :: String!]!
+  let zig = `zig-${arch}-linux-${zigVersion}`
 
-    container
-      .from(images["musl"]!)
-      .withExec(["apk", "add", "llvm", "tar"])
-      .withDirectory("/zig", http(url: `https://ziglang.org/download/${zigVersion}/${zig}.tar.xz`).extract.directory(zig))
-      .withEnvVariable("PATH", "/zig:${PATH}", expand: true)
-  } else if (target.hasSuffix("gnu")) {
-    let base = container(platform: platform(target))
+  container
+    .from(images["musl"]!)
+    .withExec(["apk", "add", "llvm", "tar"])
+    .withDirectory("/zig", http(url: `https://ziglang.org/download/${zigVersion}/${zig}.tar.xz`).extract.directory(zig))
+    .withEnvVariable("PATH", "/zig:${PATH}", expand: true)
+}
 
-    base.from(gccImage).withDirectory("/usr/local/lib/erlang", base.from(image(target)).directory("/usr/local/lib/erlang"))
+let link(prepared: Container!, target: String!): Container! {
+  let zigTarget = [
+    "aarch64-linux-gnu": "aarch64-linux-gnu.2.17", "aarch64-linux-musl": "aarch64-linux-musl",
+    "x86_64-linux-gnu": "x86_64-linux-gnu.2.17", "x86_64-linux-musl": "x86_64-linux-musl",
+    "aarch64-apple-darwin": "aarch64-macos", "x86_64-apple-darwin": "x86_64-macos",
+  ][target]!
+  let linkFlags = if (darwin(target)) {
+    ["-Wl,-undefined,dynamic_lookup", "-Wl,-install_name,@rpath/pdfium_nif.so", "-Wl,-rpath,@loader_path"]
   } else {
-    container(platform: platform(target)).from(image(target)).withExec(["apk", "add", "build-base", "tar"])
+    ["-Wl,-rpath,$ORIGIN", "-Wl,--strip-all"]
   }
-}
-
-let linkLinux(prepared: Container!): Container! {
-  prepared
-    .withExec([
-      "g++", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "--pic", "-fvisibility=hidden",
-      "--optimize=2", "--std=c++17", "--include-directory=/usr/local/lib/erlang/usr/include",
-      "--include-directory=/pdfium/include", "--include-directory=/fine", "--compile",
-      "--output=pdfium_nif.o", "pdfium_nif.cpp",
-    ])
-    .withExec([
-      "g++", "pdfium_nif.o", "--shared", "--output=pdfium_nif.so",
-      "--library-directory=/usr/local/lib/erlang/usr/lib", "--library-directory=/pdfium/lib",
-      "-static-libstdc++", "-Wl,-s", "-Wl,--disable-new-dtags", "-Wl,-rpath,$ORIGIN", "-l:libpdfium.so",
-    ])
-}
-
-let linkDarwin(prepared: Container!, target: String!): Container! {
-  let zigTarget = `${target.split("-")[0]!}-macos`
-
-  prepared
+  let linked = prepared
     .withExec([
       "zig", "c++", "-target", zigTarget, "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-fPIC",
       "-fvisibility=hidden", "-O2", "-std=c++17", "-I", "/usr/local/lib/erlang/usr/include",
       "-I", "/pdfium/include", "-I", "/fine", "-c", "pdfium_nif.cpp", "-o", "pdfium_nif.o",
     ])
-    .withExec([
-      "zig", "c++", "-target", zigTarget, "pdfium_nif.o", "-shared", "-o", "pdfium_nif.so",
-      "-L", "/pdfium/lib", "-lpdfium", "-Wl,-undefined,dynamic_lookup",
-      "-Wl,-install_name,@rpath/pdfium_nif.so", "-Wl,-rpath,@loader_path",
-    ])
-    .withExec(["llvm-install-name-tool", "-change", "./libpdfium.dylib", "@rpath/libpdfium.dylib", "pdfium_nif.so"])
+    .withExec(["zig", "c++", "-target", zigTarget, "pdfium_nif.o", "-shared", "-o", "pdfium_nif.so", "-L", "/pdfium/lib", "-lpdfium"] + linkFlags)
+
+  if (darwin(target)) {
+    linked.withExec(["llvm-install-name-tool", "-change", "./libpdfium.dylib", "@rpath/libpdfium.dylib", "pdfium_nif.so"])
+  } else {
+    linked
+  }
 }
 
 let nextPatchVersion(tree: Directory!): String! {

@@ -75,9 +75,9 @@ dagger call ci --target aarch64-linux-musl export --path .
 ```
 
 The targets are `aarch64-linux-gnu`, `aarch64-linux-musl`, `x86_64-linux-gnu`,
-`x86_64-linux-musl`, `aarch64-apple-darwin` and `x86_64-apple-darwin`. The macOS
-ones are cross-compiled with zig and only built, so `mix test` on a Mac is their
-check. `dagger check` runs all six. The workflows load the workspace from git
+`x86_64-linux-musl`, `aarch64-apple-darwin` and `x86_64-apple-darwin`, all
+compiled with zig in one image. The macOS ones are only built, so `mix test` on
+a Mac is their check. `dagger check` runs all six. The workflows load the workspace from git
 rather than from a checkout, and the same works from any directory:
 
 ```sh
