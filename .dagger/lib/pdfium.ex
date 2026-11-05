@@ -226,29 +226,22 @@ defmodule Pdfium do
     artifacts: Dagger.Directory.t(),
     sha: String.t(),
     github_token: Dagger.Secret.t()
-  ) :: Dagger.Container.t() do
-    package_version = package_version(Dagger.Workspace.directory(ws, "/", include: ~w(VERSION)))
+  ) :: Pdfium.Release.t() do
+    package = Dagger.Workspace.directory(ws, "/", include: @package_paths)
+    package_version = package_version(package)
     {:ok, entries} = Dagger.Directory.entries(artifacts)
 
-    gh(github_token)
-    |> Dagger.Container.with_directory("/artifacts", artifacts)
-    |> Dagger.Container.with_exec(
-      ~w"gh release create v#{package_version} --repo #{@repository_slug} --target #{sha} --title v#{package_version}" ++
-        Enum.map(entries, &Path.join("/artifacts", &1))
-    )
-  end
+    receipt =
+      gh(github_token)
+      |> Dagger.Container.with_directory("/artifacts", artifacts)
+      |> Dagger.Container.with_exec(
+        ~w"gh release create v#{package_version} --repo #{@repository_slug} --target #{sha} --title v#{package_version}" ++
+          Enum.map(entries, &Path.join("/artifacts", &1)),
+        redirect_stdout: "/receipt"
+      )
+      |> Dagger.Container.file("/receipt")
 
-  defn hex_publish(ws: Dagger.Workspace.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
-    dag()
-    |> Dagger.Client.container()
-    |> Dagger.Container.from(@musl_image)
-    |> Dagger.Container.with_directory("/pdfium", Dagger.Workspace.directory(ws, "/", include: @package_paths))
-    |> Dagger.Container.with_workdir("/pdfium")
-    |> Dagger.Container.with_exec(~w"mix local.hex --force")
-    |> Dagger.Container.with_exec(~w"mix deps.get")
-    |> Dagger.Container.with_exec(~w"mix elixir_make.checksum --all")
-    |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
-    |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
+    %Pdfium.Release{package: package, receipt: receipt}
   end
 
   def test_script do
@@ -338,8 +331,8 @@ defmodule Pdfium do
 
   defp tag_number("chromium/" <> number), do: String.to_integer(number)
 
-  defp image("glibc"), do: @glibc_image
-  defp image("musl"), do: @musl_image
+  def image("glibc"), do: @glibc_image
+  def image("musl"), do: @musl_image
 
   defp with_build_image(dag, platform_name, "glibc", otp_image_name) do
     otp_directory =
