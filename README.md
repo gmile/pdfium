@@ -112,7 +112,7 @@ wget https://github.com/erlef/otp_builds/releases/download/OTP-29.1.2/OTP-29.1.2
 shasum -a 256 /tmp/OTP-29.1.2-macos-amd64.tar.gz
 shasum -a 256 /tmp/OTP-29.1.2-macos-arm64.tar.gz
 
-# Then edit custom/build.json by inserting the hashes
+# Then edit custom/builds.json by inserting the hashes
 ```
 
 ## Repository settings the workflows rely on
