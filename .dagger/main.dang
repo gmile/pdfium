@@ -15,7 +15,7 @@ let archives: Map[String!]! = [
   "aarch64-apple-darwin": "mac-arm64", "x86_64-apple-darwin": "mac-x64",
 ]
 let nifVersion = "2.18"
-let packagePaths: [String!]! = ["build.zig", "build.zig.zon", "c_src/**", "lib/**", "LICENSE", "mix.exs", "mix.lock", "README.md", "VERSION"]
+let packagePaths: [String!]! = ["build.zig", "build.zig.zon", "c_src/**", "lib/**", "LICENSE", "mix.exs", "mix.lock", "README.md"]
 let testPaths: [String!]! = packagePaths + ["test/**"]
 
 type Pdfium {
@@ -23,19 +23,19 @@ type Pdfium {
     let main = git(url: repositoryUrl).branch("main")
     let tree = main.tree
     let tag = latestLibpdfiumTag
-    let version = nextPatchVersion(tree)
-    let manifest = archives.keys.reduce(buildImage.withFile("/src/build.zig", tree.file("build.zig")).withFile("/src/build.zig.zon", tree.file("build.zig.zon")).withWorkdir("/src")) { acc, target =>
+    let next = nextPatchVersion(tree)
+    let fetched = archives.keys.reduce(buildImage.withFile("/src/build.zig", tree.file("build.zig")).withFile("/src/build.zig.zon", tree.file("build.zig.zon")).withWorkdir("/src")) { acc, target =>
       acc.withExec(["zig", "fetch", `--save=pdfium_${target}`, archiveUrl(tag, target)])
-    }
-    let withTag = tree.withFile("build.zig.zon", manifest.file("/src/build.zig.zon"))
-    let withVersion = withTag.withNewFile("VERSION", version)
+    }.file("/src/build.zig.zon").contents
+    let withTag = tree.withNewFile("build.zig.zon", fetched)
+    let withVersion = tree.withNewFile("build.zig.zon", fetched.replaceMatches(`\.version = "[^"]+"`, `.version = "${next}"`))
     let first = commit(main, withTag.changes(tree), `Update libpdfium to ${tag}`, actor)
 
-    Bump(ref: commit(first, withVersion.changes(withTag), `Update package to version ${version}`, actor))
+    Bump(ref: commit(first, withVersion.changes(withTag), `Update package to version ${next}`, actor))
   }
 
   pub precompile(srcDir: Directory!, target: String!, cache: Directory): File! {
-    let packageVersion = srcDir.file("VERSION").contents
+    let packageVersion = version(srcDir)
     let outputPath = `/build/pdfium-nif-${nifVersion}-${target}-${packageVersion}.tar.gz`
     let library = if (darwin(target)) "libpdfium.dylib" else "libpdfium.so"
 
@@ -76,7 +76,7 @@ type Pdfium {
 
   pub githubRelease(ws: Workspace!, artifacts: Directory!, sha: String!, githubToken: Secret!): Release! {
     let package = ws.directory(".", include: packagePaths)
-    let version = package.file("VERSION").contents
+    let tag = `v${version(package)}`
     let assets = artifacts.entries.map { item => `/artifacts/${item}` }
 
     Release(
@@ -84,7 +84,7 @@ type Pdfium {
       receipt: gh(githubToken)
         .withDirectory("/artifacts", artifacts)
         .withExec(
-          ["gh", "release", "create", `v${version}`, "--repo", repositorySlug, "--target", sha, "--title", `v${version}`] + assets,
+          ["gh", "release", "create", tag, "--repo", repositorySlug, "--target", sha, "--title", tag] + assets,
           redirectStdout: "/receipt",
         )
         .file("/receipt"),
@@ -172,8 +172,12 @@ let buildImage: Container! {
     .withEnvVariable("PATH", "/zig:${PATH}", expand: true)
 }
 
+let version(tree: Directory!): String! {
+  tree.file("build.zig.zon").contents.match(`\.version = "([^"]+)"`)!.captures[0]!
+}
+
 let nextPatchVersion(tree: Directory!): String! {
-  let parts = tree.file("VERSION").contents.split(".")
+  let parts = version(tree).split(".")
   `${parts[0]!}.${parts[1]!}.${(JSON.decode(parts[2]!) :: Int!) + 1}`
 }
 

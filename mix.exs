@@ -1,7 +1,7 @@
 defmodule PDFium.MixProject do
   use Mix.Project
 
-  @version File.read!("VERSION") |> String.trim_trailing()
+  @version Regex.run(~r/\.version = "([^"]+)"/, File.read!("build.zig.zon"), capture: :all_but_first) |> hd()
 
   def project do
     [
@@ -73,7 +73,6 @@ defmodule PDFium.MixProject do
         LICENSE
         mix.exs
         README.md
-        VERSION
       ",
       licenses: ~w"MIT",
       links: %{
