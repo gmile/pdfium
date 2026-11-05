@@ -54,27 +54,14 @@ nix develop
 
 ## Releasing
 
-1. bump version in `VERSION` file. Run:
+Every Monday the `Update to latest libpdfium` workflow opens a pull request that
+bumps `LIBPDFIUM_TAG` and `VERSION`. Merging it into `main` runs the `Release`
+workflow, which builds the artifacts, creates the GitHub release and publishes
+the package to hex. Run the workflow by hand to release outside the schedule:
 
-   ```sh
-   echo -n (awk 'BEGIN{FS=OFS="."} {$NF+=1}1' VERSION) > VERSION
-   ```
-
-2. commit and push the change:
-
-   ```sh
-   git add VERSION
-   git commit --message "Bump library version"
-   git push origin main
-   ```
-
-3. create a PR from `main` to `stable`. Run:
-
-   ```sh
-   gh pr create --base stable --fill
-   ```
-
-4. wait until the PR checks are green, then merge the PR
+```sh
+gh workflow run update-libpdfium.yaml
+```
 
 ## Running CI steps locally
 
@@ -103,24 +90,33 @@ nix develop
 
 ## Releasing manually
 
-1. open PR with a new libpdfium tag:
+1. push a branch with a new libpdfium tag and open a pull request for it:
 
     ```sh
-    env GITHUB_TOKEN=(gh auth token) dagger call prepare-release-pull-request \
-      --base stable \
+    env GITHUB_TOKEN=(gh auth token) dagger call prepare-release \
       --libpdfium-tag chromium/7506 \
-      --actor 41898282+github-actions[bot] \
-      --github-token env://GITHUB_TOKEN
-    ```
-
-2. wait until the PR is green, then merge it and release a package on hex:
-
-    ```sh
-    HEX_API_KEY=483a... GITHUB_TOKEN=(gh auth token) dagger call create-release \
-      --pr 99 \
       --actor gmile \
       --github-token env://GITHUB_TOKEN \
-      --hex-api-key env://HEX_API_KEY
+      push --branch update-libpdfium
+
+    env GITHUB_TOKEN=(gh auth token) dagger call open-pull-request \
+      --head update-libpdfium \
+      --github-token env://GITHUB_TOKEN \
+      stdout
+    ```
+
+2. merge the pull request, then from `main` with the artifacts of its CI run in `artifacts/`:
+
+    ```sh
+    env GITHUB_TOKEN=(gh auth token) dagger call github-release \
+      --artifacts artifacts \
+      --sha (git rev-parse main) \
+      --github-token env://GITHUB_TOKEN \
+      stdout
+
+    env HEX_API_KEY=483a... dagger call hex-publish \
+      --hex-api-key env://HEX_API_KEY \
+      stdout
     ```
 
 ## Updating OTP version (for macOS)
