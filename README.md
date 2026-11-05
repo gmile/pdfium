@@ -117,6 +117,14 @@ shasum -a 256 /tmp/OTP-29.1.2-macos-arm64.tar.gz
 # Then edit custom/build.json by inserting the hashes
 ```
 
+## Repository settings the workflows rely on
+
+* a GitHub App installed on the repository with write access to contents and
+  pull requests; its id is the `GH_APP_ID` variable and its private key the
+  `GH_APP_PRIVATE_KEY` secret
+* the `HEX_API_KEY` secret for `mix hex.publish`
+* required checks named after the CI jobs, one per matrix entry
+
 ## Known issues
 
 * Installing the library was tested and will work in macOS and inside Docker images built by Bob. Installing
