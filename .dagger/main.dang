@@ -14,7 +14,7 @@ let nifVersion = "2.18"
 let packagePaths: [String!]! = ["c_src/**", "lib/**", "LICENSE", "Makefile", "mix.exs", "mix.lock", "README.md", "LIBPDFIUM_TAG", "VERSION"]
 let testPaths: [String!]! = packagePaths + ["test/**", "custom/test.pdf"]
 
-type PdfiumDang {
+type Pdfium {
   pub prepareRelease(actor: String!, libpdfiumTag: String, packageVersion: String): Bump! {
     let main = git(url: repositoryUrl).branch("main")
     let tree = main.tree

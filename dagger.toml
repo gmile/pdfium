@@ -1,26 +1,13 @@
-[modules.elixir-sdk]
-source = "dagger.io/sdk/elixir"
-
-[modules.pdfium]
-source = "."
-main = true
-
-[sdks.elixir]
-module = "elixir-sdk"
-
-[sdks.elixir.scopes."."]
-is-module = true
-name = "pdfium"
-
 [modules.dang-sdk]
 source = "dagger.io/sdk/dang"
+
+[modules.pdfium]
+source = ".dagger"
+main = true
 
 [sdks.dang]
 module = "dang-sdk"
 
-[sdks.dang.scopes.".dagger/dang"]
+[sdks.dang.scopes.".dagger"]
 is-module = true
-name = "pdfium-dang"
-
-[modules.pdfium-dang]
-source = ".dagger/dang"
+name = "pdfium"

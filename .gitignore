@@ -31,9 +31,6 @@ custom/pdfium-nif-*.tar.gz
 
 c_src/pdfium_nif.o
 output
-.dagger/dagger_sdk
-.dagger/deps
-.dagger/_build
 
 # nix flake dev shell
 .nix-profile*
