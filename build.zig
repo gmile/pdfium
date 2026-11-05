@@ -4,8 +4,7 @@ const builtin = @import("builtin");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const erts = b.option([]const u8, "erts", "OTP include directory") orelse
-        b.graph.environ_map.get("ERTS_INCLUDE_DIR") orelse @panic("pass -Derts or set ERTS_INCLUDE_DIR");
+    const erts = b.graph.environ_map.get("ERTS_INCLUDE_DIR").?;
     const os = target.result.os.tag;
     const arch = target.result.cpu.arch;
     const abi = target.result.abi;
