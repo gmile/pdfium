@@ -14,15 +14,11 @@ defmodule Pdfium do
   @source_paths ~w(c_src/** lib/pdfium/nif.ex LIBPDFIUM_TAG VERSION)
   @package_paths ~w(c_src/** lib/** LICENSE Makefile mix.exs mix.lock README.md LIBPDFIUM_TAG VERSION)
 
-  defn prepare_release(
-    github_token: Dagger.Secret.t(),
-    actor: String.t(),
-    libpdfium_tag: String.t() | nil,
-    package_version: String.t() | nil
-  ) :: Dagger.GitRef.t() do
+  defn prepare_release(actor: String.t(), libpdfium_tag: String.t() | nil, package_version: String.t() | nil) ::
+         Pdfium.Bump.t() do
     main =
       dag()
-      |> Dagger.Client.git(@repository_url, http_auth_token: github_token)
+      |> Dagger.Client.git(@repository_url)
       |> Dagger.GitRepository.branch("main")
 
     tree = Dagger.GitRef.tree(main)
@@ -31,25 +27,12 @@ defmodule Pdfium do
     with_tag = Dagger.Directory.with_new_file(tree, "LIBPDFIUM_TAG", libpdfium_tag)
     with_version = Dagger.Directory.with_new_file(with_tag, "VERSION", package_version)
 
-    main
-    |> commit(Dagger.Directory.changes(with_tag, tree), "Update libpdfium tag to #{libpdfium_tag}", actor)
-    |> commit(Dagger.Directory.changes(with_version, with_tag), "Update package to version #{package_version}", actor)
-  end
+    ref =
+      main
+      |> commit(Dagger.Directory.changes(with_tag, tree), "Update libpdfium tag to #{libpdfium_tag}", actor)
+      |> commit(Dagger.Directory.changes(with_version, with_tag), "Update package to version #{package_version}", actor)
 
-  defn open_pull_request(head: String.t(), github_token: Dagger.Secret.t()) :: Dagger.Container.t() do
-    {:ok, libpdfium_tag} =
-      dag()
-      |> Dagger.Client.git(@repository_url)
-      |> Dagger.GitRepository.branch(head)
-      |> Dagger.GitRef.tree()
-      |> Dagger.Directory.file("LIBPDFIUM_TAG")
-      |> Dagger.File.contents()
-
-    gh(github_token)
-    |> Dagger.Container.with_exec(
-      ~w"gh pr create --repo #{@repository_slug} --base main --head #{head} --reviewer gmile" ++
-        ["--title", "Bump libpdfium to #{libpdfium_tag}", "--body", ""]
-    )
+    %Pdfium.Bump{ref: ref}
   end
 
   def collect_build_info(src_dir, platform_name, abi) do
@@ -295,11 +278,14 @@ defmodule Pdfium do
     Dagger.GitRef.with_commit(ref, changes, message, now, actor, "#{actor}@users.noreply.github.com")
   end
 
-  defp gh(github_token) do
+  def repository_url, do: @repository_url
+  def repository_slug, do: @repository_slug
+
+  def gh(github_token) do
     dag()
     |> Dagger.Client.container()
     |> Dagger.Container.from(@alpine_image)
-    |> Dagger.Container.with_exec(~w"apk add github-cli")
+    |> Dagger.Container.with_exec(~w"apk add git github-cli")
     |> Dagger.Container.with_secret_variable("GH_TOKEN", github_token)
   end
 

@@ -19,11 +19,7 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
-      - run: gh auth setup-git
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-
-      - name: Push the bump
+      - name: Open a pull request bumping libpdfium
         uses: dagger/dagger-for-github@v8.4.1
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -31,19 +27,7 @@ jobs:
           version: 1.0.0-beta.25
           args: >-
             prepare-release \
-              --github-token env://GITHUB_TOKEN \
               --actor 41898282+github-actions[bot] \
-            push \
-              --branch update-libpdfium
-
-      - name: Open a pull request
-        uses: dagger/dagger-for-github@v8.4.1
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        with:
-          version: 1.0.0-beta.25
-          args: >-
             open-pull-request \
-              --head update-libpdfium \
               --github-token env://GITHUB_TOKEN \
             stdout
