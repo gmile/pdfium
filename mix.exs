@@ -67,6 +67,7 @@ defmodule PDFium.MixProject do
       files: ~w"
         build.zig
         build.zig.zon
+        build
         c_src/pdfium_nif.cpp
         checksum.exs
         lib
