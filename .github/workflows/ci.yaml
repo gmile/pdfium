@@ -35,7 +35,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/zig
-          key: zig-0.17.1-${{ runner.arch }}
+          key: zig-0.17.1-${{ matrix.target }}
 
       - run: mkdir --parents ${{ runner.temp }}/zig
 
