@@ -12,7 +12,6 @@ defmodule PDFium.MixProject do
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:elixir_make] ++ Mix.compilers(),
-      make_env: fn -> %{"FINE_INCLUDE_DIR" => Fine.include_dir()} end,
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps()
@@ -21,6 +20,9 @@ defmodule PDFium.MixProject do
 
   def make_precompiler do
     [
+      make_executable: "zig",
+      make_targets: ["build"],
+      make_args: ["-Doptimize=ReleaseFast", "--prefix", "priv"],
       make_precompiler: {:nif, CCPrecompiler},
       make_precompiler_filename: "pdfium_nif",
       make_precompiler_url:
@@ -55,7 +57,6 @@ defmodule PDFium.MixProject do
   defp deps do
     [
       {:image, "~> 0.1", only: :dev},
-      {:fine, "~> 0.2.0", runtime: false},
       {:cc_precompiler, "~> 0.1", runtime: false},
       {:elixir_make, "~> 0.1", runtime: false}
     ]
@@ -64,15 +65,15 @@ defmodule PDFium.MixProject do
   defp package do
     [
       files: ~w"
+        build.zig
+        build.zig.zon
+        c_src/pdfium_nif.cpp
+        checksum.exs
         lib
         LICENSE
         mix.exs
         README.md
-        c_src/pdfium_nif.cpp
-        Makefile
         VERSION
-        LIBPDFIUM_TAG
-        checksum.exs
       ",
       licenses: ~w"MIT",
       links: %{

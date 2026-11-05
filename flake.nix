@@ -33,6 +33,7 @@
               pkgs.fish
               dagger.packages.${system}.dagger
               pkgs.gh
+              pkgs.zig
             ];
 
             shellHook = ''
