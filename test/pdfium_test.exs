@@ -302,6 +302,17 @@ defmodule PDFiumTest do
     end
   end
 
+  describe "get_page_sizes/1" do
+    test "reports every page as displayed, turned pages included" do
+      pages = [[box: {0, 0, 400, 600}, rotation: 90], [box: {0, 0, 200, 300}]]
+      document = tmp_path() |> Document.write!(pages) |> open!()
+
+      assert {:ok, [[turned, upright]]} = PDFium.get_page_sizes([document])
+      assert %{width: 600.0, height: 400.0} = turned
+      assert %{width: 200.0, height: 300.0} = upright
+    end
+  end
+
   describe "get_annotation_counts/1" do
     test "counts the annotations on each page, in order" do
       {:ok, document} = PDFium.load_document(@annotated)
