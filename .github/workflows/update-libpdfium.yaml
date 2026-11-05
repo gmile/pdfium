@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      - uses: actions/checkout@v6
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -17,14 +19,27 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
-      - name: Open a pull request if a newer libpdfium tag exists
+      - name: Push the bump
         uses: dagger/dagger-for-github@v8.4.1
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           version: 1.0.0-beta.25
           args: >-
-            prepare-release-pull-request \
-              --base stable \
+            prepare-release \
+              --github-token env://GITHUB_TOKEN \
               --actor 41898282+github-actions[bot] \
-              --github-token env://GITHUB_TOKEN
+            push \
+              --branch update-libpdfium
+
+      - name: Open a pull request
+        uses: dagger/dagger-for-github@v8.4.1
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          version: 1.0.0-beta.25
+          args: >-
+            open-pull-request \
+              --head update-libpdfium \
+              --github-token env://GITHUB_TOKEN \
+            stdout
