@@ -15,11 +15,11 @@ let packagePaths: [String!]! = ["c_src/**", "lib/**", "LICENSE", "Makefile", "mi
 let testPaths: [String!]! = packagePaths + ["test/**", "custom/test.pdf"]
 
 type Pdfium {
-  pub prepareRelease(actor: String!, libpdfiumTag: String, packageVersion: String): Bump! {
+  pub prepareRelease(actor: String!): Bump! {
     let main = git(url: repositoryUrl).branch("main")
     let tree = main.tree
-    let tag = libpdfiumTag ?? latestLibpdfiumTag
-    let version = packageVersion ?? nextPatchVersion(tree)
+    let tag = latestLibpdfiumTag
+    let version = nextPatchVersion(tree)
     let withTag = tree.withNewFile("LIBPDFIUM_TAG", tag)
     let withVersion = withTag.withNewFile("VERSION", version)
     let first = commit(main, withTag.changes(tree), `Update libpdfium tag to ${tag}`, actor)
