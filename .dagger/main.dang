@@ -43,7 +43,7 @@ type Pdfium {
       .withFile("/src/build.zig", srcDir.file("build.zig"))
       .withFile("/src/build.zig.zon", srcDir.file("build.zig.zon"))
       .withWorkdir("/src")
-      .withExec(["zig", "build", "--help"])
+      .withExec(["zig", "build", "--help", "-Derts=/usr/local/lib/erlang/usr/include"])
       .withDirectory("/src", srcDir)
       .withExec(["zig", "build", `-Dtarget=${zigTargets[target]!}`, "-Doptimize=ReleaseFast", "-Derts=/usr/local/lib/erlang/usr/include", "--prefix", "/build"])
       .withExec(["tar", "--create", "--verbose", `--file=${outputPath}`, "--directory", "/build", "pdfium_nif.so", library])
