@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - VERSION
+      - build.zig.zon
 
 jobs:
   build:
