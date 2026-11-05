@@ -11,3 +11,16 @@ module = "elixir-sdk"
 [sdks.elixir.scopes."."]
 is-module = true
 name = "pdfium"
+
+[modules.dang-sdk]
+source = "dagger.io/sdk/dang"
+
+[sdks.dang]
+module = "dang-sdk"
+
+[sdks.dang.scopes.".dagger/dang"]
+is-module = true
+name = "pdfium-dang"
+
+[modules.pdfium-dang]
+source = ".dagger/dang"

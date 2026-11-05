@@ -1,0 +1,170 @@
+let repositoryUrl = "https://github.com/gmile/pdfium"
+let repositorySlug = "gmile/pdfium"
+let libpdfiumBinariesUrl = "https://github.com/bblanchon/pdfium-binaries"
+let fineUrl = "https://github.com/elixir-nx/fine"
+let fineTag = "v0.2.0"
+let alpineImage = "alpine:3.24.3"
+let gccImage = "gcc:16.2-trixie"
+let images: Map[String!]! = ["glibc": "hexpm/elixir:1.20.5-erlang-29.1.2-ubuntu-noble-20261024.1", "musl": "hexpm/elixir:1.20.5-erlang-29.1.2-alpine-3.24.3"]
+let erlangPlatforms: Map[String!]! = ["linux/arm64": "aarch64", "linux/amd64": "x86_64"]
+let pdfiumPlatforms: Map[String!]! = ["linux/arm64": "arm64", "linux/amd64": "x64"]
+let erlangAbis: Map[String!]! = ["glibc": "linux-gnu", "musl": "linux-musl"]
+let pdfiumAbis: Map[String!]! = ["glibc": "linux", "musl": "linux-musl"]
+let nifVersion = "2.18"
+let packagePaths: [String!]! = ["c_src/**", "lib/**", "LICENSE", "Makefile", "mix.exs", "mix.lock", "README.md", "LIBPDFIUM_TAG", "VERSION"]
+let testPaths: [String!]! = packagePaths + ["test/**", "custom/test.pdf"]
+
+type PdfiumDang {
+  pub prepareRelease(actor: String!, libpdfiumTag: String, packageVersion: String): Bump! {
+    let main = git(url: repositoryUrl).branch("main")
+    let tree = main.tree
+    let tag = libpdfiumTag ?? latestLibpdfiumTag
+    let version = packageVersion ?? nextPatchVersion(tree)
+    let withTag = tree.withNewFile("LIBPDFIUM_TAG", tag)
+    let withVersion = withTag.withNewFile("VERSION", version)
+    let first = commit(main, withTag.changes(tree), `Update libpdfium tag to ${tag}`, actor)
+
+    Bump(ref: commit(first, withVersion.changes(withTag), `Update package to version ${version}`, actor))
+  }
+
+  pub precompile(srcDir: Directory!, platformName: String!, abi: String!): File! {
+    let pdfiumTag = srcDir.file("LIBPDFIUM_TAG").contents.replace("/", "%2F")
+    let packageVersion = srcDir.file("VERSION").contents
+    let erlangPlatform = erlangPlatforms[platformName]!
+    let erlangAbi = erlangAbis[abi]!
+    let pdfiumPlatform = pdfiumPlatforms[platformName]!
+    let pdfiumAbi = pdfiumAbis[abi]!
+    let outputPath = `/build/pdfium-nif-${nifVersion}-${erlangPlatform}-${erlangAbi}-${packageVersion}.tar.gz`
+    let fineHeaders = git(url: fineUrl).tag(fineTag).tree.directory("c_include")
+    let libpdfium = http(url: `${libpdfiumBinariesUrl}/releases/download/${pdfiumTag}/pdfium-${pdfiumAbi}-${pdfiumPlatform}.tgz`).extract
+
+    buildImage(platformName, abi)
+      .withWorkdir("/build")
+      .withFile("/build/pdfium_nif.cpp", srcDir.file("c_src/pdfium_nif.cpp"))
+      .withDirectory("/fine", fineHeaders)
+      .withDirectory("/pdfium", libpdfium)
+      .withExec([
+        "g++", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "--pic", "-fvisibility=hidden",
+        "--optimize=2", "--std=c++17", "--include-directory=/usr/local/lib/erlang/usr/include",
+        "--include-directory=/pdfium/include", "--include-directory=/fine", "--compile",
+        "--output=pdfium_nif.o", "pdfium_nif.cpp",
+      ])
+      .withExec([
+        "g++", "pdfium_nif.o", "--shared", "--output=pdfium_nif.so",
+        "--library-directory=/usr/local/lib/erlang/usr/lib", "--library-directory=/pdfium/lib",
+        "-static-libstdc++", "-Wl,-s", "-Wl,--disable-new-dtags", "-Wl,-rpath,$ORIGIN", "-l:libpdfium.so",
+      ])
+      .withExec([
+        "tar", "--create", "--verbose", `--file=${outputPath}`,
+        "--directory", "/build", "pdfium_nif.so", "--directory", "/pdfium/lib", "libpdfium.so",
+      ])
+      .file(outputPath)
+  }
+
+  pub test(precompiled: File!, srcDir: Directory!, platformName: String!, abi: String!): File! {
+    container(platform: platformName :: Platform!)
+      .from(images[abi]!)
+      .withDirectory("/pdfium", srcDir)
+      .withDirectory("/pdfium/priv", precompiled.extract)
+      .withWorkdir("/pdfium")
+      .withExec(["mix", "local.hex", "--force"])
+      .withExec(["mix", "deps.get"])
+      .withExec(["mix", "test"])
+      .sync
+    precompiled
+  }
+
+  pub ci(ws: Workspace!, platformName: String!, abi: String!): File! {
+    let srcDir = ws.directory(".", include: testPaths)
+    test(precompile(srcDir, platformName, abi), srcDir, platformName, abi)
+  }
+
+  pub amd64Glibc(ws: Workspace!): Void @check { ci(ws, "linux/amd64", "glibc").sync; null }
+  pub amd64Musl(ws: Workspace!): Void @check { ci(ws, "linux/amd64", "musl").sync; null }
+  pub arm64Glibc(ws: Workspace!): Void @check { ci(ws, "linux/arm64", "glibc").sync; null }
+  pub arm64Musl(ws: Workspace!): Void @check { ci(ws, "linux/arm64", "musl").sync; null }
+
+  pub githubRelease(ws: Workspace!, artifacts: Directory!, sha: String!, githubToken: Secret!): Release! {
+    let package = ws.directory(".", include: packagePaths)
+    let version = package.file("VERSION").contents
+    let assets = artifacts.entries.map { item => `/artifacts/${item}` }
+
+    Release(
+      package: package,
+      receipt: gh(githubToken)
+        .withDirectory("/artifacts", artifacts)
+        .withExec(
+          ["gh", "release", "create", `v${version}`, "--repo", repositorySlug, "--target", sha, "--title", `v${version}`] + assets,
+          redirectStdout: "/receipt",
+        )
+        .file("/receipt"),
+    )
+  }
+}
+
+type Bump {
+  pub ref: GitRef!
+
+  pub openPullRequest(githubToken: Secret!): Container! {
+    gh(githubToken)
+      .withDirectory("/pdfium", ref.tree(depth: 0))
+      .withWorkdir("/pdfium")
+      .withExec(["gh", "auth", "setup-git"])
+      .withExec(["git", "push", repositoryUrl, "HEAD:refs/heads/update-libpdfium"])
+      .withExec(["gh", "pr", "create", "--repo", repositorySlug, "--base", "main", "--head", "update-libpdfium", "--reviewer", "gmile", "--fill-first"])
+  }
+}
+
+type Release {
+  pub package: Directory!
+  pub receipt: File!
+
+  pub hexPublish(hexApiKey: Secret!): Container! {
+    container
+      .from(images["musl"]!)
+      .withDirectory("/pdfium", package)
+      .withFile("/pdfium/release", receipt)
+      .withWorkdir("/pdfium")
+      .withExec(["mix", "local.hex", "--force"])
+      .withExec(["mix", "deps.get"])
+      .withExec(["mix", "elixir_make.checksum", "--all"])
+      .withSecretVariable("HEX_API_KEY", hexApiKey)
+      .withExec(["mix", "hex.publish", "package", "--yes"])
+  }
+}
+
+let commit(ref: GitRef!, changes: Changeset!, message: String!, actor: String!): GitRef! {
+  ref.withCommit(changes, message, currentTimestamp, actor, `${actor}@users.noreply.github.com`)
+}
+
+let gh(githubToken: Secret!): Container! {
+  container
+    .from(alpineImage)
+    .withExec(["apk", "add", "git", "github-cli"])
+    .withSecretVariable("GH_TOKEN", githubToken)
+}
+
+let buildImage(platformName: String!, abi: String!): Container! {
+  let base = container(platform: platformName :: Platform!)
+
+  if (abi == "glibc") {
+    base.from(gccImage).withDirectory("/usr/local/lib/erlang", base.from(images[abi]!).directory("/usr/local/lib/erlang"))
+  } else {
+    base.from(images[abi]!).withExec(["apk", "add", "build-base", "tar"])
+  }
+}
+
+let nextPatchVersion(tree: Directory!): String! {
+  let parts = tree.file("VERSION").contents.split(".")
+  `${parts[0]!}.${parts[1]!}.${(JSON.decode(parts[2]!) :: Int!) + 1}`
+}
+
+let latestLibpdfiumTag: String! {
+  git(url: libpdfiumBinariesUrl)
+    .tags(patterns: ["chromium/*"])
+    .reduce("chromium/0") { acc, tag => if (tagNumber(tag) > tagNumber(acc)) tag else acc }
+}
+
+let tagNumber(tag: String!): Int! {
+  JSON.decode(tag.trimPrefix("chromium/")) :: Int!
+}

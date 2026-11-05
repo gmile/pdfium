@@ -1,0 +1,5 @@
+name = "pdfium-dang"
+engineVersion = "v1.0.0-beta.25"
+
+[runtime]
+  source = "dang"
