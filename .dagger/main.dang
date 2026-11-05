@@ -15,7 +15,7 @@ let archives: Map[String!]! = [
   "aarch64-apple-darwin": "mac-arm64", "x86_64-apple-darwin": "mac-x64",
 ]
 let nifVersion = "2.18"
-let packagePaths: [String!]! = ["build.zig", "build.zig.zon", "c_src/**", "lib/**", "LICENSE", "mix.exs", "mix.lock", "README.md", "VERSION"]
+let packagePaths: [String!]! = ["build.zig", "build.zig.zon", "build/**", "c_src/**", "lib/**", "LICENSE", "mix.exs", "mix.lock", "README.md", "VERSION"]
 let testPaths: [String!]! = packagePaths + ["test/**"]
 
 type Pdfium {
