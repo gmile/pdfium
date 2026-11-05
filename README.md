@@ -19,8 +19,7 @@ Native bindings for pdfium project
 ## Developing
 
 The development environment is a Nix shell carrying Erlang, Elixir, the Dagger
-CLI at the version the module pins, `gh` and the tools `custom/build-for-mac.sh`
-fetches its dependencies with:
+CLI at the version the module pins and `gh`:
 
 ```sh
 nix develop
