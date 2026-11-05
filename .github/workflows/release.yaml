@@ -10,7 +10,6 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/ci.yaml
-    secrets: inherit
 
   release:
     needs: build

@@ -11,16 +11,24 @@ on:
       - main
 
 jobs:
-  build-for-linux-amd64:
-    runs-on: ubuntu-24.04
+  build:
+    runs-on: ${{ matrix.runner }}
 
     strategy:
       matrix:
-        abi:
-          - glibc
-          - musl
-        platform:
-          - amd64
+        include:
+          - target: aarch64-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: aarch64-linux-musl
+            runner: ubuntu-24.04-arm
+          - target: aarch64-apple-darwin
+            runner: ubuntu-24.04-arm
+          - target: x86_64-linux-gnu
+            runner: ubuntu-24.04
+          - target: x86_64-linux-musl
+            runner: ubuntu-24.04
+          - target: x86_64-apple-darwin
+            runner: ubuntu-24.04
 
     steps:
       - name: Precompile and test
@@ -30,8 +38,7 @@ jobs:
           dagger-flags: --progress plain --workspace github.com/gmile/pdfium@${{ github.sha }}
           args: >-
             ci \
-              --platform-name linux/${{ matrix.platform }} \
-              --abi ${{ matrix.abi }} \
+              --target ${{ matrix.target }} \
             export \
               --path . \
               --allowParentDirPath
@@ -39,66 +46,5 @@ jobs:
       - name: Upload files
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.platform }}-${{ matrix.abi }}
+          name: ${{ matrix.target }}
           path: pdfium-nif-*
-
-  build-for-linux-arm64:
-    runs-on: ubuntu-24.04-arm
-
-    strategy:
-      matrix:
-        abi:
-          - glibc
-          - musl
-        platform:
-          - arm64
-
-    steps:
-      - name: Precompile and test
-        uses: dagger/dagger-for-github@v8.4.1
-        with:
-          version: 1.0.0-beta.25
-          dagger-flags: --progress plain --workspace github.com/gmile/pdfium@${{ github.sha }}
-          args: >-
-            ci \
-              --platform-name linux/${{ matrix.platform }} \
-              --abi ${{ matrix.abi }} \
-            export \
-              --path . \
-              --allowParentDirPath
-
-      - name: Upload files
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.platform }}-${{ matrix.abi }}
-          path: pdfium-nif-*
-
-  build-for-macos:
-    runs-on: macos-14
-    steps:
-      - uses: actions/create-github-app-token@v3
-        id: app-token
-        with:
-          app-id: ${{ vars.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      - name: Checkout code
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/checkout@v7
-
-      - name: Build
-        run: |
-          pushd custom
-          ./build-for-mac.sh arm64
-          ./build-for-mac.sh x86_64
-          popd
-
-      - name: Upload files
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: macOS-builds
-          path: custom/pdfium-nif-*
