@@ -62,8 +62,7 @@ type Pdfium {
   }
 
   pub test(precompiled: File!, srcDir: Directory!, platformName: String!, abi: String!): File! {
-    container(platform: platformName :: Platform!)
-      .from(images[abi]!)
+    testImage(platformName, abi)
       .withDirectory("/pdfium", srcDir)
       .withDirectory("/pdfium/priv", precompiled.extract)
       .withWorkdir("/pdfium")
@@ -142,6 +141,13 @@ let gh(githubToken: Secret!): Container! {
     .from(alpineImage)
     .withExec(["apk", "add", "git", "github-cli"])
     .withSecretVariable("GH_TOKEN", githubToken)
+}
+
+let testImage(platformName: String!, abi: String!): Container! {
+  let base = container(platform: platformName :: Platform!).from(images[abi]!)
+  let cacerts = "/etc/ssl/certs/ca-certificates.crt"
+
+  if (abi == "glibc") base.withFile(cacerts, container.from(images["musl"]!).file(cacerts)) else base
 }
 
 let buildImage(platformName: String!, abi: String!): Container! {
