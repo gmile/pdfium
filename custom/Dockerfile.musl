@@ -1,5 +1,0 @@
-#syntax=docker/dockerfile:1
-
-FROM hexpm/elixir:1.20.2-erlang-29.0.3-alpine-3.23.5
-
-RUN apk add build-base tar jq coreutils
