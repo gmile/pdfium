@@ -29,14 +29,9 @@
               beam.erlang
               elixir
               pkgs.fish
-              # custom/build-for-mac.sh reads builds.json and fetches OTP,
-              # libpdfium and the Fine headers with these. The shell brings no
-              # compiler of its own: the script builds against the OTP headers it
-              # downloads and the macOS SDK, and a wrapped cc puts link flags on
-              # the compile step, which its -Werror will not have.
+              pkgs.gh
               pkgs.jq
               pkgs.wget
-              pkgs.git
             ];
 
             shellHook = ''
