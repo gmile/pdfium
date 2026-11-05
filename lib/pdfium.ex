@@ -21,9 +21,17 @@ defmodule PDFium do
 
   @doc """
   Opens a document.
+
+  The file is read whole before PDFium is given it, so PDFium never reads the
+  disk while it holds the lock every call waits on.
   """
   @spec load_document(Path.t()) :: {:ok, reference()} | {:error, load_error()}
-  defdelegate load_document(filename), to: PDFium.NIF
+  def load_document(path) do
+    case File.read(path) do
+      {:ok, contents} -> load_memory_document(contents)
+      {:error, _reason} -> {:error, :file}
+    end
+  end
 
   @doc """
   Opens a document from its contents.
