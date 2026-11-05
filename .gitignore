@@ -37,3 +37,5 @@ output
 
 # nix flake dev shell
 .nix-profile*
+
+checksum.exs
