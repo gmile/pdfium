@@ -7,7 +7,3 @@ main = true
 
 [sdks.dang]
 module = "dang-sdk"
-
-[sdks.dang.scopes.".dagger"]
-is-module = true
-name = "pdfium"
