@@ -90,7 +90,8 @@ gh workflow run update-libpdfium.yaml
 
 ## Releasing manually
 
-1. push a branch with a new libpdfium tag and open a pull request for it:
+1. push a branch with a new libpdfium tag and open a pull request for it. The push
+   authenticates with your git credential helper, which `gh auth setup-git` configures:
 
     ```sh
     env GITHUB_TOKEN=(gh auth token) dagger call prepare-release \

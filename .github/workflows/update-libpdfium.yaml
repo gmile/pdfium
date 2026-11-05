@@ -19,6 +19,10 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
+      - run: gh auth setup-git
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
       - name: Push the bump
         uses: dagger/dagger-for-github@v8.4.1
         env:
