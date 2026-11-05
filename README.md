@@ -18,12 +18,16 @@ Native bindings for pdfium project
 
 ## Developing
 
-The development environment is a Nix shell carrying Erlang, Elixir, the Dagger
-CLI at the version the module pins and `gh`:
+The development environment is a Nix shell carrying Erlang, Elixir, zig, the
+Dagger CLI at the version the module pins and `gh`:
 
 ```sh
 nix develop
 ```
+
+`mix compile` builds the NIF for this machine with `zig build`, driven by
+`build.zig`, which fetches the libpdfium archive and the Fine headers declared in
+`build.zig.zon`.
 
 ## Usage
 
@@ -53,7 +57,8 @@ nix develop
 ## Releasing
 
 Every Monday the `Update to latest libpdfium` workflow opens a pull request that
-bumps `LIBPDFIUM_TAG` to the latest tag and `VERSION` to the next patch. Merging
+bumps the libpdfium archives in `build.zig.zon` to the latest tag and `VERSION`
+to the next patch. Merging
 it into `main` runs the `Release` workflow, which builds the artifacts, creates
 the GitHub release and publishes the package to hex. Run the workflow by hand to
 release outside the schedule:
@@ -62,8 +67,9 @@ release outside the schedule:
 gh workflow run update-libpdfium.yaml
 ```
 
-For any other tag or version, open a pull request that edits the two files by
-hand. Merging it releases the same way.
+For any other tag or version, open a pull request that edits `VERSION` by hand
+and points `build.zig.zon` at the archives of that tag with `zig fetch --save`.
+Merging it releases the same way.
 
 ## Running CI steps locally
 
