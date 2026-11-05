@@ -45,7 +45,7 @@ type Pdfium {
   }
 
   pub zigCache(ws: Workspace!, target: String!, cache: Directory): Directory! {
-    build(ws.directory(".", include: packagePaths), target, cache ?? directory).directory("/root/.cache/zig")
+    build(ws.directory(".", include: testPaths), target, cache ?? directory).directory("/root/.cache/zig")
   }
 
   pub test(precompiled: File!, srcDir: Directory!, target: String!): File! {
