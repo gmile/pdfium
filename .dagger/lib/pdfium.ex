@@ -12,6 +12,7 @@ defmodule Pdfium do
   @musl_image "hexpm/elixir:1.20.5-erlang-29.1.2-alpine-3.24.3"
   @nif_version "2.18"
   @source_paths ~w(c_src/** lib/pdfium/nif.ex LIBPDFIUM_TAG VERSION)
+  @package_paths ~w(c_src/** lib/** LICENSE Makefile mix.exs mix.lock README.md LIBPDFIUM_TAG VERSION)
 
   defn prepare_release(
     github_token: Dagger.Secret.t(),
@@ -220,92 +221,34 @@ defmodule Pdfium do
     check(ws, "linux/arm64", "musl")
   end
 
-  defn create_release(pr: String.t(), actor: String.t(), github_token: Dagger.Secret.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Void.t() do
-    {:ok, now} = Dagger.Client.current_timestamp(dag())
+  defn github_release(
+    ws: Dagger.Workspace.t(),
+    artifacts: Dagger.Directory.t(),
+    sha: String.t(),
+    github_token: Dagger.Secret.t()
+  ) :: Dagger.Container.t() do
+    package_version = package_version(Dagger.Workspace.directory(ws, "/", include: ~w(VERSION)))
+    {:ok, entries} = Dagger.Directory.entries(artifacts)
 
-    gh =
-      gh(github_token)
-      |> Dagger.Container.with_env_variable("CACHE_BUSTER", now)
+    gh(github_token)
+    |> Dagger.Container.with_directory("/artifacts", artifacts)
+    |> Dagger.Container.with_exec(
+      ~w"gh release create v#{package_version} --repo #{@repository_slug} --target #{sha} --title v#{package_version}" ++
+        Enum.map(entries, &Path.join("/artifacts", &1))
+    )
+  end
 
-    {:ok, <<head_ref::binary-size(40), "\n", base_ref_name::binary >>} =
-      gh
-      |> Dagger.Container.with_exec(~w"gh pr view #{pr} --json headRefOid,baseRefName --jq .headRefOid,.baseRefName --repo #{@repository_slug}")
-      |> Dagger.Container.stdout()
-
-    base_ref_name = String.trim_trailing(base_ref_name)
-
-    run_id = ~w"
-      gh run list
-        --workflow ci.yaml
-        --commit #{head_ref}
-        --status success
-        --limit 1
-        --json databaseId
-        --repo #{@repository_slug}
-        --jq .[0].databaseId
-    "
-
-    {:ok, run_id} =
-      gh
-      |> Dagger.Container.with_exec(run_id)
-      |> Dagger.Container.stdout()
-
-    gh = Dagger.Container.with_exec(gh, ~w"gh run download #{run_id} --dir /artifacts --repo #{@repository_slug}")
-    artifacts = Dagger.Container.directory(gh, "/artifacts")
-
-    {:ok, entries} = Dagger.Directory.glob(artifacts, "**/*.tar.gz")
-    entries = Enum.map(entries, &"/artifacts/#{&1}")
-
-    {:ok, checksums} =
-      gh
-      |> Dagger.Container.with_exec(~w"sha256sum" ++ entries)
-      |> Dagger.Container.stdout()
-
-    checksums =
-      checksums
-      |> String.split("\n", trim: true)
-      |> Enum.map(&String.split(&1, ~r/\s+/, parts: 2))
-      |> Enum.map(fn [hash, path] -> {Path.basename(path), "sha256:" <> hash} end)
-      |> Map.new()
-
-    repository = Dagger.Client.git(dag(), @repository_url, http_auth_token: github_token)
-    base_ref = Dagger.GitRepository.branch(repository, base_ref_name)
-    base_tree = Dagger.GitRef.tree(base_ref)
-
-    {:ok, package_version} =
-      base_tree
-      |> Dagger.Directory.file("VERSION")
-      |> Dagger.File.contents()
-
-    with_checksums = Dagger.Directory.with_new_file(base_tree, "checksum.exs", inspect(checksums, pretty: true))
-
-    {:ok, release_sha} =
-      base_ref
-      |> commit(Dagger.Directory.changes(with_checksums, base_tree), "Update checksums", actor)
-      |> Dagger.GitRef.push(to: repository, branch: base_ref_name)
-      |> Dagger.GitPushResult.sha()
-
-    {:ok, _} =
-      gh
-      |> Dagger.Container.with_exec(
-        ~w"gh release create v#{package_version} --repo #{@repository_slug} --target #{release_sha}" ++
-          ["--title", "v#{package_version}"] ++ entries
-      )
-      |> Dagger.Container.sync()
-
-    {:ok, _} =
-      dag()
-      |> Dagger.Client.container()
-      |> Dagger.Container.from(@musl_image)
-      |> Dagger.Container.with_directory("/pdfium", with_checksums)
-      |> Dagger.Container.with_workdir("/pdfium")
-      |> Dagger.Container.with_exec(~w"mix local.hex --force")
-      |> Dagger.Container.with_exec(~w"mix do deps.get + deps.compile")
-      |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
-      |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
-      |> Dagger.Container.sync()
-
-    :ok
+  defn hex_publish(ws: Dagger.Workspace.t(), hex_api_key: Dagger.Secret.t()) :: Dagger.Container.t() do
+    dag()
+    |> Dagger.Client.container()
+    |> Dagger.Container.from(@musl_image)
+    |> Dagger.Container.with_directory("/pdfium", Dagger.Workspace.directory(ws, "/", include: @package_paths))
+    |> Dagger.Container.with_workdir("/pdfium")
+    |> Dagger.Container.with_exec(~w"mix local.hex --force")
+    |> Dagger.Container.with_exec(~w"mix deps.get")
+    |> Dagger.Container.with_exec(~w"mix elixir_make.checksum --all")
+    |> Dagger.Container.with_secret_variable("HEX_API_KEY", hex_api_key)
+    |> Dagger.Container.with_exec(~w"mix hex.publish package --yes")
   end
 
   def test_script do

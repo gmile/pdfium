@@ -1,18 +1,28 @@
 name: Release
 
 on:
-  pull_request:
-    types:
-      - closed
+  push:
     branches:
-      - stable
+      - main
+    paths:
+      - VERSION
 
 jobs:
+  build:
+    uses: ./.github/workflows/ci.yaml
+    secrets: inherit
+
   release:
+    needs: build
     runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
 
       - uses: actions/create-github-app-token@v3
         id: app-token
@@ -21,17 +31,26 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
-      - name: Release
-        if: github.event.pull_request.merged == true
+      - name: Create a GitHub release
         uses: dagger/dagger-for-github@v8.4.1
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          version: 1.0.0-beta.25
+          args: >-
+            github-release \
+              --artifacts artifacts \
+              --sha ${{ github.sha }} \
+              --github-token env://GITHUB_TOKEN \
+            stdout
+
+      - name: Publish to hex
+        uses: dagger/dagger-for-github@v8.4.1
+        env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
         with:
           version: 1.0.0-beta.25
           args: >-
-            create-release \
-              --pr ${{ github.event.pull_request.number }} \
-              --actor ${{ github.actor }} \
-              --github-token env://GITHUB_TOKEN \
-              --hex-api-key env://HEX_API_KEY
+            hex-publish \
+              --hex-api-key env://HEX_API_KEY \
+            stdout

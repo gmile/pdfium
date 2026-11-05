@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   pull_request:
     types:
       - opened
@@ -8,7 +9,6 @@ on:
       - reopened
     branches:
       - main
-      - stable
 
 jobs:
   build-for-linux-amd64:
