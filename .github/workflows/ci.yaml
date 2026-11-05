@@ -32,8 +32,12 @@ jobs:
             runner: ubuntu-24.04
 
     steps:
+      - uses: crazy-max/ghaction-github-runtime@v4
+
       - name: Precompile and test
         uses: dagger/dagger-for-github@v8.4.1
+        env:
+          _EXPERIMENTAL_DAGGER_CACHE_CONFIG: type=gha,mode=max,url=${{ env.ACTIONS_CACHE_URL }},url_v2=${{ env.ACTIONS_RESULTS_URL }},token=${{ env.ACTIONS_RUNTIME_TOKEN }}
         with:
           version: 1.0.0-beta.25
           dagger-flags: --progress plain --workspace github.com/gmile/pdfium@${{ github.sha }}

@@ -40,9 +40,11 @@ type Pdfium {
     let library = if (darwin(target)) "libpdfium.dylib" else "libpdfium.so"
 
     buildImage
-      .withDirectory("/src", srcDir)
+      .withFile("/src/build.zig", srcDir.file("build.zig"))
+      .withFile("/src/build.zig.zon", srcDir.file("build.zig.zon"))
       .withWorkdir("/src")
-      .withMountedCache("/root/.cache/zig", cacheVolume(key: "zig"))
+      .withExec(["zig", "build", "--help"])
+      .withDirectory("/src", srcDir)
       .withExec(["zig", "build", `-Dtarget=${zigTargets[target]!}`, "-Doptimize=ReleaseFast", "-Derts=/usr/local/lib/erlang/usr/include", "--prefix", "/build"])
       .withExec(["tar", "--create", "--verbose", `--file=${outputPath}`, "--directory", "/build", "pdfium_nif.so", library])
       .file(outputPath)
