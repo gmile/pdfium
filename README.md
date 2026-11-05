@@ -106,23 +106,8 @@ gh run download 42028488533 --dir artifacts
 
 ## Updating OTP version (for macOS)
 
-```sh
-wget https://github.com/erlef/otp_builds/releases/download/OTP-29.1.2/OTP-29.1.2-macos-amd64.tar.gz /tmp
-wget https://github.com/erlef/otp_builds/releases/download/OTP-29.1.2/OTP-29.1.2-macos-arm64.tar.gz /tmp
-
-shasum -a 256 /tmp/OTP-29.1.2-macos-amd64.tar.gz
-shasum -a 256 /tmp/OTP-29.1.2-macos-arm64.tar.gz
-
-# Then edit custom/builds.json by inserting the hashes
-```
-
-## Repository settings the workflows rely on
-
-* a GitHub App installed on the repository with write access to contents and
-  pull requests; its id is the `GH_APP_ID` variable and its private key the
-  `GH_APP_PRIVATE_KEY` secret
-* the `HEX_API_KEY` secret for `mix hex.publish`
-* required checks named after the CI jobs, one per matrix entry
+Edit `otp=` in `custom/build-for-mac.sh`. The script downloads that version
+from [erlef/otp_builds](https://github.com/erlef/otp_builds/releases).
 
 ## Known issues
 

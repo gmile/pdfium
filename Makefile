@@ -5,7 +5,7 @@ TARGETS = priv/libpdfium.dylib priv/pdfium_nif.so
 all: $(TARGETS)
 
 $(TARGETS): c_src/pdfium_nif.cpp
-	cd custom && ./build-for-mac.sh macos arm64 29.1.2
+	cd custom && ./build-for-mac.sh arm64
 
 clean:
 	rm -rf $(TARGETS)

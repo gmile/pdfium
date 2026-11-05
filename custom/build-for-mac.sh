@@ -1,23 +1,23 @@
 set -ex
 
-# TODO: script to update builds.json
+arch=$1
+otp=29.1.2
+fine_tag=v0.2.0
+nif_version=2.18
 
-os=$1   # mac, linux, linux-musl
-arch=$2 # arm64, amd64
-otp=$3  # 29.0.3
+case $arch in
+  arm64) otp_arch=arm64; pdfium_arch=arm64 ;;
+  x86_64) otp_arch=amd64; pdfium_arch=x64 ;;
+esac
 
-eval $(jq -r --arg os "$os" \
-           --arg arch "$arch" \
-           --arg otp "$otp" \
-           '.builds[] |
-            select(.os == $os and .arch == $arch and .otp == $otp) |
-            to_entries | .[] | "\(.key)=\(.value)"' builds.json)
+otp_download_link=https://github.com/erlef/otp_builds/releases/download/OTP-$otp/OTP-$otp-macos-$otp_arch.tar.gz
+pdfium_download_link=https://github.com/bblanchon/pdfium-binaries/releases/download/$(sed 's|/|%2F|' ../LIBPDFIUM_TAG)/pdfium-mac-$pdfium_arch.tgz
 
 otp_directory_name=$(basename $otp_download_link .tar.gz)
 otp_archive_name=$(basename $otp_download_link)
 pdfium_directory_name=$(basename $pdfium_download_link .tgz)
 pdfium_archive_name=$(basename $pdfium_download_link)
-test_directory_name=${os}-${arch}-${otp}-test
+test_directory_name=macos-${arch}-${otp}-test
 
 # When invoked by elixir_make (mix compile), FINE_INCLUDE_DIR points at
 # the hex-packaged Fine headers. When invoked directly (CI), fetch them.
@@ -42,13 +42,11 @@ mkdir $test_directory_name
 mkdir $pdfium_directory_name
 
 # 2. Download Erlang
-wget --quiet $otp_download_link
-shasum --algorithm 256 --check <<< "$otp_sha256sum  $otp_archive_name"
+curl --silent --location --output $otp_archive_name $otp_download_link
 tar --extract --gunzip --directory=$otp_directory_name < $otp_archive_name
 
 # 3. Download PDFium
-wget --quiet $pdfium_download_link
-shasum --algorithm 256 --check <<< "$pdfium_sha256sum  $pdfium_archive_name"
+curl --silent --location --output $pdfium_archive_name $pdfium_download_link
 tar --extract --gunzip --directory=$pdfium_directory_name < $pdfium_archive_name
 
 # 4. Fetch Fine headers (only if not supplied via FINE_INCLUDE_DIR)
