@@ -2,19 +2,13 @@ let repositoryUrl = "https://github.com/gmile/pdfium"
 let repositorySlug = "gmile/pdfium"
 let libpdfiumBinariesUrl = "https://github.com/bblanchon/pdfium-binaries"
 let alpineImage = "alpine:3.24.3"
-let images: Map[String!]! = ["glibc": "hexpm/elixir:1.20.5-erlang-29.1.2-ubuntu-noble-20261024.1", "musl": "hexpm/elixir:1.20.5-erlang-29.1.2-alpine-3.24.3"]
 let zigVersion = "0.17.1"
-let zigTargets: Map[String!]! = [
-  "aarch64-linux-gnu": "aarch64-linux-gnu.2.17", "aarch64-linux-musl": "aarch64-linux-musl",
-  "x86_64-linux-gnu": "x86_64-linux-gnu.2.17", "x86_64-linux-musl": "x86_64-linux-musl",
-  "aarch64-apple-darwin": "aarch64-macos", "x86_64-apple-darwin": "x86_64-macos",
-]
+let images: Map[String!]! = ["glibc": "hexpm/elixir:1.20.5-erlang-29.1.2-ubuntu-noble-20261024.1", "musl": "hexpm/elixir:1.20.5-erlang-29.1.2-alpine-3.24.3"]
 let archives: Map[String!]! = [
   "aarch64-linux-gnu": "linux-arm64", "aarch64-linux-musl": "linux-musl-arm64",
   "x86_64-linux-gnu": "linux-x64", "x86_64-linux-musl": "linux-musl-x64",
   "aarch64-apple-darwin": "mac-arm64", "x86_64-apple-darwin": "mac-x64",
 ]
-let nifVersion = "2.18"
 let packagePaths: [String!]! = ["build.zig", "build.zig.zon", "c_src/**", "lib/**", "LICENSE", "mix.exs", "mix.lock", "README.md"]
 let testPaths: [String!]! = packagePaths + ["test/**"]
 
@@ -24,7 +18,7 @@ type Pdfium {
     let tree = main.tree
     let tag = latestLibpdfiumTag
     let next = nextPatchVersion(tree)
-    let fetched = archives.keys.reduce(buildImage.withFile("/src/build.zig", tree.file("build.zig")).withFile("/src/build.zig.zon", tree.file("build.zig.zon")).withWorkdir("/src")) { acc, target =>
+    let fetched = archives.keys.reduce(buildImage(tree)) { acc, target =>
       acc.withExec(["zig", "fetch", `--save=pdfium_${target}`, archiveUrl(tag, target)])
     }.file("/src/build.zig.zon").contents
     let withTag = tree.withNewFile("build.zig.zon", fetched)
@@ -35,17 +29,14 @@ type Pdfium {
   }
 
   pub precompile(srcDir: Directory!, target: String!, cache: Directory): File! {
-    let packageVersion = version(srcDir)
-    let outputPath = `/build/pdfium-nif-${nifVersion}-${target}-${packageVersion}.tar.gz`
+    let built = build(srcDir, target, cache ?? directory)
+    let nifVersion = built.withExec(["erl", "-noshell", "-eval", "io:format(erlang:system_info(nif_version)), halt()."]).stdout
+    let outputPath = `/build/pdfium-nif-${nifVersion}-${target}-${version(srcDir)}.tar.gz`
     let library = if (darwin(target)) "libpdfium.dylib" else "libpdfium.so"
 
-    build(srcDir, target, cache ?? directory)
+    built
       .withExec(["tar", "--create", "--verbose", `--file=${outputPath}`, "--directory", "/build", "pdfium_nif.so", library])
       .file(outputPath)
-  }
-
-  pub zigCache(ws: Workspace!, target: String!, cache: Directory): Directory! {
-    build(ws.directory(".", include: testPaths), target, cache ?? directory).directory("/root/.cache/zig")
   }
 
   pub test(precompiled: File!, srcDir: Directory!, target: String!): File! {
@@ -58,6 +49,10 @@ type Pdfium {
       .withExec(["mix", "test"])
       .sync
     precompiled
+  }
+
+  pub zigCache(ws: Workspace!, target: String!, cache: Directory): Directory! {
+    build(ws.directory(".", include: testPaths), target, cache ?? directory).directory("/root/.cache/zig")
   }
 
   pub ci(ws: Workspace!, target: String!, cache: Directory): File! {
@@ -135,11 +130,13 @@ let gh(githubToken: Secret!): Container! {
 }
 
 let build(srcDir: Directory!, target: String!, cache: Directory!): Container! {
-  buildImage
+  buildImage(srcDir)
     .withDirectory("/root/.cache/zig", cache)
-    .withDirectory("/src", srcDir)
-    .withWorkdir("/src")
-    .withExec(["zig", "build", `-Dtarget=${zigTargets[target]!}`, "-Doptimize=ReleaseFast", "-Derts=/usr/local/lib/erlang/usr/include", "--prefix", "/build"])
+    .withExec(["zig", "build", `-Dtarget=${zigTarget(target)}`, "-Doptimize=ReleaseFast", "--prefix", "/build"])
+}
+
+let zigTarget(target: String!): String! {
+  if (darwin(target)) `${target.split("-")[0]!}-macos` else if (target.hasSuffix("gnu")) `${target}.2.17` else target
 }
 
 let darwin(target: String!): Boolean! {
@@ -161,7 +158,7 @@ let testImage(target: String!): Container! {
   if (target.hasSuffix("gnu")) base.withFile(cacerts, container.from(images["musl"]!).file(cacerts)) else base
 }
 
-let buildImage: Container! {
+let buildImage(src: Directory!): Container! {
   let arch = ["linux/arm64": "aarch64", "linux/amd64": "x86_64"][defaultPlatform :: String!]!
   let zig = `zig-${arch}-linux-${zigVersion}`
 
@@ -170,6 +167,9 @@ let buildImage: Container! {
     .withExec(["apk", "add", "llvm", "tar"])
     .withDirectory("/zig", http(url: `https://ziglang.org/download/${zigVersion}/${zig}.tar.xz`).extract.directory(zig))
     .withEnvVariable("PATH", "/zig:${PATH}", expand: true)
+    .withEnvVariable("ERTS_INCLUDE_DIR", "/usr/local/lib/erlang/usr/include")
+    .withDirectory("/src", src)
+    .withWorkdir("/src")
 }
 
 let version(tree: Directory!): String! {
