@@ -2,6 +2,11 @@ name: Update to latest libpdfium
 
 on:
   workflow_dispatch:
+    inputs:
+      libpdfium_tag:
+        description: libpdfium tag, the latest one when empty
+      package_version:
+        description: package version, the next patch when empty
   schedule:
     - cron: 0 13 * * 1
 
@@ -27,6 +32,8 @@ jobs:
           args: >-
             prepare-release \
               --actor 41898282+github-actions[bot] \
+              ${{ inputs.libpdfium_tag && format('--libpdfium-tag {0}', inputs.libpdfium_tag) || '' }} \
+              ${{ inputs.package_version && format('--package-version {0}', inputs.package_version) || '' }} \
             open-pull-request \
               --github-token env://GITHUB_TOKEN \
             stdout
