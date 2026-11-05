@@ -23,27 +23,20 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      - name: Push the bump
-        uses: dagger/dagger-for-github@v8.4.1
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+      - uses: dagger/dagger-for-github@v8.4.1
         with:
           version: 1.0.0-beta.25
-          args: >-
-            prepare-release \
-              --github-token env://GITHUB_TOKEN \
-              --actor 41898282+github-actions[bot] \
-            push \
-              --branch update-libpdfium
+
+      - name: Push the bump
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: >-
+          dagger call prepare-release
+          --github-token env://GITHUB_TOKEN
+          --actor 41898282+github-actions[bot]
+          push --branch update-libpdfium
 
       - name: Open a pull request
-        uses: dagger/dagger-for-github@v8.4.1
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        with:
-          version: 1.0.0-beta.25
-          args: >-
-            open-pull-request \
-              --head update-libpdfium \
-              --github-token env://GITHUB_TOKEN \
-            stdout
+        run: dagger call open-pull-request --head update-libpdfium --github-token env://GITHUB_TOKEN stdout

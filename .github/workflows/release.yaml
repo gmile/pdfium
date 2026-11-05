@@ -31,26 +31,21 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
+      - uses: dagger/dagger-for-github@v8.4.1
+        with:
+          version: 1.0.0-beta.25
+
       - name: Create a GitHub release
-        uses: dagger/dagger-for-github@v8.4.1
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        with:
-          version: 1.0.0-beta.25
-          args: >-
-            github-release \
-              --artifacts artifacts \
-              --sha ${{ github.sha }} \
-              --github-token env://GITHUB_TOKEN \
-            stdout
+        run: >-
+          dagger call github-release
+          --artifacts artifacts
+          --sha ${{ github.sha }}
+          --github-token env://GITHUB_TOKEN
+          stdout
 
       - name: Publish to hex
-        uses: dagger/dagger-for-github@v8.4.1
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
-        with:
-          version: 1.0.0-beta.25
-          args: >-
-            hex-publish \
-              --hex-api-key env://HEX_API_KEY \
-            stdout
+        run: dagger call hex-publish --hex-api-key env://HEX_API_KEY stdout
