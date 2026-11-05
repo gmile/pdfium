@@ -33,8 +33,6 @@
               pkgs.fish
               dagger.packages.${system}.dagger
               pkgs.gh
-              pkgs.jq
-              pkgs.wget
             ];
 
             shellHook = ''
