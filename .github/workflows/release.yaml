@@ -17,8 +17,6 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v7
-
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
@@ -38,6 +36,7 @@ jobs:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
         with:
           version: 1.0.0-beta.25
+          dagger-flags: --progress plain --workspace github.com/gmile/pdfium@${{ github.sha }}
           args: >-
             github-release \
               --artifacts artifacts \
