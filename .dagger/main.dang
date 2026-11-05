@@ -34,20 +34,18 @@ type Pdfium {
     Bump(ref: commit(first, withVersion.changes(withTag), `Update package to version ${version}`, actor))
   }
 
-  pub precompile(srcDir: Directory!, target: String!): File! {
+  pub precompile(srcDir: Directory!, target: String!, cache: Directory): File! {
     let packageVersion = srcDir.file("VERSION").contents
     let outputPath = `/build/pdfium-nif-${nifVersion}-${target}-${packageVersion}.tar.gz`
     let library = if (darwin(target)) "libpdfium.dylib" else "libpdfium.so"
 
-    buildImage
-      .withFile("/src/build.zig", srcDir.file("build.zig"))
-      .withFile("/src/build.zig.zon", srcDir.file("build.zig.zon"))
-      .withWorkdir("/src")
-      .withExec(["zig", "build", "--help", "-Derts=/usr/local/lib/erlang/usr/include"])
-      .withDirectory("/src", srcDir)
-      .withExec(["zig", "build", `-Dtarget=${zigTargets[target]!}`, "-Doptimize=ReleaseFast", "-Derts=/usr/local/lib/erlang/usr/include", "--prefix", "/build"])
+    build(srcDir, target, cache ?? directory)
       .withExec(["tar", "--create", "--verbose", `--file=${outputPath}`, "--directory", "/build", "pdfium_nif.so", library])
       .file(outputPath)
+  }
+
+  pub zigCache(ws: Workspace!, target: String!, cache: Directory): Directory! {
+    build(ws.directory(".", include: packagePaths), target, cache ?? directory).directory("/root/.cache/zig")
   }
 
   pub test(precompiled: File!, srcDir: Directory!, target: String!): File! {
@@ -62,9 +60,9 @@ type Pdfium {
     precompiled
   }
 
-  pub ci(ws: Workspace!, target: String!): File! {
+  pub ci(ws: Workspace!, target: String!, cache: Directory): File! {
     let srcDir = ws.directory(".", include: testPaths)
-    let archive = precompile(srcDir, target)
+    let archive = precompile(srcDir, target, cache)
 
     if (darwin(target)) archive else test(archive, srcDir, target)
   }
@@ -134,6 +132,14 @@ let gh(githubToken: Secret!): Container! {
     .from(alpineImage)
     .withExec(["apk", "add", "git", "github-cli"])
     .withSecretVariable("GH_TOKEN", githubToken)
+}
+
+let build(srcDir: Directory!, target: String!, cache: Directory!): Container! {
+  buildImage
+    .withDirectory("/root/.cache/zig", cache)
+    .withDirectory("/src", srcDir)
+    .withWorkdir("/src")
+    .withExec(["zig", "build", `-Dtarget=${zigTargets[target]!}`, "-Doptimize=ReleaseFast", "-Derts=/usr/local/lib/erlang/usr/include", "--prefix", "/build"])
 }
 
 let darwin(target: String!): Boolean! {
