@@ -1,11 +1,10 @@
-CUSTOM_DIR = custom
-MACOS_SCRIPT = $(CUSTOM_DIR)/build-for-mac.sh
 TARGETS = priv/libpdfium.dylib priv/pdfium_nif.so
 
 all: $(TARGETS)
 
 $(TARGETS): c_src/pdfium_nif.cpp
-	cd custom && ./build-for-mac.sh arm64
+	dagger call ci --target aarch64-apple-darwin export --path priv/pdfium-nif.tar.gz
+	tar --extract --file priv/pdfium-nif.tar.gz --directory priv
 
 clean:
 	rm -rf $(TARGETS)
