@@ -1,0 +1,47 @@
+.{
+    .name = .pdfium,
+    .version = "0.0.0",
+    .fingerprint = 0xee52b5c923e23d9a,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .@"pdfium_aarch64-linux-gnu" = .{
+            .url = "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F8138/pdfium-linux-arm64.tgz",
+            .hash = "N-V-__8AAFdOiABuuI-ewfZldHLsD17cNk7imKtkfo2r6iZa",
+            .lazy = true,
+        },
+        .@"pdfium_aarch64-linux-musl" = .{
+            .url = "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F8138/pdfium-linux-musl-arm64.tgz",
+            .hash = "N-V-__8AAGjhGgFdgqnc3pF82x5kpckv76W4zNsYjFVe9iuL",
+            .lazy = true,
+        },
+        .@"pdfium_x86_64-linux-gnu" = .{
+            .url = "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F8138/pdfium-linux-x64.tgz",
+            .hash = "N-V-__8AAB27hwAniJChPmwNZUkFT5h2vtPSLhZiaOzVisfR",
+            .lazy = true,
+        },
+        .@"pdfium_x86_64-linux-musl" = .{
+            .url = "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F8138/pdfium-linux-musl-x64.tgz",
+            .hash = "N-V-__8AAEdNGQHBKxu_KAmVNxw0b7q6mJBQ6scg3cbJyVRo",
+            .lazy = true,
+        },
+        .@"pdfium_aarch64-apple-darwin" = .{
+            .url = "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F8138/pdfium-mac-arm64.tgz",
+            .hash = "N-V-__8AAONAfQBFyPhRg0OrYXWYlgUQXLY-xEFVs4o8PeXM",
+            .lazy = true,
+        },
+        .@"pdfium_x86_64-apple-darwin" = .{
+            .url = "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F8138/pdfium-mac-x64.tgz",
+            .hash = "N-V-__8AABkRhAAsKwFG1GRcQH2-Xx1H3y_JMOmFhNMvZzdP",
+            .lazy = true,
+        },
+        .fine = .{
+            .url = "https://github.com/elixir-nx/fine/archive/refs/tags/v0.2.0.tar.gz",
+            .hash = "N-V-__8AAG5HAgAwot_38o6_-lwIJGA35oka0q79KFT2StJF",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "c_src",
+    },
+}
