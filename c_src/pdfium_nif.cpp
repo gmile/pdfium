@@ -332,14 +332,13 @@ SizesResult get_page_sizes(ErlNifEnv *env, std::vector<fine::ResourcePtr<PDFDoc>
         sizes.reserve(static_cast<size_t>(page_count));
 
         for (int index = 0; index < page_count; index++) {
-            FPDF_PAGE page = FPDF_LoadPage(doc->document, index);
+            FS_SIZEF size;
 
-            if (!page) {
+            if (!FPDF_GetPageSizeByIndexF(doc->document, index, &size)) {
                 return fine::Error(page_load_failed);
             }
 
-            sizes.emplace_back(FPDF_GetPageWidthF(page), FPDF_GetPageHeightF(page));
-            FPDF_ClosePage(page);
+            sizes.emplace_back(size.width, size.height);
         }
 
         documents.push_back(std::move(sizes));
