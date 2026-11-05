@@ -1,7 +1,7 @@
 defmodule PDFiumConcurrencyTest do
   use ExUnit.Case
 
-  @pdf_path Path.expand("../custom/test.pdf", __DIR__)
+  @pdf_path Path.expand("fixtures/test.pdf", __DIR__)
 
   test "concurrent load/close does not corrupt PDFium state" do
     concurrency = System.schedulers_online() * 4
