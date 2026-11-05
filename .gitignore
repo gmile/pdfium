@@ -33,3 +33,7 @@ output
 .nix-profile*
 
 checksum.exs
+
+.zig-cache/
+zig-out/
+zig-pkg/
