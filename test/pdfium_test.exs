@@ -5,7 +5,7 @@ defmodule PDFiumTest do
   alias PDFium.Toolbox
 
   @annotated Path.expand("fixtures/annotated.pdf", __DIR__)
-  @plain Path.expand("../custom/test.pdf", __DIR__)
+  @plain Path.expand("fixtures/test.pdf", __DIR__)
   @encrypted_r5 Path.expand("fixtures/encrypted-r5.pdf", __DIR__)
   @encrypted_r6 Path.expand("fixtures/encrypted-r6.pdf", __DIR__)
 

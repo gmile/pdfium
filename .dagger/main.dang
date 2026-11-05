@@ -12,7 +12,7 @@ let erlangAbis: Map[String!]! = ["glibc": "linux-gnu", "musl": "linux-musl"]
 let pdfiumAbis: Map[String!]! = ["glibc": "linux", "musl": "linux-musl"]
 let nifVersion = "2.18"
 let packagePaths: [String!]! = ["c_src/**", "lib/**", "LICENSE", "Makefile", "mix.exs", "mix.lock", "README.md", "LIBPDFIUM_TAG", "VERSION"]
-let testPaths: [String!]! = packagePaths + ["test/**", "custom/test.pdf"]
+let testPaths: [String!]! = packagePaths + ["test/**"]
 
 type Pdfium {
   pub prepareRelease(actor: String!): Bump! {
