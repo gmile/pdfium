@@ -55,13 +55,17 @@ nix develop
 ## Releasing
 
 Every Monday the `Update to latest libpdfium` workflow opens a pull request that
-bumps `LIBPDFIUM_TAG` and `VERSION`. Merging it into `main` runs the `Release`
-workflow, which builds the artifacts, creates the GitHub release and publishes
-the package to hex. Run the workflow by hand to release outside the schedule:
+bumps `LIBPDFIUM_TAG` to the latest tag and `VERSION` to the next patch. Merging
+it into `main` runs the `Release` workflow, which builds the artifacts, creates
+the GitHub release and publishes the package to hex. Run the workflow by hand to
+release outside the schedule:
 
 ```sh
 gh workflow run update-libpdfium.yaml
 ```
+
+For any other tag or version, open a pull request that edits the two files by
+hand. Merging it releases the same way.
 
 ## Running CI steps locally
 
@@ -80,28 +84,26 @@ directory:
 dagger --workspace github.com/gmile/pdfium@main check
 ```
 
-## Releasing manually
+## When a release fails
 
-1. push a branch with a new libpdfium tag and open a pull request for it:
+The `Release` workflow creates the GitHub release before it publishes to hex, so
+a failure in the hex step leaves a release behind that a re-run would refuse to
+create again. Delete it together with its tag, then re-run the failed job:
 
-    ```sh
-    env GITHUB_TOKEN=(gh auth token) dagger call prepare-release \
-      --libpdfium-tag chromium/7506 \
-      --actor gmile \
-      open-pull-request --github-token env://GITHUB_TOKEN \
-      stdout
-    ```
+```sh
+gh release delete v0.1.46 --cleanup-tag --yes
+```
 
-2. merge the pull request, then from `main` with the artifacts of its CI run in `artifacts/`:
+```sh
+gh run rerun 42028488533 --failed
+```
 
-    ```sh
-    env GITHUB_TOKEN=(gh auth token) HEX_API_KEY=483a... dagger call github-release \
-      --artifacts artifacts \
-      --sha (git rev-parse main) \
-      --github-token env://GITHUB_TOKEN \
-      hex-publish --hex-api-key env://HEX_API_KEY \
-      stdout
-    ```
+The six archives of any run can be fetched for inspection or for running the
+release steps by hand:
+
+```sh
+gh run download 42028488533 --dir artifacts
+```
 
 ## Updating OTP version (for macOS)
 
