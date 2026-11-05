@@ -90,33 +90,24 @@ gh workflow run update-libpdfium.yaml
 
 ## Releasing manually
 
-1. push a branch with a new libpdfium tag and open a pull request for it. The push
-   authenticates with your git credential helper, which `gh auth setup-git` configures:
+1. push a branch with a new libpdfium tag and open a pull request for it:
 
     ```sh
     env GITHUB_TOKEN=(gh auth token) dagger call prepare-release \
       --libpdfium-tag chromium/7506 \
       --actor gmile \
-      --github-token env://GITHUB_TOKEN \
-      push --branch update-libpdfium
-
-    env GITHUB_TOKEN=(gh auth token) dagger call open-pull-request \
-      --head update-libpdfium \
-      --github-token env://GITHUB_TOKEN \
+      open-pull-request --github-token env://GITHUB_TOKEN \
       stdout
     ```
 
 2. merge the pull request, then from `main` with the artifacts of its CI run in `artifacts/`:
 
     ```sh
-    env GITHUB_TOKEN=(gh auth token) dagger call github-release \
+    env GITHUB_TOKEN=(gh auth token) HEX_API_KEY=483a... dagger call github-release \
       --artifacts artifacts \
       --sha (git rev-parse main) \
       --github-token env://GITHUB_TOKEN \
-      stdout
-
-    env HEX_API_KEY=483a... dagger call hex-publish \
-      --hex-api-key env://HEX_API_KEY \
+      hex-publish --hex-api-key env://HEX_API_KEY \
       stdout
     ```
 
