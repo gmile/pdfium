@@ -67,16 +67,18 @@ hand. Merging it releases the same way.
 
 ## Running CI steps locally
 
-`ci` builds the NIF for one platform, runs the test suite against it and
-returns the archive:
+`ci` builds the NIF for one target, runs the test suite against it where the
+target can run in a container, and returns the archive:
 
 ```sh
-dagger call ci --platform-name linux/arm64 --abi musl export --path .
+dagger call ci --target aarch64-linux-musl export --path .
 ```
 
-`dagger check` runs it for all four Linux platforms. The workflows load the
-workspace from git rather than from a checkout, and the same works from any
-directory:
+The targets are `aarch64-linux-gnu`, `aarch64-linux-musl`, `x86_64-linux-gnu`,
+`x86_64-linux-musl`, `aarch64-apple-darwin` and `x86_64-apple-darwin`. The macOS
+ones are cross-compiled with zig and only built, so `mix test` on a Mac is their
+check. `dagger check` runs all six. The workflows load the workspace from git
+rather than from a checkout, and the same works from any directory:
 
 ```sh
 dagger --workspace github.com/gmile/pdfium@main check
@@ -103,10 +105,13 @@ release steps by hand:
 gh run download 42028488533 --dir artifacts
 ```
 
-## Updating OTP version (for macOS)
+## Repository settings the workflows rely on
 
-Edit `otp=` in `custom/build-for-mac.sh`. The script downloads that version
-from [erlef/otp_builds](https://github.com/erlef/otp_builds/releases).
+* a GitHub App installed on the repository with write access to contents and
+  pull requests; its id is the `GH_APP_ID` variable and its private key the
+  `GH_APP_PRIVATE_KEY` secret
+* the `HEX_API_KEY` secret for `mix hex.publish`
+* required checks named after the CI jobs, one per matrix entry
 
 ## Known issues
 
