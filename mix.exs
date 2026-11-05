@@ -27,7 +27,6 @@ defmodule PDFium.MixProject do
       make_precompiler_filename: "pdfium_nif",
       make_precompiler_url:
         "https://github.com/gmile/pdfium/releases/download/v#{@version}/@{artefact_filename}",
-      # TODO: not sure if below is necessary
       cc_precompiler: [
         compilers: %{
           {:unix, :linux} => %{
