@@ -99,20 +99,13 @@ gh workflow run ci.yaml --ref main
 
 ## When a release fails
 
-The `Release` workflow creates the GitHub release before it publishes to hex, so
-a failure in the hex step leaves a release behind that a re-run would refuse to
-create again. Delete it together with its tag, then re-run the failed job:
+Releases are immutable, so a tag can never be reused, not even after deleting
+the release. Whatever failed, the way forward is another pull request bumping
+`.version` in `build.zig.zon` to the next patch. The same holds for a change to
+that file that forgot to bump the version: the release run goes red once and
+the next bump releases normally.
 
-```sh
-gh release delete v0.1.46 --cleanup-tag --yes
-```
-
-```sh
-gh run rerun 42028488533 --failed
-```
-
-The six archives of any run can be fetched for inspection or for running the
-release steps by hand:
+The six archives of any run can be fetched for inspection:
 
 ```sh
 gh run download 42028488533 --dir artifacts
@@ -125,6 +118,7 @@ gh run download 42028488533 --dir artifacts
   `GH_APP_PRIVATE_KEY` secret
 * the `HEX_API_KEY` secret for `mix hex.publish`
 * required checks named after the CI jobs, one per matrix entry
+* immutable releases, which is why a failed release is followed by a bump
 
 ## Known issues
 
