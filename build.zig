@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -30,18 +31,8 @@ pub fn build(b: *std.Build) void {
     module.addIncludePath(.{ .cwd_relative = erts });
     module.addIncludePath(pdfium.path("include"));
     module.addIncludePath(fine.path("c_include"));
-    if (os == .macos) {
-        const rename = b.addRunArtifact(b.addExecutable(.{
-            .name = "dylib_id",
-            .root_module = b.createModule(.{ .root_source_file = b.path("build/dylib_id.zig"), .target = b.graph.host }),
-        }));
-        rename.addFileArg(pdfium.path("lib/libpdfium.dylib"));
-        module.addObjectFile(rename.addOutputFileArg("libpdfium.dylib"));
-        rename.addArg("@rpath/libpdfium.dylib");
-    } else {
-        module.addLibraryPath(pdfium.path("lib"));
-        module.linkSystemLibrary("pdfium", .{});
-    }
+    module.addLibraryPath(pdfium.path("lib"));
+    module.linkSystemLibrary("pdfium", .{});
     module.addRPath(.{ .cwd_relative = if (os == .macos) "@loader_path" else "$ORIGIN" });
 
     const nif = b.addLibrary(.{ .name = "pdfium_nif", .linkage = .dynamic, .root_module = module });
@@ -52,5 +43,13 @@ pub fn build(b: *std.Build) void {
 
     const install = b.addInstallArtifact(nif, .{ .dest_dir = .{ .override = .{ .custom = "." } }, .dest_sub_path = "pdfium_nif.so" });
     b.getInstallStep().dependOn(&install.step);
+    if (os == .macos) {
+        const rename = b.addSystemCommand(&.{
+            if (builtin.os.tag == .macos) "install_name_tool" else "llvm-install-name-tool",
+            "-change", "./libpdfium.dylib", "@rpath/libpdfium.dylib",
+        });
+        rename.addArtifactArg(nif);
+        install.step.dependOn(&rename.step);
+    }
     b.getInstallStep().dependOn(&b.addInstallFileWithDir(pdfium.path(b.fmt("lib/{s}", .{library})), .{ .custom = "." }, library).step);
 }
