@@ -51,23 +51,22 @@ type Pdfium {
     precompiled
   }
 
-  pub zigCache(ws: Workspace!, target: String!, cache: Directory): Directory! {
-    build(ws.directory(".", include: testPaths), target, cache ?? directory).directory("/root/.cache/zig")
-  }
-
-  pub ci(ws: Workspace!, target: String!, cache: Directory): File! {
+  pub ci(ws: Workspace!, target: String!, cache: Directory): Build! {
     let srcDir = ws.directory(".", include: testPaths)
     let archive = precompile(srcDir, target, cache)
 
-    if (darwin(target)) archive else test(archive, srcDir, target)
+    Build(
+      archive: if (darwin(target)) archive else test(archive, srcDir, target),
+      cache: build(srcDir, target, cache ?? directory).directory("/root/.cache/zig"),
+    )
   }
 
-  pub arm64LinuxGnu(ws: Workspace!): Void @check { ci(ws, "aarch64-linux-gnu").sync; null }
-  pub arm64LinuxMusl(ws: Workspace!): Void @check { ci(ws, "aarch64-linux-musl").sync; null }
-  pub arm64AppleDarwin(ws: Workspace!): Void @check { ci(ws, "aarch64-apple-darwin").sync; null }
-  pub amd64LinuxGnu(ws: Workspace!): Void @check { ci(ws, "x86_64-linux-gnu").sync; null }
-  pub amd64LinuxMusl(ws: Workspace!): Void @check { ci(ws, "x86_64-linux-musl").sync; null }
-  pub amd64AppleDarwin(ws: Workspace!): Void @check { ci(ws, "x86_64-apple-darwin").sync; null }
+  pub arm64LinuxGnu(ws: Workspace!): Void @check { ci(ws, "aarch64-linux-gnu").archive.sync; null }
+  pub arm64LinuxMusl(ws: Workspace!): Void @check { ci(ws, "aarch64-linux-musl").archive.sync; null }
+  pub arm64AppleDarwin(ws: Workspace!): Void @check { ci(ws, "aarch64-apple-darwin").archive.sync; null }
+  pub amd64LinuxGnu(ws: Workspace!): Void @check { ci(ws, "x86_64-linux-gnu").archive.sync; null }
+  pub amd64LinuxMusl(ws: Workspace!): Void @check { ci(ws, "x86_64-linux-musl").archive.sync; null }
+  pub amd64AppleDarwin(ws: Workspace!): Void @check { ci(ws, "x86_64-apple-darwin").archive.sync; null }
 
   pub githubRelease(ws: Workspace!, artifacts: Directory!, sha: String!, githubToken: Secret!): Release! {
     let package = ws.directory(".", include: packagePaths)
@@ -85,6 +84,11 @@ type Pdfium {
         .file("/receipt"),
     )
   }
+}
+
+type Build {
+  pub archive: File!
+  pub cache: Directory!
 }
 
 type Bump {

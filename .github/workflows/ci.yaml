@@ -49,16 +49,16 @@ jobs:
             ci \
               --target ${{ matrix.target }} \
               --cache ${{ runner.temp }}/zig \
-            export \
+            archive export \
               --path . \
               --allowParentDirPath
 
       - name: Keep zig's cache
         run: >-
-          dagger --workspace github.com/gmile/pdfium@${{ github.sha }} call zig-cache
+          dagger --workspace github.com/gmile/pdfium@${{ github.sha }} call ci
           --target ${{ matrix.target }}
           --cache ${{ runner.temp }}/zig
-          export --path ${{ runner.temp }}/zig
+          cache export --path ${{ runner.temp }}/zig
 
       - name: Upload files
         uses: actions/upload-artifact@v7

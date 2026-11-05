@@ -77,7 +77,7 @@ with it. Merging releases the same way.
 target can run in a container, and returns the archive:
 
 ```sh
-dagger call ci --target aarch64-linux-musl export --path .
+dagger call ci --target aarch64-linux-musl archive export --path .
 ```
 
 The targets are `aarch64-linux-gnu`, `aarch64-linux-musl`, `x86_64-linux-gnu`,
@@ -88,6 +88,13 @@ rather than from a checkout, and the same works from any directory:
 
 ```sh
 dagger --workspace github.com/gmile/pdfium@main check
+```
+
+CI keeps zig's cache per target. After changing the zig version, warm the
+caches on `main` once so pull requests start from them:
+
+```sh
+gh workflow run ci.yaml --ref main
 ```
 
 ## When a release fails
