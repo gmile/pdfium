@@ -25,8 +25,6 @@ tools `custom/build-for-mac.sh` fetches its dependencies with:
 nix develop
 ```
 
-`mise.toml` pins the same Erlang and Elixir for anyone using mise instead.
-
 ## Usage
 
 1. open a PDF file descriptor:
