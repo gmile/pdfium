@@ -62,7 +62,7 @@ with a specific libpdfium tag or package version when the latest or the next
 patch is not what you want:
 
 ```sh
-gh workflow run update-libpdfium.yaml -f libpdfium_tag=chromium/7506 -f package_version=0.2.0
+gh workflow run update-libpdfium.yaml --field libpdfium_tag=chromium/7506 --field package_version=0.2.0
 ```
 
 ## Running CI steps locally
