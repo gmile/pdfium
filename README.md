@@ -65,28 +65,20 @@ gh workflow run update-libpdfium.yaml
 
 ## Running CI steps locally
 
-1. Prepare:
+`ci` builds the NIF for one platform, runs the test suite against it and
+returns the archive:
 
-   ```sh
-   mkdir output
-   ```
+```sh
+dagger call ci --platform-name linux/arm64 --abi musl export --path .
+```
 
-1. Build:
+`dagger check` runs it for all four Linux platforms. The workflows load the
+workspace from git rather than from a checkout, and the same works from any
+directory:
 
-   ```sh
-   dagger call \
-     precompile --src-dir . --platform-name linux/arm64 --abi musl \
-     export --path output/ --allowParentDirPath
-   ```
-
-2. Test:
-
-   ```sh
-   dagger call test \
-     --precompiled output/pdfium-nif-2.18-aarch64-linux-musl-0.1.29.tar.gz \
-     --src-dir . \
-     --abi musl --platform-name linux/arm64
-   ```
+```sh
+dagger --workspace github.com/gmile/pdfium@main check
+```
 
 ## Releasing manually
 
