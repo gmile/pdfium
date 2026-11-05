@@ -1,13 +1,21 @@
 let repositoryUrl = "https://github.com/gmile/pdfium"
 let repositorySlug = "gmile/pdfium"
 let libpdfiumBinariesUrl = "https://github.com/bblanchon/pdfium-binaries"
-let fineUrl = "https://github.com/elixir-nx/fine"
-let fineTag = "v0.2.0"
 let alpineImage = "alpine:3.24.3"
 let images: Map[String!]! = ["glibc": "hexpm/elixir:1.20.5-erlang-29.1.2-ubuntu-noble-20261024.1", "musl": "hexpm/elixir:1.20.5-erlang-29.1.2-alpine-3.24.3"]
 let zigVersion = "0.17.1"
+let zigTargets: Map[String!]! = [
+  "aarch64-linux-gnu": "aarch64-linux-gnu.2.17", "aarch64-linux-musl": "aarch64-linux-musl",
+  "x86_64-linux-gnu": "x86_64-linux-gnu.2.17", "x86_64-linux-musl": "x86_64-linux-musl",
+  "aarch64-apple-darwin": "aarch64-macos", "x86_64-apple-darwin": "x86_64-macos",
+]
+let archives: Map[String!]! = [
+  "aarch64-linux-gnu": "linux-arm64", "aarch64-linux-musl": "linux-musl-arm64",
+  "x86_64-linux-gnu": "linux-x64", "x86_64-linux-musl": "linux-musl-x64",
+  "aarch64-apple-darwin": "mac-arm64", "x86_64-apple-darwin": "mac-x64",
+]
 let nifVersion = "2.18"
-let packagePaths: [String!]! = ["c_src/**", "lib/**", "LICENSE", "Makefile", "mix.exs", "mix.lock", "README.md", "LIBPDFIUM_TAG", "VERSION"]
+let packagePaths: [String!]! = ["build.zig", "build.zig.zon", "c_src/**", "lib/**", "LICENSE", "mix.exs", "mix.lock", "README.md", "VERSION"]
 let testPaths: [String!]! = packagePaths + ["test/**"]
 
 type Pdfium {
@@ -16,35 +24,27 @@ type Pdfium {
     let tree = main.tree
     let tag = latestLibpdfiumTag
     let version = nextPatchVersion(tree)
-    let withTag = tree.withNewFile("LIBPDFIUM_TAG", tag)
+    let manifest = archives.keys.reduce(buildImage.withFile("/src/build.zig", tree.file("build.zig")).withFile("/src/build.zig.zon", tree.file("build.zig.zon")).withWorkdir("/src")) { acc, target =>
+      acc.withExec(["zig", "fetch", `--save=pdfium_${target}`, archiveUrl(tag, target)])
+    }
+    let withTag = tree.withFile("build.zig.zon", manifest.file("/src/build.zig.zon"))
     let withVersion = withTag.withNewFile("VERSION", version)
-    let first = commit(main, withTag.changes(tree), `Update libpdfium tag to ${tag}`, actor)
+    let first = commit(main, withTag.changes(tree), `Update libpdfium to ${tag}`, actor)
 
     Bump(ref: commit(first, withVersion.changes(withTag), `Update package to version ${version}`, actor))
   }
 
   pub precompile(srcDir: Directory!, target: String!): File! {
-    let pdfiumTag = srcDir.file("LIBPDFIUM_TAG").contents.replace("/", "%2F")
     let packageVersion = srcDir.file("VERSION").contents
-    let archive = [
-      "aarch64-linux-gnu": "linux-arm64", "aarch64-linux-musl": "linux-musl-arm64",
-      "x86_64-linux-gnu": "linux-x64", "x86_64-linux-musl": "linux-musl-x64",
-      "aarch64-apple-darwin": "mac-arm64", "x86_64-apple-darwin": "mac-x64",
-    ][target]!
-    let library = if (darwin(target)) "libpdfium.dylib" else "libpdfium.so"
     let outputPath = `/build/pdfium-nif-${nifVersion}-${target}-${packageVersion}.tar.gz`
-    let fineHeaders = git(url: fineUrl).tag(fineTag).tree.directory("c_include")
-    let libpdfium = http(url: `${libpdfiumBinariesUrl}/releases/download/${pdfiumTag}/pdfium-${archive}.tgz`).extract
-    let prepared = buildImage
-      .withWorkdir("/build")
-      .withFile("/build/pdfium_nif.cpp", srcDir.file("c_src/pdfium_nif.cpp"))
-      .withDirectory("/fine", fineHeaders)
-      .withDirectory("/pdfium", libpdfium)
-    link(prepared, target)
-      .withExec([
-        "tar", "--create", "--verbose", `--file=${outputPath}`,
-        "--directory", "/build", "pdfium_nif.so", "--directory", "/pdfium/lib", library,
-      ])
+    let library = if (darwin(target)) "libpdfium.dylib" else "libpdfium.so"
+
+    buildImage
+      .withDirectory("/src", srcDir)
+      .withWorkdir("/src")
+      .withMountedCache("/root/.cache/zig", cacheVolume(key: "zig"))
+      .withExec(["zig", "build", `-Dtarget=${zigTargets[target]!}`, "-Doptimize=ReleaseFast", "-Derts=/usr/local/lib/erlang/usr/include", "--prefix", "/build"])
+      .withExec(["tar", "--create", "--verbose", `--file=${outputPath}`, "--directory", "/build", "pdfium_nif.so", library])
       .file(outputPath)
   }
 
@@ -164,32 +164,6 @@ let buildImage: Container! {
     .withEnvVariable("PATH", "/zig:${PATH}", expand: true)
 }
 
-let link(prepared: Container!, target: String!): Container! {
-  let zigTarget = [
-    "aarch64-linux-gnu": "aarch64-linux-gnu.2.17", "aarch64-linux-musl": "aarch64-linux-musl",
-    "x86_64-linux-gnu": "x86_64-linux-gnu.2.17", "x86_64-linux-musl": "x86_64-linux-musl",
-    "aarch64-apple-darwin": "aarch64-macos", "x86_64-apple-darwin": "x86_64-macos",
-  ][target]!
-  let linkFlags = if (darwin(target)) {
-    ["-Wl,-undefined,dynamic_lookup", "-Wl,-install_name,@rpath/pdfium_nif.so", "-Wl,-rpath,@loader_path"]
-  } else {
-    ["-Wl,-rpath,$ORIGIN", "-Wl,--strip-all"]
-  }
-  let linked = prepared
-    .withExec([
-      "zig", "c++", "-target", zigTarget, "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-fPIC",
-      "-fvisibility=hidden", "-O2", "-std=c++17", "-I", "/usr/local/lib/erlang/usr/include",
-      "-I", "/pdfium/include", "-I", "/fine", "-c", "pdfium_nif.cpp", "-o", "pdfium_nif.o",
-    ])
-    .withExec(["zig", "c++", "-target", zigTarget, "pdfium_nif.o", "-shared", "-o", "pdfium_nif.so", "-L", "/pdfium/lib", "-lpdfium"] + linkFlags)
-
-  if (darwin(target)) {
-    linked.withExec(["llvm-install-name-tool", "-change", "./libpdfium.dylib", "@rpath/libpdfium.dylib", "pdfium_nif.so"])
-  } else {
-    linked
-  }
-}
-
 let nextPatchVersion(tree: Directory!): String! {
   let parts = tree.file("VERSION").contents.split(".")
   `${parts[0]!}.${parts[1]!}.${(JSON.decode(parts[2]!) :: Int!) + 1}`
@@ -199,6 +173,10 @@ let latestLibpdfiumTag: String! {
   git(url: libpdfiumBinariesUrl)
     .tags(patterns: ["chromium/*"])
     .reduce("chromium/0") { acc, tag => if (tagNumber(tag) > tagNumber(acc)) tag else acc }
+}
+
+let archiveUrl(tag: String!, target: String!): String! {
+  `${libpdfiumBinariesUrl}/releases/download/${tag.replace("/", "%2F")}/pdfium-${archives[target]!}.tgz`
 }
 
 let tagNumber(tag: String!): Int! {
