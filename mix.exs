@@ -25,6 +25,7 @@ defmodule PDFium.MixProject do
       make_env: &make_env/0,
       make_precompiler: {:nif, CCPrecompiler},
       make_precompiler_filename: "pdfium_nif",
+      make_precompiler_nif_versions: [versions: ["2.17"]],
       make_precompiler_url:
         "https://github.com/gmile/pdfium/releases/download/v#{@version}/@{artefact_filename}",
       cc_precompiler: [

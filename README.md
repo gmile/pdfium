@@ -4,6 +4,10 @@ Native bindings for pdfium project
 
 ## Installing
 
+Precompiled NIFs are built against OTP 27 and load on OTP 26 and newer, on
+x86_64 and aarch64 Linux with glibc or musl and on arm64 macOS. Elsewhere the
+package compiles from source and needs a C++ compiler, `make` and `curl`.
+
 * for Mix projects, add the following under `deps` in `mix.exs`:
 
     ```elixir
