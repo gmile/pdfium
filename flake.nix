@@ -1,39 +1,110 @@
 {
-  description = "pdfium development environment (Erlang/OTP 29 + Elixir 1.20)";
+  description = "Elixir interface for pdfium";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    dagger.url = "github:dagger/nix";
-    dagger.inputs.nixpkgs.follows = "nixpkgs";
-  };
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
-    { self, nixpkgs, dagger }:
+    { self, nixpkgs }:
     let
-      systems = [
-        "aarch64-darwin"
-        "x86_64-darwin"
-        "aarch64-linux"
-        "x86_64-linux"
+      lib = nixpkgs.lib;
+      targets = [
+        "aarch64-linux-gnu"
+        "aarch64-linux-musl"
+        "x86_64-linux-gnu"
+        "x86_64-linux-musl"
+        "aarch64-apple-darwin"
       ];
-      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system (import nixpkgs { inherit system; }));
+      buildable = {
+        aarch64-darwin = [ "aarch64-apple-darwin" ];
+        aarch64-linux = lib.filter (lib.hasInfix "-linux-") targets;
+        x86_64-linux = lib.filter (lib.hasInfix "-linux-") targets;
+      };
+      testable = {
+        aarch64-darwin = [ "aarch64-apple-darwin" ];
+        aarch64-linux = [ "aarch64-linux-gnu" "aarch64-linux-musl" ];
+        x86_64-linux = [ "x86_64-linux-gnu" "x86_64-linux-musl" ];
+      };
+      forAllSystems = f: lib.mapAttrs (system: _: f system nixpkgs.legacyPackages.${system}) buildable;
+      named = prefix: f: list: lib.listToAttrs (map (target: lib.nameValuePair "${prefix}-${target}" (f target)) list);
+      erlLibs = beam: "${beam.hex}/lib/erlang/lib";
     in
     {
+      packages = forAllSystems (
+        system: pkgs:
+        let
+          nif = pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_27) erlang; };
+          beam = pkgs.beam_minimal.packages.erlang_29;
+          beamFor =
+            target:
+            if lib.hasSuffix "-musl" target then
+              beam.overrideScope (_: _: { inherit (pkgs.pkgsMusl.beam_minimal.packages.erlang_29) erlang; })
+            else
+              beam;
+          app =
+            script: attrs:
+            pkgs.writeShellApplication (
+              {
+                name = script;
+                text = builtins.readFile ./nix/${script}.sh;
+              }
+              // attrs
+            );
+          test =
+            target:
+            let
+              beam = beamFor target;
+            in
+            app "test" {
+              name = "test-${target}";
+              runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.coreutils ];
+              runtimeEnv = {
+                ERL_LIBS = erlLibs beam;
+                NIF = "${nif.nif target}";
+              };
+            };
+        in
+        {
+          default = nif.nif (builtins.head testable.${system});
+          inputs = pkgs.linkFarm "inputs" { inherit nixpkgs; };
+          archives = pkgs.symlinkJoin {
+            name = "pdfium-nif-archives";
+            paths = map nif.archive buildable.${system};
+          };
+          release = app "release" {
+            runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.gh pkgs.git ];
+            runtimeEnv = {
+              ERL_LIBS = erlLibs beam;
+              VERSION = nif.version;
+            };
+          };
+          update = app "update" {
+            runtimeInputs = [ pkgs.gh pkgs.git pkgs.gnused pkgs.jq ];
+            runtimeEnv = {
+              VERSION = nif.version;
+              LIBPDFIUM = nif.libpdfiumTag;
+              TARGETS = lib.concatStringsSep " " targets;
+            };
+          };
+        }
+        // named "nif" nif.nif buildable.${system}
+        // named "archive" nif.archive buildable.${system}
+        // named "libpdfium" nif.libpdfium targets
+        // named "test" test testable.${system}
+      );
+
       devShells = forAllSystems (
         system: pkgs:
         let
-          beam = pkgs.beam.packages.erlang_29;
-          elixir = beam.elixir_1_20;
+          beam = pkgs.beam_minimal.packages.erlang_29;
         in
         {
-          default = pkgs.mkShellNoCC {
+          default = pkgs.mkShell {
             packages = [
               beam.erlang
-              elixir
+              beam.elixir_1_20
+              beam.hex
               pkgs.fish
-              dagger.packages.${system}.dagger
               pkgs.gh
-              pkgs.zig
             ];
 
             shellHook = ''
