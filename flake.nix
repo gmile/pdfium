@@ -26,12 +26,42 @@
       };
       forAllSystems = f: lib.mapAttrs (system: _: f system nixpkgs.legacyPackages.${system}) buildable;
       named = prefix: f: list: lib.listToAttrs (map (target: lib.nameValuePair "${prefix}-${target}" (f target)) list);
+      erlLibs = beam: "${beam.hex}/lib/erlang/lib";
     in
     {
       packages = forAllSystems (
         system: pkgs:
         let
           nif = pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_29) erlang; };
+          beam = pkgs.beam_minimal.packages.erlang_29;
+          beamFor =
+            target:
+            if lib.hasSuffix "-musl" target then
+              beam.overrideScope (_: _: { inherit (pkgs.pkgsMusl.beam_minimal.packages.erlang_29) erlang; })
+            else
+              beam;
+          app =
+            script: attrs:
+            pkgs.writeShellApplication (
+              {
+                name = script;
+                text = builtins.readFile ./nix/${script}.sh;
+              }
+              // attrs
+            );
+          test =
+            target:
+            let
+              beam = beamFor target;
+            in
+            app "test" {
+              name = "test-${target}";
+              runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.coreutils ];
+              runtimeEnv = {
+                ERL_LIBS = erlLibs beam;
+                NIF = "${nif.nif target}";
+              };
+            };
         in
         {
           default = nif.nif (builtins.head testable.${system});
@@ -40,10 +70,26 @@
             name = "pdfium-nif-archives";
             paths = map nif.archive buildable.${system};
           };
+          release = app "release" {
+            runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.gh pkgs.git ];
+            runtimeEnv = {
+              ERL_LIBS = erlLibs beam;
+              VERSION = nif.version;
+            };
+          };
+          update = app "update" {
+            runtimeInputs = [ pkgs.gh pkgs.git pkgs.gnused pkgs.jq ];
+            runtimeEnv = {
+              VERSION = nif.version;
+              LIBPDFIUM = nif.libpdfiumTag;
+              TARGETS = lib.concatStringsSep " " targets;
+            };
+          };
         }
         // named "nif" nif.nif buildable.${system}
         // named "archive" nif.archive buildable.${system}
         // named "libpdfium" nif.libpdfium targets
+        // named "test" test testable.${system}
       );
 
       devShells = forAllSystems (
