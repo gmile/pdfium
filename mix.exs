@@ -1,7 +1,8 @@
 defmodule PDFium.MixProject do
   use Mix.Project
 
-  @version Regex.run(~r/\.version = "([^"]+)"/, File.read!("build.zig.zon"), capture: :all_but_first) |> hd()
+  @version "0.1.47"
+  @libpdfium "chromium/8138"
 
   def project do
     [
@@ -20,9 +21,8 @@ defmodule PDFium.MixProject do
 
   def make_precompiler do
     [
-      make_executable: "zig",
-      make_targets: ["build"],
-      make_args: ["-Doptimize=ReleaseFast", "--prefix", "priv"],
+      make_targets: ["all"],
+      make_env: &make_env/0,
       make_precompiler: {:nif, CCPrecompiler},
       make_precompiler_filename: "pdfium_nif",
       make_precompiler_url:
@@ -36,12 +36,18 @@ defmodule PDFium.MixProject do
             "aarch64-linux-musl" => nil
           },
           {:unix, :darwin} => %{
-            "x86_64-apple-darwin" => nil,
             "aarch64-apple-darwin" => nil
           }
         }
       ]
     ]
+  end
+
+  defp make_env do
+    %{
+      "PDFIUM_TAG" => @libpdfium,
+      "FINE_INCLUDE_DIR" => Path.join(Mix.Project.deps_path(), "fine/c_include")
+    }
   end
 
   def application do
@@ -57,19 +63,19 @@ defmodule PDFium.MixProject do
     [
       {:image, "~> 0.1", only: :dev},
       {:cc_precompiler, "~> 0.1", runtime: false},
-      {:elixir_make, "~> 0.1", runtime: false}
+      {:elixir_make, "~> 0.1", runtime: false},
+      {:fine, "~> 0.2", runtime: false}
     ]
   end
 
   defp package do
     [
       files: ~w"
-        build.zig
-        build.zig.zon
         c_src/pdfium_nif.cpp
         checksum.exs
         lib
         LICENSE
+        Makefile
         mix.exs
         README.md
       ",
