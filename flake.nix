@@ -32,7 +32,7 @@
       packages = forAllSystems (
         system: pkgs:
         let
-          nif = pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_29) erlang; };
+          nif = pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_27) erlang; };
           beam = pkgs.beam_minimal.packages.erlang_29;
           beamFor =
             target:
