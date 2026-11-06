@@ -5,21 +5,74 @@ on:
     branches:
       - main
     paths:
-      - build.zig.zon
+      - mix.exs
 
 jobs:
-  build:
-    uses: ./.github/workflows/ci.yaml
+  archives:
+    runs-on: ${{ matrix.runs-on }}
+
+    strategy:
+      matrix:
+        runs-on:
+          - ubuntu-24.04
+          - macos-15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: cachix/install-nix-action@v31
+
+      - uses: cachix/cachix-action@v17
+        with:
+          name: gmile
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-archives-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'mix.exs', 'c_src/**') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-archives-
+          gc-max-store-size: 0
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-${{ runner.arch }}-archives-
+          purge-created: 0
+          purge-primary-key: never
+
+      - run: nix build .#archives .#inputs --print-build-logs
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: archives-${{ runner.os }}
+          path: result/*
 
   release:
-    needs: build
+    needs: archives
     runs-on: ubuntu-24.04
 
     steps:
+      - uses: actions/checkout@v7
+
+      - uses: cachix/install-nix-action@v31
+
+      - uses: cachix/cachix-action@v17
+        with:
+          name: gmile
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-shell-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-shell-
+          gc-max-store-size: 0
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-${{ runner.arch }}-shell-
+          purge-created: 0
+          purge-primary-key: never
+
       - uses: actions/download-artifact@v8
         with:
-          path: artifacts
+          pattern: archives-*
           merge-multiple: true
+          path: archives
 
       - uses: actions/create-github-app-token@v3
         id: app-token
@@ -27,19 +80,9 @@ jobs:
           client-id: ${{ vars.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
-      - name: Create a GitHub release and publish to hex
-        uses: dagger/dagger-for-github@v8.4.1
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+      - run: nix build .#release .#inputs
+
+      - env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
-        with:
-          version: 1.0.0-beta.25
-          dagger-flags: --progress plain --workspace github.com/gmile/pdfium@${{ github.sha }}
-          args: >-
-            github-release \
-              --artifacts artifacts \
-              --sha ${{ github.sha }} \
-              --github-token env://GITHUB_TOKEN \
-            hex-publish \
-              --hex-api-key env://HEX_API_KEY \
-            stdout
+        run: result/bin/release archives

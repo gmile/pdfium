@@ -18,16 +18,25 @@ Native bindings for pdfium project
 
 ## Developing
 
-The development environment is a Nix shell carrying Erlang, Elixir, zig, the
-Dagger CLI at the version the module pins and `gh`:
+The development environment is a Nix shell carrying Erlang, Elixir, a C++
+compiler and `gh`:
 
 ```sh
 nix develop
 ```
 
-`mix compile` builds the NIF for this machine with `zig build`, driven by
-`build.zig`, which fetches the libpdfium archive and the Fine headers declared in
-`build.zig.zon`.
+CI pushes everything it builds to the `gmile` Cachix cache, the musl Erlang
+among it. To download those instead of building them, trust the cache once:
+
+```sh
+cachix use gmile
+```
+
+`mix compile` builds the NIF for this machine through the `Makefile`, which
+downloads the libpdfium archive for the `@libpdfium` tag in `mix.exs` and
+compiles `c_src/pdfium_nif.cpp` against it and the Fine headers from hex. This
+is also what a user of the package gets when no precompiled NIF matches their
+platform.
 
 ## Usage
 
@@ -57,55 +66,69 @@ nix develop
 ## Releasing
 
 Every Monday the `Update to latest libpdfium` workflow opens a pull request that
-bumps the libpdfium archives and the version in `build.zig.zon`. Merging
-it into `main` runs the `Release` workflow, which builds the artifacts, creates
-the GitHub release and publishes the package to hex. Run the workflow by hand to
+bumps `@libpdfium` and `@version` in `mix.exs` and the archive hashes in
+`nix/libpdfium.nix`. Merging it into `main` runs the `Release` workflow, which
+builds the archives on a Linux and a macOS runner, creates the GitHub release
+and publishes the package to hex. Run the workflow by hand to
 release outside the schedule:
 
 ```sh
 gh workflow run update-libpdfium.yaml
 ```
 
-For any other tag or version, open a pull request that sets `.version` in
-`build.zig.zon` by hand and points it at the archives of that tag with
-`zig fetch --save`. Every change to that file is released, so bump the version
-with it. Merging releases the same way.
+For any other tag, run the same app the workflow runs with the tag as its
+argument:
+
+```sh
+nix run .#update -- chromium/8138
+```
+
+Every push to `main` that touches `mix.exs` is released, so bump `@version`
+with it.
 
 ## Running CI steps locally
 
-`ci` builds the NIF for one target, runs the test suite against it where the
-target can run in a container, and returns the archive:
+The flake builds the NIF for every Linux target from any Linux machine with
+the cross toolchains of nixpkgs, and the macOS one on a Mac:
 
 ```sh
-dagger call ci --target aarch64-linux-musl archive export --path .
+nix build .#nif-aarch64-linux-musl
 ```
 
 The targets are `aarch64-linux-gnu`, `aarch64-linux-musl`, `x86_64-linux-gnu`,
-`x86_64-linux-musl`, `aarch64-apple-darwin` and `x86_64-apple-darwin`, all
-compiled with zig in one image. The macOS ones are only built, so `mix test` on
-a Mac is their check. `dagger check` runs all six. The workflows load the workspace from git
-rather than from a checkout, and the same works from any directory:
+`x86_64-linux-musl` and `aarch64-apple-darwin`. `nix build` alone builds the
+one for this machine, and `nix build .#archives` the tarballs this machine can
+build. Nix caches every derivation by its inputs, so a NIF is rebuilt only when
+`c_src/`, `mix.exs` or the toolchain change, and CI keeps the store between
+runs with `cache-nix-action`.
+
+Every workflow step is a flake app, so it runs the same way on a runner and
+here:
 
 ```sh
-dagger --workspace github.com/gmile/pdfium@main check
+nix run .#test-aarch64-linux-musl
+nix run .#release
+nix run .#update
 ```
 
-CI keeps zig's cache per target. After changing the zig version, warm the
-caches on `main` once so pull requests start from them:
-
-```sh
-gh workflow run ci.yaml --ref main
-```
+`test-<target>` puts that target's NIF in `priv/` and runs `mix test` on an
+Erlang built against the same libc, so a musl target runs on a musl BEAM from
+`pkgsMusl`. A system only has the test apps for the targets it can run: both of
+its Linux targets, or the macOS one. CI runs each on a runner of its kind.
+`release` creates the GitHub release from a directory of archives and publishes
+the package to hex. `update` moves `mix.exs` and `nix/libpdfium.nix` to the
+latest libpdfium, bumps the version, pushes the `update-libpdfium` branch and
+opens the pull request.
 
 ## When a release fails
 
 Releases are immutable, so a tag can never be reused, not even after deleting
 the release. Whatever failed, the way forward is another pull request bumping
-`.version` in `build.zig.zon` to the next patch. The same holds for a change to
-that file that forgot to bump the version: the release run goes red once and
-the next bump releases normally.
+`@version` in `mix.exs` to the next patch. The same holds for a change to that
+file that forgot to bump the version: the release run goes red once and the
+next bump releases normally.
 
-The six archives of any run can be fetched for inspection:
+The archives of any run can be fetched for inspection:
 
 ```sh
 gh run download 42028488533 --dir artifacts
@@ -117,6 +140,7 @@ gh run download 42028488533 --dir artifacts
   pull requests; its id is the `GH_APP_ID` variable and its private key the
   `GH_APP_PRIVATE_KEY` secret
 * the `HEX_API_KEY` secret for `mix hex.publish`
+* the `CACHIX_AUTH_TOKEN` secret, a write token for the `gmile` Cachix cache
 * required checks named after the CI jobs, one per matrix entry
 * immutable releases, which is why a failed release is followed by a bump
 
