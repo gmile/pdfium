@@ -1,6 +1,6 @@
 ## PDFium
 
-Native bindings for pdfium project
+Elixir bindings for the pdfium library.
 
 ## Installing
 
