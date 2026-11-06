@@ -1,9 +1,0 @@
-[modules.dang-sdk]
-source = "dagger.io/sdk/dang"
-
-[modules.pdfium]
-source = ".dagger"
-main = true
-
-[sdks.dang]
-module = "dang-sdk"
