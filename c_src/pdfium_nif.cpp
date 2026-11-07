@@ -127,12 +127,12 @@ fine::Atom last_error_name(unsigned long error) {
 
 } // namespace
 
-Result<fine::ResourcePtr<PDFDoc>> load_memory_document(ErlNifEnv *env, std::string data) {
+Result<fine::ResourcePtr<PDFDoc>> load_memory_document(ErlNifEnv *env, std::string data, std::string password) {
     auto doc = fine::make_resource<PDFDoc>(nullptr, std::move(data));
 
     auto lock = lock_pdfium();
-    FPDF_DOCUMENT document =
-        FPDF_LoadMemDocument64(doc->buffer.data(), doc->buffer.size(), nullptr);
+    FPDF_DOCUMENT document = FPDF_LoadMemDocument64(doc->buffer.data(), doc->buffer.size(),
+                                                    password.empty() ? nullptr : password.c_str());
     unsigned long error = document ? 0 : FPDF_GetLastError();
     lock.unlock();
 
