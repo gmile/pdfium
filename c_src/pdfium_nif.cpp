@@ -132,21 +132,6 @@ fine::Atom last_error_name(unsigned long error) {
 
 using DocResult = std::variant<fine::Ok<fine::ResourcePtr<PDFDoc>>, fine::Error<fine::Atom>>;
 
-DocResult load_document(ErlNifEnv *env, std::string filename) {
-    auto lock = lock_pdfium();
-    FPDF_DOCUMENT document = FPDF_LoadDocument(filename.c_str(), nullptr);
-    unsigned long error = document ? 0 : FPDF_GetLastError();
-    lock.unlock();
-
-    if (!document) {
-        return fine::Error(last_error_name(error));
-    }
-
-    return fine::Ok(fine::make_resource<PDFDoc>(document));
-}
-
-FINE_NIF(load_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
-
 DocResult load_memory_document(ErlNifEnv *env, std::string data) {
     auto doc = fine::make_resource<PDFDoc>(nullptr, std::move(data));
 

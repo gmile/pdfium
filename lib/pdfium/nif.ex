@@ -15,8 +15,6 @@ defmodule PDFium.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  def load_document(_filename), do: :erlang.nif_error(:nif_not_loaded)
-
   def load_memory_document(_contents), do: :erlang.nif_error(:nif_not_loaded)
 
   def close_document(_document), do: :erlang.nif_error(:nif_not_loaded)
