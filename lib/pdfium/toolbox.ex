@@ -333,7 +333,7 @@ defmodule PDFium.Toolbox do
           result | {:error, PDFium.load_error()}
         when result: term()
   defp with_documents(sources, function) do
-    opened = Enum.map(sources, &open/1)
+    opened = Enum.map(sources, &PDFium.open_document/1)
 
     try do
       case Enum.find(opened, &match?({:error, _reason}, &1)) do
@@ -347,8 +347,4 @@ defmodule PDFium.Toolbox do
       end)
     end
   end
-
-  @spec open(PDFium.source()) :: {:ok, reference()} | {:error, atom()}
-  defp open({:bytes, contents}), do: PDFium.load_memory_document(contents)
-  defp open(path), do: PDFium.load_document(path)
 end

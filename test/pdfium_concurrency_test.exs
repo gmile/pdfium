@@ -13,7 +13,7 @@ defmodule PDFiumConcurrencyTest do
     |> Enum.map(fn _ ->
       Task.async(fn ->
         for _ <- 1..iterations do
-          case PDFium.load_document(@pdf_path) do
+          case PDFium.open_document(@pdf_path) do
             {:ok, doc} ->
               PDFium.get_page_count(doc)
               PDFium.close_document(doc)
@@ -29,7 +29,7 @@ defmodule PDFiumConcurrencyTest do
     assert :counters.get(errors, 1) == 0
 
     # Verify PDFium is still healthy after stress
-    assert {:ok, doc} = PDFium.load_document(@pdf_path)
+    assert {:ok, doc} = PDFium.open_document(@pdf_path)
     assert {:ok, _pages} = PDFium.get_page_count(doc)
     assert :ok = PDFium.close_document(doc)
   end
@@ -42,7 +42,7 @@ defmodule PDFiumConcurrencyTest do
       on_exit(fn -> File.rm(path) end)
 
       {:ok, heavy} =
-        path |> PDFium.Test.Document.write!([[content: curves(20_000)]]) |> PDFium.load_document()
+        path |> PDFium.Test.Document.write!([[content: curves(20_000)]]) |> PDFium.open_document()
 
       on_exit(fn -> PDFium.close_document(heavy) end)
       {:ok, _, _, _} = PDFium.get_page_bitmap(heavy, 0, 300)
@@ -59,7 +59,7 @@ defmodule PDFiumConcurrencyTest do
     test "does not wait for the render when the document was never closed", context do
       assert drop_us(context, fn _document -> :ok end) < div(context.render_us, 4)
 
-      assert {:ok, document} = PDFium.load_memory_document(File.read!(@pdf_path))
+      assert {:ok, document} = PDFium.open_document({:bytes, File.read!(@pdf_path)})
       assert {:ok, _pages} = PDFium.get_page_count(document)
     end
   end
@@ -69,7 +69,7 @@ defmodule PDFiumConcurrencyTest do
 
     holder =
       spawn(fn ->
-        {:ok, document} = PDFium.load_memory_document(File.read!(@pdf_path))
+        {:ok, document} = PDFium.open_document({:bytes, File.read!(@pdf_path)})
         before_drop.(document)
         Process.put(:document, document)
         send(test, :ready)

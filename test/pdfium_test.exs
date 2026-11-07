@@ -24,7 +24,7 @@ defmodule PDFiumTest do
   end
 
   defp open!(path) do
-    {:ok, document} = PDFium.load_document(path)
+    {:ok, document} = PDFium.open_document(path)
     on_exit(fn -> PDFium.close_document(document) end)
 
     document
@@ -43,34 +43,34 @@ defmodule PDFiumTest do
     {red, green, blue}
   end
 
-  describe "load_document/1" do
+  describe "open_document/1" do
     test "opens a document" do
-      assert {:ok, _document} = PDFium.load_document(@plain)
+      assert {:ok, _document} = PDFium.open_document(@plain)
     end
 
     test "names the reason a file is not one it can read" do
       path = tmp_path()
       File.write!(path, "not a pdf at all")
 
-      assert {:error, :format} = PDFium.load_document(path)
+      assert {:error, :format} = PDFium.open_document(path)
     end
 
     test "names the reason a file is not there" do
-      assert {:error, :file} = PDFium.load_document("/nonexistent-directory/absent.pdf")
+      assert {:error, :file} = PDFium.open_document("/nonexistent-directory/absent.pdf")
     end
   end
 
-  describe "load_memory_document/1" do
+  describe "open_document/1 from contents" do
     test "opens a document from its contents" do
-      {:ok, from_path} = PDFium.load_document(@plain)
+      {:ok, from_path} = PDFium.open_document(@plain)
       {:ok, pages} = PDFium.get_page_count(from_path)
 
-      assert {:ok, document} = PDFium.load_memory_document(File.read!(@plain))
+      assert {:ok, document} = PDFium.open_document({:bytes, File.read!(@plain)})
       assert {:ok, ^pages} = PDFium.get_page_count(document)
     end
 
     test "keeps the contents for as long as the document is open" do
-      assert {:ok, document} = PDFium.load_memory_document(File.read!(@plain))
+      assert {:ok, document} = PDFium.open_document({:bytes, File.read!(@plain)})
 
       :erlang.garbage_collect()
 
@@ -79,44 +79,44 @@ defmodule PDFiumTest do
     end
 
     test "names the reason contents are not a document it can read" do
-      assert {:error, :format} = PDFium.load_memory_document("not a pdf at all")
+      assert {:error, :format} = PDFium.open_document({:bytes, "not a pdf at all"})
     end
   end
 
-  describe "with_memory_document/2" do
+  describe "with_document/2 from contents" do
     test "runs the function with the document it opened" do
       assert {:ok, pages} =
-               PDFium.with_memory_document(File.read!(@plain), &PDFium.get_page_count/1)
+               PDFium.with_document({:bytes, File.read!(@plain)}, &PDFium.get_page_count/1)
 
       assert pages > 0
     end
 
     test "closes the document even when the function raises" do
       assert_raise RuntimeError, fn ->
-        PDFium.with_memory_document(File.read!(@plain), fn _document -> raise "boom" end)
+        PDFium.with_document({:bytes, File.read!(@plain)}, fn _document -> raise "boom" end)
       end
     end
   end
 
   describe "save_to_binary/1" do
     test "answers with the document as it would have been written" do
-      {:ok, document} = PDFium.load_document(@plain)
+      {:ok, document} = PDFium.open_document(@plain)
 
       assert {:ok, saved} = PDFium.save_to_binary(document)
       assert String.starts_with?(saved, "%PDF-")
     end
 
     test "answers with a document that can be opened again" do
-      {:ok, document} = PDFium.load_memory_document(File.read!(@annotated))
+      {:ok, document} = PDFium.open_document({:bytes, File.read!(@annotated)})
       {:ok, pages} = PDFium.get_page_count(document)
 
       assert {:ok, saved} = PDFium.save_to_binary(document)
-      assert {:ok, reopened} = PDFium.load_memory_document(saved)
+      assert {:ok, reopened} = PDFium.open_document({:bytes, saved})
       assert {:ok, ^pages} = PDFium.get_page_count(reopened)
     end
 
     test "refuses a document that has been closed" do
-      {:ok, document} = PDFium.load_document(@plain)
+      {:ok, document} = PDFium.open_document(@plain)
       :ok = PDFium.close_document(document)
 
       assert {:error, :document_closed} = PDFium.save_to_binary(document)
@@ -160,7 +160,7 @@ defmodule PDFiumTest do
 
     test "save_to_binary/2 answers with the document without its encryption" do
       assert {:ok, saved} = PDFium.save_to_binary(open!(@encrypted_r6), :remove)
-      assert {:ok, reopened} = PDFium.load_memory_document(saved)
+      assert {:ok, reopened} = PDFium.open_document({:bytes, saved})
       assert {:ok, nil} = PDFium.get_security_handler_revision(reopened)
     end
 
@@ -270,7 +270,7 @@ defmodule PDFiumTest do
 
   describe "get_annotation_counts/1" do
     test "counts the annotations on each page, in order" do
-      {:ok, document} = PDFium.load_document(@annotated)
+      {:ok, document} = PDFium.open_document(@annotated)
       on_exit(fn -> PDFium.close_document(document) end)
 
       assert {:ok, [1]} = PDFium.get_annotation_counts(document)
@@ -811,7 +811,7 @@ defmodule PDFiumTest do
 
       assert {:ok, stamped} = Toolbox.overlay_to_binary({:bytes, File.read!(document)}, overlay)
       assert String.starts_with?(stamped, "%PDF-")
-      assert {:ok, 1} = PDFium.with_memory_document(stamped, &PDFium.get_page_count/1)
+      assert {:ok, 1} = PDFium.with_document({:bytes, stamped}, &PDFium.get_page_count/1)
     end
 
     test "refuses contents that are not a document" do
@@ -870,7 +870,7 @@ defmodule PDFiumTest do
     test "flattens, answering with the document" do
       assert {:ok, flattened} = Toolbox.flatten_to_binary({:bytes, File.read!(@annotated)})
       assert String.starts_with?(flattened, "%PDF-")
-      assert {:ok, 1} = PDFium.with_memory_document(flattened, &PDFium.get_page_count/1)
+      assert {:ok, 1} = PDFium.with_document({:bytes, flattened}, &PDFium.get_page_count/1)
     end
 
     test "still says when there was nothing to flatten" do
@@ -883,7 +883,7 @@ defmodule PDFiumTest do
 
       assert {:ok, merged} = Toolbox.merge_to_binary([{:bytes, File.read!(first)}, second])
 
-      assert {:ok, pages} = PDFium.with_memory_document(merged, &PDFium.get_page_sizes/1)
+      assert {:ok, pages} = PDFium.with_document({:bytes, merged}, &PDFium.get_page_sizes/1)
       assert Enum.map(pages, & &1.width) == [100.0, 200.0, 300.0]
     end
 
@@ -897,7 +897,7 @@ defmodule PDFiumTest do
       assert {:ok, extracted} =
                Toolbox.extract_pages_to_binary({:bytes, File.read!(source)}, [1, 2])
 
-      assert {:ok, pages} = PDFium.with_memory_document(extracted, &PDFium.get_page_sizes/1)
+      assert {:ok, pages} = PDFium.with_document({:bytes, extracted}, &PDFium.get_page_sizes/1)
       assert Enum.map(pages, & &1.width) == [300.0, 400.0]
     end
 

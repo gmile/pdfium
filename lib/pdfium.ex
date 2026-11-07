@@ -23,57 +23,32 @@ defmodule PDFium do
           | :xfa_layout
 
   @doc """
-  Opens a document.
+  Opens a document, given as a path or as `{:bytes, contents}`.
 
-  The file is read whole before PDFium is given it, so PDFium never reads the
-  disk while it holds the lock every call waits on.
+  A path is read whole first, so pdfium never reads the disk while it holds
+  the lock every call waits on. The document keeps the bytes for as long as it
+  is open.
   """
-  @spec load_document(Path.t()) :: {:ok, reference()} | {:error, load_error()}
-  def load_document(path) do
+  @spec open_document(source()) :: {:ok, reference()} | {:error, load_error()}
+  def open_document({:bytes, contents}), do: PDFium.NIF.load_memory_document(contents)
+
+  def open_document(path) do
     case File.read(path) do
-      {:ok, contents} -> load_memory_document(contents)
+      {:ok, contents} -> open_document({:bytes, contents})
       {:error, _reason} -> {:error, :file}
     end
   end
 
-  @doc """
-  Opens a document from its contents.
-
-  PDFium reads the bytes where they lie for as long as the document is open, so
-  the document holds onto them itself.
-  """
-  @spec load_memory_document(binary()) :: {:ok, reference()} | {:error, load_error()}
-  defdelegate load_memory_document(contents), to: PDFium.NIF
-
   defdelegate close_document(document), to: PDFium.NIF
 
   @doc """
-  Opens `contents`, runs `function` with the document, and closes it again.
+  Opens `source`, runs `function` with the document, and closes it again, even
+  if the work raises.
   """
-  @spec with_memory_document(binary(), (reference() -> result)) :: result | {:error, load_error()}
+  @spec with_document(source(), (reference() -> result)) :: result | {:error, load_error()}
         when result: term()
-  def with_memory_document(contents, function) do
-    with {:ok, document} <- load_memory_document(contents) do
-      try do
-        function.(document)
-      after
-        close_document(document)
-      end
-    end
-  end
-
-  @doc """
-  Opens the document at `path`, runs `function` with it, and closes it again.
-
-  Closing is what hands back the memory a document holds at a known moment
-  rather than whenever the reference is collected, and it happens even if the
-  work raises: a caller that answers its own errors would otherwise hold onto
-  the document for as long as the process lives.
-  """
-  @spec with_document(Path.t(), (reference() -> result)) :: result | {:error, load_error()}
-        when result: term()
-  def with_document(path, function) do
-    with {:ok, document} <- load_document(path) do
+  def with_document(source, function) do
+    with {:ok, document} <- open_document(source) do
       try do
         function.(document)
       after
