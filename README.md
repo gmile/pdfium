@@ -50,6 +50,8 @@ Enter the shell, then use mix as usual:
 nix develop
 mix compile
 mix test
+mix dialyzer
+mix docs
 ```
 
 Trust the project cache once, so builds download instead of compile:
@@ -60,7 +62,7 @@ cachix use gmile
 
 ## Running tests
 
-Run the tests for every target this machine can run:
+Run the tests for every target this machine can run, and dialyzer:
 
 ```sh
 nix flake check

@@ -15,7 +15,9 @@ defmodule PDFium.MixProject do
       compilers: [:elixir_make] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       package: package(),
-      deps: deps()
+      deps: deps(),
+      docs: [main: "readme", extras: ["README.md"]],
+      dialyzer: [plt_add_apps: [:ex_unit]]
     ] ++ make_precompiler()
   end
 
@@ -64,7 +66,9 @@ defmodule PDFium.MixProject do
     [
       {:cc_precompiler, "~> 0.1", runtime: false},
       {:elixir_make, "~> 0.1", runtime: false},
-      {:fine, "~> 0.2", runtime: false}
+      {:fine, "~> 0.2", runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.38", only: :dev, runtime: false}
     ]
   end
 

@@ -83,31 +83,35 @@
             version = nif.version;
             src = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
             mixEnv = "test";
-            hash = "sha256-4X8xCsxkvurD48sp0j1qcAnrOtA7wCVQrHK1iGBodOw=";
+            hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";
           };
-          test =
-            target:
+          mix =
+            name: target: command:
             let
               beam = beamFor target;
             in
             pkgs.stdenvNoCC.mkDerivation {
-              name = "test-${target}";
+              inherit name;
               src = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ./lib ./test ]; };
               nativeBuildInputs = [ beam.erlang beam.elixir_1_20 beam.hex ];
               MIX_ENV = "test";
-              MIX_DEPS_PATH = deps;
               HEX_OFFLINE = 1;
               buildPhase = ''
-                export HOME=$TMPDIR
+                export HOME=$TMPDIR MIX_DEPS_PATH=$PWD/deps
+                cp --recursive --no-preserve=mode ${deps} deps
                 mkdir priv
                 install --mode 755 ${nif.nif target}/* priv
                 mix deps.compile --no-deps-check
-                mix test --no-deps-check
+                ${command}
               '';
               installPhase = "touch $out";
             };
+          test = target: mix "test-${target}" target "mix test --no-deps-check";
         in
         named "test" test testable.${system}
+        // {
+          dialyzer = mix "dialyzer" (builtins.head testable.${system}) "mix dialyzer";
+        }
       );
 
       devShells = forAllSystems (
