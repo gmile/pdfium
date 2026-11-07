@@ -297,6 +297,12 @@ defmodule PDFiumTest do
       assert {:ok, ~s([{"name":"Someone"}])} = PDFium.get_meta_text(document, "SignedBy")
     end
 
+    test "reads a value beyond the basic plane" do
+      document = tmp_path() |> Document.write!([[]], Title: "Contract 📄") |> open!()
+
+      assert {:ok, "Contract 📄"} = PDFium.get_meta_text(document, "Title")
+    end
+
     test "reads a value stored as text rather than as bytes" do
       document = tmp_path() |> Document.write!([[]], Author: "Stanisław Lem") |> open!()
 
@@ -379,6 +385,14 @@ defmodule PDFiumTest do
 
       PDFium.with_new_document(fn document ->
         assert {:error, :no_pages} = PDFium.import_pages(document, source, [], 0)
+      end)
+    end
+
+    test "reporting a position past the end" do
+      source = tmp_path() |> Document.write!([[]]) |> open!()
+
+      PDFium.with_new_document(fn document ->
+        assert {:error, :import_failed} = PDFium.import_pages(document, source, :all, 5)
       end)
     end
 

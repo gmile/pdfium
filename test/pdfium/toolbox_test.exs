@@ -248,6 +248,36 @@ defmodule PDFium.ToolboxTest do
       refute blue?(colour_at(output, 0.75, 0.75))
     end
 
+    test "turns the overlay with a page turned half or three quarters" do
+      for rotation <- [180, 270] do
+        output = tmp_path()
+        {width, height} = if rotation == 180, do: {400, 600}, else: {600, 400}
+
+        document =
+          tmp_path() |> Document.write!([[box: {0, 0, width, height}, rotation: rotation]])
+
+        overlay = corner_overlay({0, 0, 400, 600})
+
+        assert :ok = write(Toolbox.stamp(document, [{overlay, 0}]), output)
+        assert blue?(colour_at(output, 0.25, 0.25)), "rotation #{rotation}"
+        refute blue?(colour_at(output, 0.75, 0.75)), "rotation #{rotation}"
+      end
+    end
+
+    test "places against the crop box when the page has one" do
+      output = tmp_path()
+      page = [box: {0, 0, 400, 400}, crop: {100, 100, 300, 300}]
+      document = tmp_path() |> Document.write!([page])
+      overlay = corner_overlay({0, 0, 200, 200})
+
+      assert {:ok, [%{width: 200.0, height: 200.0}]} =
+               PDFium.with_document(document, &PDFium.get_page_sizes/1)
+
+      assert :ok = write(Toolbox.stamp(document, [{overlay, 0}]), output)
+      assert blue?(colour_at(output, 0.25, 0.25))
+      refute blue?(colour_at(output, 0.75, 0.75))
+    end
+
     test "scales an overlay of a different shape to fit, centred" do
       output = tmp_path()
       box = {0, 0, 400, 400}
