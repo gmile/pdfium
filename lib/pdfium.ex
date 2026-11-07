@@ -1,4 +1,7 @@
 defmodule PDFium do
+  @typedoc "A document to open: a path, or its contents."
+  @type source :: Path.t() | {:bytes, binary()}
+
   @typedoc """
   Why pdfium would not open a document, named as pdfium names it.
 
