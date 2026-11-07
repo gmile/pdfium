@@ -424,14 +424,14 @@ defmodule PDFiumTest do
     test "draws the annotations on the page it names" do
       document = open!(@annotated)
 
-      assert {:ok, :flattened} = PDFium.flatten_page(document, 0)
+      assert :ok = PDFium.flatten_page(document, 0)
       assert {:ok, [0]} = PDFium.get_annotation_counts(document)
     end
 
     test "says when a page had nothing to draw" do
       document = tmp_path() |> Document.write!([[]]) |> open!()
 
-      assert {:ok, :nothing_to_do} = PDFium.flatten_page(document, 0)
+      assert :ok = PDFium.flatten_page(document, 0)
     end
 
     test "leaves the pages it was not asked about" do
@@ -439,7 +439,7 @@ defmodule PDFiumTest do
       assert :ok = write(Toolbox.merge([@annotated, @annotated]), output)
       document = open!(output)
 
-      assert {:ok, :flattened} = PDFium.flatten_page(document, 0)
+      assert :ok = PDFium.flatten_page(document, 0)
       assert {:ok, [0, 1]} = PDFium.get_annotation_counts(document)
     end
 

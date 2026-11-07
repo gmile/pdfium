@@ -38,8 +38,6 @@ static fine::Atom form_object_failed("form_object_failed");
 static fine::Atom document_closed("document_closed");
 static fine::Atom page_load_failed("page_load_failed");
 static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
-static fine::Atom flattened("flattened");
-static fine::Atom nothing_to_do("nothing_to_do");
 static fine::Atom flatten_failed("flatten_failed");
 static fine::Atom save_failed("save_failed");
 
@@ -360,8 +358,8 @@ FPDF_DWORD save_flags(bool remove_security) { return remove_security ? FPDF_REMO
 
 // `usage` is one of pdfium's FLAT_ values: 0 to flatten for display, 1 for
 // print.
-Result<fine::Atom> flatten_page(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, int64_t page_index,
-                           int64_t usage) {
+Result<> flatten_page(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, int64_t page_index,
+                      int64_t usage) {
     auto lock = lock_pdfium();
 
     if (!doc->document) {
@@ -377,14 +375,11 @@ Result<fine::Atom> flatten_page(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, i
     int result = FPDFPage_Flatten(page, static_cast<int>(usage));
     FPDF_ClosePage(page);
 
-    switch (result) {
-    case FLATTEN_SUCCESS:
-        return fine::Ok(flattened);
-    case FLATTEN_NOTHINGTODO:
-        return fine::Ok(nothing_to_do);
-    default:
+    if (result == FLATTEN_FAIL) {
         return fine::Error(flatten_failed);
     }
+
+    return fine::Ok<>();
 }
 
 FINE_NIF(flatten_page, ERL_NIF_DIRTY_JOB_CPU_BOUND);

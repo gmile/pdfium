@@ -168,7 +168,7 @@ defmodule PDFium.Toolbox do
   defp each_page(count, function) do
     Enum.reduce_while(0..(count - 1)//1, :ok, fn index, :ok ->
       case function.(index) do
-        {:ok, _} -> {:cont, :ok}
+        :ok -> {:cont, :ok}
         error -> {:halt, error}
       end
     end)
