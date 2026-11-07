@@ -55,7 +55,7 @@ defmodule PDFiumVisualTest do
       assert {:ok, :flattened} = PDFium.flatten_page(document, 0, usage)
       assert {:ok, binary} = PDFium.save_to_binary(document)
 
-      flattened = open_binary!(binary)
+      flattened = open!({:bytes, binary})
       assert {:ok, [0]} = PDFium.get_annotation_counts(flattened)
       assert_looks_like(sheet(flattened), "annotations-flattened-#{usage}")
     end
@@ -102,7 +102,7 @@ defmodule PDFiumVisualTest do
     assert_looks_like(sheet(encrypted), "encrypted-r6-marked")
 
     assert {:ok, binary} = PDFium.save_to_binary(encrypted, :remove)
-    decrypted = open_binary!(binary)
+    decrypted = open!({:bytes, binary})
     assert {:ok, nil} = PDFium.get_security_handler_revision(decrypted)
     assert_looks_like(sheet(decrypted), "encrypted-r6-marked")
 
@@ -117,7 +117,7 @@ defmodule PDFiumVisualTest do
                     do: PDFium.save_to_binary(output)
              end)
 
-    assembled = open_binary!(binary)
+    assembled = open!({:bytes, binary})
     assert {:ok, 4} = PDFium.get_page_count(assembled)
     assert_looks_like(sheet(assembled), "assembled")
   end
@@ -136,21 +136,21 @@ defmodule PDFiumVisualTest do
     bars = bars!()
 
     assert {:ok, binary} = Toolbox.stamp_to_binary(target, [{overlay, 0}, {overlay, 1}])
-    assert_looks_like(sheet(open_binary!(binary)), "toolbox-stamp")
+    assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-stamp")
 
     assert {:ok, binary} = Toolbox.overlay_to_binary(target, {:bytes, File.read!(overlays)})
-    assert_looks_like(sheet(open_binary!(binary)), "toolbox-overlay")
+    assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-overlay")
 
     for usage <- [:display, :print] do
       assert {:ok, binary} = Toolbox.flatten_to_binary(annotated, usage)
-      assert_looks_like(sheet(open_binary!(binary)), "annotations-flattened-#{usage}")
+      assert_looks_like(sheet(open!({:bytes, binary})), "annotations-flattened-#{usage}")
     end
 
     assert {:ok, binary} = Toolbox.merge_to_binary([bars, {:bytes, File.read!(@encrypted_r6)}])
-    assert_looks_like(sheet(open_binary!(binary)), "toolbox-merge")
+    assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-merge")
 
     assert {:ok, binary} = Toolbox.extract_pages_to_binary(bars, [2, 0, 2])
-    assert_looks_like(sheet(open_binary!(binary)), "toolbox-extract")
+    assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-extract")
   end
 
   defp mark(x, y) do
@@ -195,14 +195,8 @@ defmodule PDFiumVisualTest do
     path
   end
 
-  defp open!(path) do
-    {:ok, document} = PDFium.load_document(path)
-    on_exit(fn -> PDFium.close_document(document) end)
-    document
-  end
-
-  defp open_binary!(binary) do
-    {:ok, document} = PDFium.load_memory_document(binary)
+  defp open!(source) do
+    {:ok, document} = PDFium.open_document(source)
     on_exit(fn -> PDFium.close_document(document) end)
     document
   end
