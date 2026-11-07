@@ -228,22 +228,14 @@ BitmapResult get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
     }
 
     FPDFBitmap_FillRect(bitmap, 0, 0, width, height, 0xFFFFFFFF);
-    FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, FPDF_ANNOT);
+    FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, FPDF_ANNOT | FPDF_REVERSE_BYTE_ORDER);
 
-    auto *buffer = static_cast<unsigned char *>(FPDFBitmap_GetBuffer(bitmap));
-    int stride = FPDFBitmap_GetStride(bitmap);
-
-    // Convert BGRA to RGBA
-    std::string rgba(static_cast<size_t>(width) * height * 4, '\0');
+    auto *buffer = static_cast<const char *>(FPDFBitmap_GetBuffer(bitmap));
+    size_t row = static_cast<size_t>(width) * 4;
+    std::string rgba;
+    rgba.reserve(row * height);
     for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            unsigned char *bgra = buffer + y * stride + x * 4;
-            char *out = &rgba[(y * width + x) * 4];
-            out[0] = bgra[2];
-            out[1] = bgra[1];
-            out[2] = bgra[0];
-            out[3] = bgra[3];
-        }
+        rgba.append(buffer + y * FPDFBitmap_GetStride(bitmap), row);
     }
 
     FPDFBitmap_Destroy(bitmap);
