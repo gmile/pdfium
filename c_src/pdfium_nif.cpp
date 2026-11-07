@@ -234,7 +234,7 @@ BitmapResult get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
     int stride = FPDFBitmap_GetStride(bitmap);
 
     // Convert BGRA to RGBA
-    std::string rgba(width * height * 4, '\0');
+    std::string rgba(static_cast<size_t>(width) * height * 4, '\0');
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             unsigned char *bgra = buffer + y * stride + x * 4;
