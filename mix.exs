@@ -1,7 +1,7 @@
 defmodule PDFium.MixProject do
   use Mix.Project
 
-  @version "0.1.48"
+  @version "0.2.0"
   @libpdfium "chromium/8138"
 
   def project do
