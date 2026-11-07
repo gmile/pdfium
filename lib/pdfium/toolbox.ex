@@ -167,24 +167,9 @@ defmodule PDFium.Toolbox do
       with {:ok, pages} <- PDFium.get_page_sizes(document),
            {:ok, overlay_pages} <- PDFium.get_page_sizes(overlay),
            true <- length(pages) == length(overlay_pages) || {:error, :page_count_mismatch},
-           {:ok, placed} <- fit_pairwise(overlay, pages, overlay_pages) do
+           named = Enum.map(0..(length(pages) - 1)//1, &{overlay, &1, &1}),
+           {:ok, placed} <- fit_each(named, pages, %{overlay => overlay_pages}) do
         finish.(document, placed)
-      end
-    end)
-  end
-
-  @spec fit_pairwise(reference(), [PDFium.page_size()], [PDFium.page_size()]) ::
-          {:ok, [{reference(), non_neg_integer(), non_neg_integer(), PDFium.placement()}]}
-          | {:error, atom()}
-  defp fit_pairwise(overlay, pages, overlay_pages) do
-    pages
-    |> Enum.zip(overlay_pages)
-    |> Enum.with_index()
-    |> Enum.reduce_while({:ok, []}, fn {{page, overlay_page}, index}, {:ok, placed} ->
-      if page.width > 0 and page.height > 0 and overlay_page.width > 0 and overlay_page.height > 0 do
-        {:cont, {:ok, placed ++ [{overlay, index, index, fit(overlay_page, page)}]}}
-      else
-        {:halt, {:error, :page_load_failed}}
       end
     end)
   end
