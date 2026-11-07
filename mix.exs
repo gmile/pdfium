@@ -17,7 +17,11 @@ defmodule PDFium.MixProject do
       package: package(),
       deps: deps(),
       docs: [main: "readme", extras: ["README.md"]],
-      dialyzer: [plt_add_apps: [:ex_unit], plt_core_path: "_build/plts", plt_local_path: "_build/plts"]
+      dialyzer: [
+        plt_add_apps: [:ex_unit],
+        plt_core_path: "_build/plts",
+        plt_local_path: "_build/plts"
+      ]
     ] ++ make_precompiler()
   end
 
