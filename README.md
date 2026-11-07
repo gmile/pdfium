@@ -37,7 +37,7 @@ Count its pages:
 Render a page to a file, with Vix:
 
 ```elixir
-{:ok, binary, w, h} = PDFium.get_page_bitmap(document, 0, 300)
+{:ok, {binary, w, h}} = PDFium.get_page_bitmap(document, 0, 300)
 {:ok, image} = Vix.Vips.Image.new_from_binary(binary, w, h, 4, :VIPS_FORMAT_UCHAR)
 {:ok, _image} = Image.write(image, "/tmp/sample.png")
 ```

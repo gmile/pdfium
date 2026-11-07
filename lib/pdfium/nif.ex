@@ -38,5 +38,5 @@ defmodule PDFium.NIF do
 
   def import_pages(_dest, _src, _page_indices, _at), do: :erlang.nif_error(:nif_not_loaded)
 
-  def stamp_in_place(_document, _placements), do: :erlang.nif_error(:nif_not_loaded)
+  def stamp(_document, _placements), do: :erlang.nif_error(:nif_not_loaded)
 end

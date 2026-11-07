@@ -67,7 +67,7 @@ defmodule PDFium do
   that content, which is the point of the annotation.
   """
   @spec get_page_bitmap(reference(), non_neg_integer(), pos_integer()) ::
-          {:ok, binary(), non_neg_integer(), non_neg_integer()} | {:error, atom()}
+          {:ok, {binary(), non_neg_integer(), non_neg_integer()}} | {:error, atom()}
   defdelegate get_page_bitmap(document, page_number, dpi), to: PDFium.NIF
 
   @typedoc """
@@ -151,11 +151,9 @@ defmodule PDFium do
   @doc """
   Writes a document out.
   """
-  @spec save(reference(), Path.t(), security()) :: {:ok, :saved} | {:error, atom()}
+  @spec save(reference(), Path.t(), security()) :: :ok | {:error, atom()}
   def save(document, output_path, security \\ :keep) do
-    with {:ok, binary} <- save_to_binary(document, security),
-         :ok <- File.write(output_path, binary),
-         do: {:ok, :saved}
+    with {:ok, binary} <- save_to_binary(document, security), do: File.write(output_path, binary)
   end
 
   @doc """
@@ -172,7 +170,7 @@ defmodule PDFium do
   they should arrive.
   """
   @spec import_pages(reference(), reference(), :all | [non_neg_integer()], non_neg_integer()) ::
-          {:ok, :imported} | {:error, atom()}
+          :ok | {:error, atom()}
   def import_pages(destination, source, pages, at \\ 0)
 
   def import_pages(destination, source, :all, at),
@@ -209,42 +207,18 @@ defmodule PDFium do
   @type placement :: {number(), number(), number(), number(), number(), number()}
 
   @doc """
-  Draws overlays over the pages of `document` and writes the result.
+  Draws overlays over the pages of `document`, in place.
 
   Each placement is `{overlay, overlay_page, page_index, matrix}`, drawing that
   page of the overlay over that page of the document, both numbered from zero.
-  Placements landing on the same page stack in the order given.
-
-  An overlay with a page per page of the document - a header and footer carrying
-  its own page numbers, say - is drawn by naming the page that belongs to each.
-
-  An overlay arrives the way a reader shows it: turned the right way up, with
-  its own box shifted onto the origin. The pages keep the content they already
-  had.
+  Placements landing on the same page stack in the order given. An overlay
+  arrives the way a reader shows it: turned the right way up, with its own box
+  shifted onto the origin. A placement that fails leaves the ones before it
+  drawn.
   """
-  @spec stamp(
-          reference(),
-          [{reference(), non_neg_integer(), non_neg_integer(), placement()}],
-          Path.t(),
-          security()
-        ) :: {:ok, :stamped} | {:error, atom()}
-  def stamp(document, placements, output_path, security \\ :keep) do
-    with {:ok, :stamped} <- stamp_in_place(document, placements),
-         {:ok, :saved} <- save(document, output_path, security),
-         do: {:ok, :stamped}
-  end
-
-  @doc """
-  Stamps as `stamp/3` does, leaving the result in the document rather than
-  writing it out.
-  """
-  @spec stamp_in_place(
-          reference(),
-          [{reference(), non_neg_integer(), non_neg_integer(), placement()}]
-        ) :: {:ok, :stamped} | {:error, atom()}
-  def stamp_in_place(document, placements) do
-    PDFium.NIF.stamp_in_place(document, as_floats(placements))
-  end
+  @spec stamp(reference(), [{reference(), non_neg_integer(), non_neg_integer(), placement()}]) ::
+          :ok | {:error, atom()}
+  def stamp(document, placements), do: PDFium.NIF.stamp(document, as_floats(placements))
 
   @spec as_floats([{reference(), non_neg_integer(), non_neg_integer(), placement()}]) :: [
           {reference(), non_neg_integer(), non_neg_integer(), placement()}

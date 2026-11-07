@@ -13,8 +13,8 @@ defmodule PDFium.Test.Visual do
   end
 
   def page(document, index, dpi \\ 72) do
-    {:ok, pixels, width, height} = PDFium.get_page_bitmap(document, index, dpi)
-    {pixels, width, height}
+    {:ok, image} = PDFium.get_page_bitmap(document, index, dpi)
+    image
   end
 
   def assert_looks_like({pixels, width, height} = image, name) do

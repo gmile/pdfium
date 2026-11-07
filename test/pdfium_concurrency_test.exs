@@ -45,8 +45,8 @@ defmodule PDFiumConcurrencyTest do
         path |> PDFium.Test.Document.write!([[content: curves(20_000)]]) |> PDFium.open_document()
 
       on_exit(fn -> PDFium.close_document(heavy) end)
-      {:ok, _, _, _} = PDFium.get_page_bitmap(heavy, 0, 300)
-      {render_us, {:ok, _, _, _}} = :timer.tc(fn -> PDFium.get_page_bitmap(heavy, 0, 300) end)
+      {:ok, {_, _, _}} = PDFium.get_page_bitmap(heavy, 0, 300)
+      {render_us, {:ok, {_, _, _}}} = :timer.tc(fn -> PDFium.get_page_bitmap(heavy, 0, 300) end)
 
       {:ok, heavy: heavy, render_us: render_us}
     end
