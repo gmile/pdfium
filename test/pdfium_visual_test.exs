@@ -65,7 +65,7 @@ defmodule PDFiumVisualTest do
 
     for usage <- [:display, :print] do
       document = open!(path)
-      assert {:ok, :flattened} = PDFium.flatten_page(document, 0, usage)
+      assert :ok = PDFium.flatten_page(document, 0, usage)
       assert {:ok, binary} = PDFium.save_to_binary(document)
 
       flattened = open!({:bytes, binary})

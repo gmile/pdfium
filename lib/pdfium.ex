@@ -178,14 +178,13 @@ defmodule PDFium do
   @doc """
   Draws a page's annotations into its content and drops them, in place.
 
-      {:ok, :flattened} = PDFium.flatten_page(document, 0)
-      {:ok, :nothing_to_do} = PDFium.flatten_page(document, 1, :print)
+      :ok = PDFium.flatten_page(document, 0)
+      :ok = PDFium.flatten_page(document, 1, :print)
 
   `usage` picks the appearance drawn: `:display` is what a reader shows,
   `:print` what it would print.
   """
-  @spec flatten_page(reference(), non_neg_integer(), :display | :print) ::
-          {:ok, :flattened | :nothing_to_do} | {:error, atom()}
+  @spec flatten_page(reference(), non_neg_integer(), :display | :print) :: :ok | {:error, atom()}
   def flatten_page(document, page_index, usage \\ :display)
 
   def flatten_page(document, page_index, :display),
