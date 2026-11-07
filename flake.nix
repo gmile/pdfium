@@ -85,6 +85,7 @@
             mixEnv = "test";
             hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";
           };
+          host = builtins.head testable.${system};
           mix =
             name: target: command:
             let
@@ -99,18 +100,30 @@
               buildPhase = ''
                 export HOME=$TMPDIR MIX_DEPS_PATH=$PWD/deps
                 cp --recursive --no-preserve=mode ${deps} deps
-                mkdir priv
-                install --mode 755 ${nif.nif target}/* priv
                 mix deps.compile --no-deps-check
                 ${command}
               '';
               installPhase = "touch $out";
             };
-          test = target: mix "test-${target}" target "mix test --no-deps-check";
+          withNif = target: command: ''
+            mkdir priv
+            install --mode 755 ${nif.nif target}/* priv
+            ${command}
+          '';
+          test = target: mix "test-${target}" target (withNif target "mix test --no-deps-check");
+          plt = (mix "plt" host (withNif host "mix dialyzer --plt")).overrideAttrs {
+            src = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
+            installPhase = "mkdir $out && cp _build/plts/*.plt $out";
+          };
+          dialyzer = mix "dialyzer" host (withNif host ''
+            mkdir -p _build/plts
+            cp ${plt}/* _build/plts
+            mix dialyzer --no-check
+          '');
         in
         named "test" test testable.${system}
         // {
-          dialyzer = mix "dialyzer" (builtins.head testable.${system}) "mix dialyzer";
+          inherit dialyzer;
         }
       );
 
