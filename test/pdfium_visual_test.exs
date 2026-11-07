@@ -29,7 +29,7 @@ defmodule PDFiumVisualTest do
 
     assert {:ok, 6} = PDFium.get_page_count(document)
 
-    assert {:ok, [sizes]} = PDFium.get_page_sizes([document])
+    assert {:ok, sizes} = PDFium.get_page_sizes(document)
 
     assert Enum.map(sizes, &{&1.width, &1.height}) == [
              {120.0, 80.0},
@@ -39,9 +39,6 @@ defmodule PDFiumVisualTest do
              {80.0, 120.0},
              {100.0, 70.0}
            ]
-
-    assert {:ok, boxes} = PDFium.get_page_boxes(document)
-    assert Enum.map(boxes, & &1.rotation) == [0, 90, 180, 270, 90, 0]
 
     assert_looks_like(sheet(document), "geometry")
     assert_looks_like(page(document, 0, 144), "geometry-144-dpi")
