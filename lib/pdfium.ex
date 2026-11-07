@@ -71,6 +71,32 @@ defmodule PDFium do
   defdelegate get_page_bitmap(document, page_number, dpi), to: PDFium.NIF
 
   @typedoc """
+  The MediaBox of a page, in points, corners sorted, and its rotation in
+  degrees. Neither corner has to sit at the origin.
+  """
+  @type page_box :: %{
+          left: float(),
+          bottom: float(),
+          right: float(),
+          top: float(),
+          rotation: 0 | 90 | 180 | 270
+        }
+
+  @doc """
+  The MediaBox and rotation of every page, in order: what placing content in
+  a page's own coordinates needs, which sizes do not carry.
+  """
+  @spec get_page_boxes(reference()) :: {:ok, [page_box()]} | {:error, atom()}
+  def get_page_boxes(document) do
+    with {:ok, boxes} <- PDFium.NIF.get_page_boxes(document) do
+      {:ok,
+       Enum.map(boxes, fn {left, bottom, right, top, rotation} ->
+         %{left: left, bottom: bottom, right: right, top: top, rotation: rotation}
+       end)}
+    end
+  end
+
+  @typedoc """
   How large a page is as a reader shows it, in points.
 
   This is the box the page is laid out in rather than the one written down, so

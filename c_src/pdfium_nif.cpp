@@ -222,6 +222,52 @@ Result<std::tuple<std::string, int64_t, int64_t>> get_page_bitmap(ErlNifEnv *env
 
 FINE_NIF(get_page_bitmap, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
+using PageBox = std::tuple<double, double, double, double, int64_t>;
+
+Result<std::vector<PageBox>> get_page_boxes(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
+    auto lock = lock_pdfium();
+
+    if (!doc->document) {
+        return fine::Error(document_closed);
+    }
+
+    int page_count = FPDF_GetPageCount(doc->document);
+
+    std::vector<PageBox> boxes;
+    boxes.reserve(static_cast<size_t>(page_count));
+
+    for (int index = 0; index < page_count; index++) {
+        FPDF_PAGE page = FPDF_LoadPage(doc->document, index);
+        if (!page) {
+            return fine::Error(page_load_failed);
+        }
+
+        int rotation = FPDFPage_GetRotation(page);
+        float left, bottom, right, top;
+
+        if (!FPDFPage_GetMediaBox(page, &left, &bottom, &right, &top)) {
+            float width = FPDF_GetPageWidthF(page);
+            float height = FPDF_GetPageHeightF(page);
+            if (rotation % 2 != 0) {
+                std::swap(width, height);
+            }
+            left = 0.0f;
+            bottom = 0.0f;
+            right = width;
+            top = height;
+        }
+
+        FPDF_ClosePage(page);
+
+        boxes.emplace_back(std::min(left, right), std::min(bottom, top), std::max(left, right),
+                           std::max(bottom, top), static_cast<int64_t>(rotation) * 90);
+    }
+
+    return fine::Ok(std::move(boxes));
+}
+
+FINE_NIF(get_page_boxes, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+
 using PageSize = std::tuple<double, double>;
 
 Result<std::vector<PageSize>> get_page_sizes(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc) {
