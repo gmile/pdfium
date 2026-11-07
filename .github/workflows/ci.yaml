@@ -17,17 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: aarch64-linux-gnu
-            runs-on: ubuntu-24.04-arm
-          - target: aarch64-apple-darwin
-            runs-on: macos-15
-          - target: x86_64-linux-gnu
-            runs-on: ubuntu-24.04
-          - target: aarch64-linux-musl
-            runs-on: ubuntu-24.04-arm
-          - target: x86_64-linux-musl
-            runs-on: ubuntu-24.04
+        runs-on:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-15
 
     steps:
       - uses: actions/checkout@v7
@@ -39,16 +32,4 @@ jobs:
           name: gmile
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - uses: nix-community/cache-nix-action@v7
-        with:
-          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ matrix.target }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'mix.exs', 'c_src/**') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-${{ matrix.target }}-
-          gc-max-store-size: 0
-          purge: true
-          purge-prefixes: nix-${{ runner.os }}-${{ runner.arch }}-${{ matrix.target }}-
-          purge-created: 0
-          purge-primary-key: never
-
-      - run: nix build .#test-${{ matrix.target }} .#inputs --print-build-logs
-
-      - run: result/bin/test-${{ matrix.target }}
+      - run: nix flake check --print-build-logs

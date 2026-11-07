@@ -27,22 +27,10 @@ jobs:
           name: gmile
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - uses: nix-community/cache-nix-action@v7
-        with:
-          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-shell-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-shell-
-          gc-max-store-size: 0
-          purge: true
-          purge-prefixes: nix-${{ runner.os }}-${{ runner.arch }}-shell-
-          purge-created: 0
-          purge-primary-key: never
-
-      - run: nix build .#update .#inputs
-
       - env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-        run: result/bin/update
+        run: nix run .#update
