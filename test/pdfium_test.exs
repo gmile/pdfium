@@ -594,11 +594,11 @@ defmodule PDFiumTest do
     end
 
     test "leaves the pages it was not asked about", %{output: output} do
-      pages = tmp_path() |> Document.write!([[], []]) |> open!()
-      assert {:ok, :saved} = PDFium.save(pages, output)
+      assert {:ok, :merged} = Toolbox.merge([@annotated, @annotated], output)
+      document = open!(output)
 
-      document = open!(@annotated)
-      assert {:ok, [1]} = PDFium.get_annotation_counts(document)
+      assert {:ok, :flattened} = PDFium.flatten_page(document, 0)
+      assert {:ok, [0, 1]} = PDFium.get_annotation_counts(document)
     end
 
     test "reports a page that is not there" do
