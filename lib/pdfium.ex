@@ -11,24 +11,11 @@ defmodule PDFium do
   @type source :: Path.t() | {:bytes, binary()}
 
   @typedoc """
-  Why pdfium would not open a document, named as pdfium names it.
-
-  `:file` is a file it could not read at all, `:format` one that is not a PDF or
-  is damaged past reading, `:password` one that needs a password it was not
-  given, `:security` one encrypted with a scheme it does not implement, and
-  `:page` one whose pages it cannot read. `:xfa_load` and `:xfa_layout` only
-  arise in a build with XFA compiled in. `:unknown` is pdfium declining to say,
-  and covers any code a later pdfium adds.
+  Why pdfium would not open a document: unreadable `:file`, broken `:format`,
+  a missing or wrong `:password`, an unsupported `:security` scheme, an
+  unreadable `:page`, or `:unknown`.
   """
-  @type load_error ::
-          :unknown
-          | :file
-          | :format
-          | :password
-          | :security
-          | :page
-          | :xfa_load
-          | :xfa_layout
+  @type load_error :: :unknown | :file | :format | :password | :security | :page
 
   @doc """
   Opens a document from a path or from `{:bytes, contents}`.
@@ -96,8 +83,9 @@ defmodule PDFium do
   defdelegate get_page_bitmap(document, page_number, dpi), to: PDFium.NIF
 
   @typedoc """
-  The MediaBox of a page, in points, corners sorted, and its rotation in
-  degrees. Neither corner has to sit at the origin.
+  The box a page is drawn in, its MediaBox clipped by its CropBox, in points
+  with corners sorted, and its rotation in degrees. Neither corner has to sit
+  at the origin.
   """
   @type page_box :: %{
           left: float(),
@@ -108,8 +96,8 @@ defmodule PDFium do
         }
 
   @doc """
-  The MediaBox and rotation of every page, in order: what placing content in
-  a page's own coordinates needs.
+  The box and rotation of every page, in order: what placing content in a
+  page's own coordinates needs.
 
       {:ok, [%{left: 0.0, bottom: 0.0, right: 612.0, top: 792.0, rotation: 0}]} =
         PDFium.get_page_boxes(document)
@@ -198,7 +186,7 @@ defmodule PDFium do
 
       {:ok, document} = PDFium.create_document()
   """
-  @spec create_document() :: {:ok, reference()} | {:error, atom()}
+  @spec create_document() :: {:ok, reference()}
   defdelegate create_document(), to: PDFium.NIF
 
   @doc """
@@ -274,7 +262,7 @@ defmodule PDFium do
 
   A placement is `{overlay, overlay_page, page_index, matrix}`, pages counted
   from zero. Placements on one page stack in the order given. A placement that
-  fails leaves the ones before it drawn.
+  fails leaves the document as it was.
   """
   @spec stamp(reference(), [{reference(), non_neg_integer(), non_neg_integer(), placement()}]) ::
           :ok | {:error, atom()}

@@ -457,7 +457,20 @@ defmodule PDFiumTest do
     end
   end
 
-  describe "stamp/3, placed by matrix" do
+  describe "stamp/2, placed by matrix" do
+    test "leaves the document as it was when a placement fails" do
+      output = tmp_path()
+      overlay = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 400, 400}) |> open!()
+      document = tmp_path() |> Document.write!([[box: {0, 0, 400, 400}]]) |> open!()
+      placement = {1, 0, 0, 1, 0, 0}
+
+      assert {:error, :page_load_failed} =
+               PDFium.stamp(document, [{overlay, 0, 0, placement}, {overlay, 0, 9, placement}])
+
+      assert :ok = PDFium.save(document, output)
+      refute blue?(colour_at(output, 0.5, 0.5))
+    end
+
     test "puts the overlay where the matrix says" do
       output = tmp_path()
       # A quarter page of blue in its own bottom left corner, placed into the
