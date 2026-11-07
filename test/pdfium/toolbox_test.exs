@@ -386,6 +386,27 @@ defmodule PDFium.ToolboxTest do
     end
   end
 
+  describe "render_pages!/2" do
+    test "renders each page as it is taken" do
+      pages = [
+        [box: {0, 0, 10, 10}, content: "1 0 0 rg 0 0 10 10 re f"],
+        [box: {0, 0, 10, 10}, content: "0 0 1 rg 0 0 10 10 re f"]
+      ]
+
+      assert [{red, 10, 10}, {blue, 10, 10}] =
+               Enum.to_list(Toolbox.render_pages!(document!(pages), 72))
+
+      assert <<255, 0, 0, _::binary>> = red
+      assert <<0, 0, 255, _::binary>> = blue
+    end
+
+    test "stops when the reader does" do
+      pages = [[box: {0, 0, 10, 10}], [box: {0, 0, 10, 10}]]
+
+      assert [{_pixels, 10, 10}] = Enum.take(Toolbox.render_pages!(document!(pages), 72), 1)
+    end
+  end
+
   describe "flatten/2" do
     test "renders annotations into the page and writes the result" do
       output = tmp_path()

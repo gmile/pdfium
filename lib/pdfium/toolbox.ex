@@ -96,6 +96,33 @@ defmodule PDFium.Toolbox do
     end)
   end
 
+  @doc """
+  Renders every page of `source` at `dpi`, one page at a time as the stream is
+  read, each as `{pixels, width, height}` in RGBA.
+
+  The document stays open while the stream is read and is closed when it
+  ends or is halted. Raises when the document cannot be opened.
+  """
+  @spec render_pages!(PDFium.source(), pos_integer()) :: Enumerable.t()
+  def render_pages!(source, dpi) do
+    Stream.resource(
+      fn ->
+        {:ok, document} = PDFium.open_document(source)
+        {:ok, count} = PDFium.get_page_count(document)
+        {document, 0, count}
+      end,
+      fn
+        {document, index, count} when index < count ->
+          {:ok, page} = PDFium.get_page_bitmap(document, index, dpi)
+          {[page], {document, index + 1, count}}
+
+        state ->
+          {:halt, state}
+      end,
+      fn {document, _index, _count} -> PDFium.close_document(document) end
+    )
+  end
+
   defp sizes_of(documents) do
     Enum.reduce_while(documents, {:ok, %{}}, fn document, {:ok, sizes} ->
       case PDFium.get_page_sizes(document) do
