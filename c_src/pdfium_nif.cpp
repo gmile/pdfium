@@ -32,11 +32,9 @@ static fine::Atom error_xfa_load("xfa_load");
 static fine::Atom error_xfa_layout("xfa_layout");
 static fine::Atom document_creation_failed("document_creation_failed");
 static fine::Atom import_failed("import_failed");
-static fine::Atom imported_atom("imported");
 static fine::Atom generate_content_failed("generate_content_failed");
 static fine::Atom xobject_failed("xobject_failed");
 static fine::Atom form_object_failed("form_object_failed");
-static fine::Atom stamped("stamped");
 static fine::Atom document_closed("document_closed");
 static fine::Atom page_load_failed("page_load_failed");
 static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
@@ -180,7 +178,7 @@ Result<int64_t> get_security_handler_revision(ErlNifEnv *env, fine::ResourcePtr<
 
 FINE_NIF(get_security_handler_revision, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-Result<std::string, int64_t, int64_t> get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
+Result<std::tuple<std::string, int64_t, int64_t>> get_page_bitmap(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
                              int64_t page_index, int64_t dpi) {
     auto lock = lock_pdfium();
 
@@ -219,9 +217,7 @@ Result<std::string, int64_t, int64_t> get_page_bitmap(ErlNifEnv *env, fine::Reso
     FPDFBitmap_Destroy(bitmap);
     FPDF_ClosePage(page);
 
-    return fine::Ok(std::move(rgba),
-                    static_cast<int64_t>(width),
-                    static_cast<int64_t>(height));
+    return fine::Ok(std::make_tuple(std::move(rgba), static_cast<int64_t>(width), static_cast<int64_t>(height)));
 }
 
 FINE_NIF(get_page_bitmap, ERL_NIF_DIRTY_JOB_CPU_BOUND);
@@ -385,7 +381,7 @@ Result<std::string> save_to_binary(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc
 FINE_NIF(save_to_binary, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 // An empty list of pages is pdfium's way of asking for all of them.
-Result<fine::Atom> import_pages(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> dest,
+Result<> import_pages(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> dest,
                          fine::ResourcePtr<PDFDoc> src, std::vector<int64_t> page_indices,
                          int64_t at) {
     auto lock = lock_pdfium();
@@ -410,7 +406,7 @@ Result<fine::Atom> import_pages(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> dest,
         return fine::Error(import_failed);
     }
 
-    return fine::Ok(imported_atom);
+    return fine::Ok<>();
 }
 
 FINE_NIF(import_pages, ERL_NIF_DIRTY_JOB_CPU_BOUND);
@@ -564,17 +560,16 @@ std::optional<fine::Atom> apply_stamps(fine::ResourcePtr<PDFDoc> doc,
     return failure;
 }
 
-Result<fine::Atom> stamp_in_place(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
-                           std::vector<Placement> placements) {
+Result<> stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::vector<Placement> placements) {
     auto lock = lock_pdfium();
 
     if (auto failure = apply_stamps(doc, placements)) {
         return fine::Error(*failure);
     }
 
-    return fine::Ok(stamped);
+    return fine::Ok<>();
 }
 
-FINE_NIF(stamp_in_place, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(stamp, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 FINE_INIT("Elixir.PDFium.NIF");

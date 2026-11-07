@@ -85,13 +85,13 @@ defmodule PDFiumVisualTest do
       {upright, 0, 2, {1, 0, 0, 1, 10, 10}}
     ]
 
-    output = tmp_path()
-    assert {:ok, :stamped} = PDFium.stamp(open!(path), placements, output)
-    assert_looks_like(sheet(open!(output)), "stamped")
-
     document = open!(path)
-    assert {:ok, :stamped} = PDFium.stamp_in_place(document, placements)
+    assert :ok = PDFium.stamp(document, placements)
     assert_looks_like(sheet(document), "stamped")
+
+    output = tmp_path()
+    assert :ok = PDFium.save(document, output)
+    assert_looks_like(sheet(open!(output)), "stamped")
   end
 
   test "documents are assembled from the pages of others, encrypted ones included" do
@@ -111,9 +111,9 @@ defmodule PDFiumVisualTest do
 
     assert {:ok, binary} =
              PDFium.with_new_document(fn output ->
-               with {:ok, :imported} <- PDFium.import_pages(output, source, [2, 0]),
-                    {:ok, :imported} <- PDFium.import_pages(output, encrypted, :all, 1),
-                    {:ok, :imported} <- PDFium.import_pages(output, source, [1], 3),
+               with :ok <- PDFium.import_pages(output, source, [2, 0]),
+                    :ok <- PDFium.import_pages(output, encrypted, :all, 1),
+                    :ok <- PDFium.import_pages(output, source, [1], 3),
                     do: PDFium.save_to_binary(output)
              end)
 
@@ -135,21 +135,21 @@ defmodule PDFiumVisualTest do
     annotated = annotated!()
     bars = bars!()
 
-    assert {:ok, binary} = Toolbox.stamp_to_binary(target, [{overlay, 0}, {overlay, 1}])
+    assert {:ok, binary} = Toolbox.stamp(target, [{overlay, 0}, {overlay, 1}])
     assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-stamp")
 
-    assert {:ok, binary} = Toolbox.overlay_to_binary(target, {:bytes, File.read!(overlays)})
+    assert {:ok, binary} = Toolbox.overlay(target, {:bytes, File.read!(overlays)})
     assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-overlay")
 
     for usage <- [:display, :print] do
-      assert {:ok, binary} = Toolbox.flatten_to_binary(annotated, usage)
+      assert {:ok, binary} = Toolbox.flatten(annotated, usage)
       assert_looks_like(sheet(open!({:bytes, binary})), "annotations-flattened-#{usage}")
     end
 
-    assert {:ok, binary} = Toolbox.merge_to_binary([bars, {:bytes, File.read!(@encrypted_r6)}])
+    assert {:ok, binary} = Toolbox.merge([bars, {:bytes, File.read!(@encrypted_r6)}])
     assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-merge")
 
-    assert {:ok, binary} = Toolbox.extract_pages_to_binary(bars, [2, 0, 2])
+    assert {:ok, binary} = Toolbox.extract_pages(bars, [2, 0, 2])
     assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-extract")
   end
 
