@@ -16,7 +16,11 @@ defmodule PDFium.MixProject do
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
-      docs: [main: "readme", extras: ["README.md"]],
+      docs: [
+        main: "readme",
+        extras: ["README.md", "CHANGELOG.md"],
+        skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
+      ],
       dialyzer: [
         plt_add_apps: [:ex_unit],
         plt_core_path: "_build/plts",
@@ -80,6 +84,7 @@ defmodule PDFium.MixProject do
     [
       files: ~w"
         c_src/pdfium_nif.cpp
+        CHANGELOG.md
         checksum.exs
         lib
         LICENSE

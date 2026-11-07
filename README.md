@@ -117,4 +117,4 @@ it. If a release fails, bump `@version` again. Tags cannot be reused.
 
 ## License
 
-See [LICENSE].
+See [LICENSE](https://github.com/gmile/pdfium/blob/main/LICENSE).
