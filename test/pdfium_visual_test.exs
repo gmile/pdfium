@@ -173,6 +173,7 @@ defmodule PDFiumVisualTest do
 
     assert {:ok, binary} = Toolbox.extract_pages(bars, [2, 0, 2])
     assert_looks_like(sheet(open!({:bytes, binary})), "toolbox-extract")
+    assert_looks_like(sheet(Toolbox.render_pages!({:bytes, binary}, 72)), "toolbox-extract")
   end
 
   defp mark(x, y) do

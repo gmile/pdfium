@@ -7,10 +7,12 @@ defmodule PDFium.Test.Visual do
   @gap 4
   @grey <<128, 128, 128, 255>>
 
-  def sheet(document) do
+  def sheet(document) when is_reference(document) do
     {:ok, count} = PDFium.get_page_count(document)
     lay_out(Enum.map(0..(count - 1)//1, &page(document, &1)))
   end
+
+  def sheet(pages), do: lay_out(Enum.to_list(pages))
 
   def page(document, index, dpi \\ 72) do
     {:ok, image} = PDFium.get_page_bitmap(document, index, dpi)
