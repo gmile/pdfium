@@ -7,13 +7,13 @@ Elixir bindings for the pdfium library.
 Add the dependency:
 
 ```elixir
-{:pdfium, "~> 0.1"}
+{:pdfium, "~> 0.2"}
 ```
 
 Or in a script:
 
 ```elixir
-Mix.install([pdfium: "~> 0.1"])
+Mix.install([pdfium: "~> 0.2"])
 ```
 
 Precompiled NIFs cover OTP 26 and newer on x86_64 and aarch64 Linux, glibc or
@@ -25,7 +25,7 @@ needs a C++ compiler, `make` and `curl`.
 Open a document:
 
 ```elixir
-{:ok, document} = PDFium.load_document("file.pdf")
+{:ok, document} = PDFium.open_document("file.pdf")
 ```
 
 Count its pages:
