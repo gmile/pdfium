@@ -205,12 +205,7 @@ Result<std::tuple<std::string, int64_t, int64_t>> get_page_bitmap(ErlNifEnv *env
     FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, FPDF_ANNOT | FPDF_REVERSE_BYTE_ORDER);
 
     auto *buffer = static_cast<const char *>(FPDFBitmap_GetBuffer(bitmap));
-    size_t row = static_cast<size_t>(width) * 4;
-    std::string rgba;
-    rgba.reserve(row * height);
-    for (int y = 0; y < height; y++) {
-        rgba.append(buffer + y * FPDFBitmap_GetStride(bitmap), row);
-    }
+    std::string rgba(buffer, static_cast<size_t>(width) * height * 4);
 
     FPDFBitmap_Destroy(bitmap);
     FPDF_ClosePage(page);
