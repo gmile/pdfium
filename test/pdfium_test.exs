@@ -455,7 +455,7 @@ defmodule PDFiumTest do
 
     test "reporting an unwritable path" do
       PDFium.with_new_document(fn document ->
-        assert {:error, :output_open_failed} =
+        assert {:error, :enoent} =
                  PDFium.save(document, "/nonexistent-directory/out.pdf")
       end)
     end
@@ -512,7 +512,7 @@ defmodule PDFiumTest do
     end
 
     test "reports an unwritable output path", %{source: source} do
-      assert {:error, :output_open_failed} =
+      assert {:error, :enoent} =
                Toolbox.extract_pages(source, [0], "/nonexistent-directory/out.pdf")
     end
   end
@@ -574,7 +574,7 @@ defmodule PDFiumTest do
     test "reports an unwritable output path" do
       document = document!([[box: {0, 0, 100, 100}]])
 
-      assert {:error, :output_open_failed} =
+      assert {:error, :enoent} =
                Toolbox.merge([document], "/nonexistent-directory/out.pdf")
     end
   end
@@ -901,7 +901,7 @@ defmodule PDFiumTest do
     end
 
     test "reports an unwritable output path" do
-      assert {:error, :output_open_failed} =
+      assert {:error, :enoent} =
                Toolbox.flatten(@annotated, "/nonexistent-directory/out.pdf")
     end
   end
