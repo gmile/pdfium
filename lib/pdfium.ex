@@ -156,7 +156,11 @@ defmodule PDFium do
   in. A key the document does not carry reads as an empty string.
   """
   @spec get_meta_text(reference(), binary()) :: {:ok, binary()} | {:error, atom()}
-  defdelegate get_meta_text(document, key), to: PDFium.NIF
+  def get_meta_text(document, key) do
+    with {:ok, utf16} <- PDFium.NIF.get_meta_text(document, key) do
+      {:ok, :unicode.characters_to_binary(utf16, {:utf16, :little})}
+    end
+  end
 
   @doc """
   How many annotations each page carries, in order.

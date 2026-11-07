@@ -355,46 +355,6 @@ CountsResult get_annotation_counts(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc
 
 FINE_NIF(get_annotation_counts, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-namespace {
-
-std::string from_utf16(const std::vector<unsigned short> &utf16) {
-    std::string out;
-    size_t index = 0;
-
-    while (index < utf16.size() && utf16[index] != 0) {
-        uint32_t point = utf16[index++];
-
-        if (point >= 0xD800 && point <= 0xDBFF && index < utf16.size()) {
-            uint32_t trail = utf16[index];
-
-            if (trail >= 0xDC00 && trail <= 0xDFFF) {
-                point = 0x10000 + ((point - 0xD800) << 10) + (trail - 0xDC00);
-                index++;
-            }
-        }
-
-        if (point < 0x80) {
-            out.push_back(static_cast<char>(point));
-        } else if (point < 0x800) {
-            out.push_back(static_cast<char>(0xC0 | (point >> 6)));
-            out.push_back(static_cast<char>(0x80 | (point & 0x3F)));
-        } else if (point < 0x10000) {
-            out.push_back(static_cast<char>(0xE0 | (point >> 12)));
-            out.push_back(static_cast<char>(0x80 | ((point >> 6) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | (point & 0x3F)));
-        } else {
-            out.push_back(static_cast<char>(0xF0 | (point >> 18)));
-            out.push_back(static_cast<char>(0x80 | ((point >> 12) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | ((point >> 6) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | (point & 0x3F)));
-        }
-    }
-
-    return out;
-}
-
-} // namespace
-
 using MetaResult = std::variant<fine::Ok<std::string>, fine::Error<fine::Atom>>;
 
 MetaResult get_meta_text(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string key) {
@@ -405,15 +365,11 @@ MetaResult get_meta_text(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::str
     }
 
     unsigned long length = FPDF_GetMetaText(doc->document, key.c_str(), nullptr, 0);
-
-    if (length <= sizeof(unsigned short)) {
-        return fine::Ok(std::string());
-    }
-
-    std::vector<unsigned short> utf16(length / sizeof(unsigned short));
+    std::string utf16(length, '\0');
     FPDF_GetMetaText(doc->document, key.c_str(), utf16.data(), length);
+    utf16.resize(length >= 2 ? length - 2 : 0);
 
-    return fine::Ok(from_utf16(utf16));
+    return fine::Ok(std::move(utf16));
 }
 
 FINE_NIF(get_meta_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
