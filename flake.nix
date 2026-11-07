@@ -40,22 +40,14 @@
               beam.overrideScope (_: _: { inherit (pkgs.pkgsMusl.beam_minimal.packages.erlang_29) erlang; })
             else
               beam;
-          app =
-            script: attrs:
-            pkgs.writeShellApplication (
-              {
-                name = script;
-                text = builtins.readFile ./nix/${script}.sh;
-              }
-              // attrs
-            );
           test =
             target:
             let
               beam = beamFor target;
             in
-            app "test" {
+            pkgs.writeShellApplication {
               name = "test-${target}";
+              text = builtins.readFile ./nix/test.sh;
               runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.coreutils ];
               runtimeEnv = {
                 ERL_LIBS = erlLibs beam;
@@ -70,14 +62,18 @@
             name = "pdfium-nif-archives";
             paths = map nif.archive buildable.${system};
           };
-          release = app "release" {
+          release = pkgs.writeShellApplication {
+            name = "release";
+            text = builtins.readFile ./nix/release.sh;
             runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.gh pkgs.git ];
             runtimeEnv = {
               ERL_LIBS = erlLibs beam;
               VERSION = nif.version;
             };
           };
-          update = app "update" {
+          update = pkgs.writeShellApplication {
+            name = "update";
+            text = builtins.readFile ./nix/update.sh;
             runtimeInputs = [ pkgs.gh pkgs.git pkgs.gnused pkgs.jq ];
             runtimeEnv = {
               VERSION = nif.version;
