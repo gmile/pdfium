@@ -73,10 +73,20 @@ defmodule PDFium.Toolbox do
       named =
         Enum.map(placements, fn {overlay, page} -> {Map.fetch!(by_source, overlay), 0, page} end)
 
-      with {:ok, [pages | overlay_pages]} <- PDFium.get_page_sizes([document | overlays]),
-           sizes = overlays |> Enum.zip(overlay_pages) |> Map.new(),
+      with {:ok, pages} <- PDFium.get_page_sizes(document),
+           {:ok, sizes} <- sizes_of(overlays),
            {:ok, placed} <- fit_each(named, pages, sizes) do
         finish.(document, placed)
+      end
+    end)
+  end
+
+  @spec sizes_of([reference()]) :: {:ok, %{reference() => [PDFium.page_size()]}} | {:error, atom()}
+  defp sizes_of(documents) do
+    Enum.reduce_while(documents, {:ok, %{}}, fn document, {:ok, sizes} ->
+      case PDFium.get_page_sizes(document) do
+        {:ok, pages} -> {:cont, {:ok, Map.put(sizes, document, pages)}}
+        error -> {:halt, error}
       end
     end)
   end
@@ -154,7 +164,8 @@ defmodule PDFium.Toolbox do
         when result: term()
   defp overlaid(source, overlay_source, finish) do
     with_documents([source, overlay_source], fn [document, overlay] ->
-      with {:ok, [pages, overlay_pages]} <- PDFium.get_page_sizes([document, overlay]),
+      with {:ok, pages} <- PDFium.get_page_sizes(document),
+           {:ok, overlay_pages} <- PDFium.get_page_sizes(overlay),
            true <- length(pages) == length(overlay_pages) || {:error, :page_count_mismatch},
            {:ok, placed} <- fit_pairwise(overlay, pages, overlay_pages) do
         finish.(document, placed)

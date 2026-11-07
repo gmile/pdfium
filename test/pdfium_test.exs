@@ -244,72 +244,27 @@ defmodule PDFiumTest do
     end
   end
 
-  describe "get_page_boxes/1" do
-    test "reports the box of every page, in order" do
-      pages = [
-        [box: {0, 0, 200, 300}],
-        [box: {0, 0, 400, 500}]
-      ]
-
+  describe "get_page_sizes/1" do
+    test "reports every page as displayed, turned pages included" do
+      pages = [[box: {0, 0, 400, 600}, rotation: 90], [box: {0, 0, 200, 300}]]
       document = tmp_path() |> Document.write!(pages) |> open!()
 
-      assert {:ok, [first, second]} = PDFium.get_page_boxes(document)
-
-      assert %{left: +0.0, bottom: +0.0, right: 200.0, top: 300.0, rotation: 0} = first
-      assert %{left: +0.0, bottom: +0.0, right: 400.0, top: 500.0, rotation: 0} = second
-    end
-
-    test "reports a box that does not start at the origin" do
-      document = tmp_path() |> Document.write!([[box: {-10, -20, 590, 772}]]) |> open!()
-
-      assert {:ok, [box]} = PDFium.get_page_boxes(document)
-      assert %{left: -10.0, bottom: -20.0, right: 590.0, top: 772.0} = box
-    end
-
-    test "sorts the corners it was given" do
-      document = tmp_path() |> Document.write!([[box: {590, 772, -10, -20}]]) |> open!()
-
-      assert {:ok, [box]} = PDFium.get_page_boxes(document)
-      assert %{left: -10.0, bottom: -20.0, right: 590.0, top: 772.0} = box
-    end
-
-    test "reports rotation in degrees" do
-      pages = Enum.map([0, 90, 180, 270], &[rotation: &1])
-      document = tmp_path() |> Document.write!(pages) |> open!()
-
-      assert {:ok, boxes} = PDFium.get_page_boxes(document)
-      assert Enum.map(boxes, & &1.rotation) == [0, 90, 180, 270]
-    end
-
-    test "reports the box the page is turned from, not the one it displays as" do
-      document = tmp_path() |> Document.write!([[box: {0, 0, 612, 792}, rotation: 90]]) |> open!()
-
-      assert {:ok, [box]} = PDFium.get_page_boxes(document)
-      assert %{right: 612.0, top: 792.0, rotation: 90} = box
+      assert {:ok, [turned, upright]} = PDFium.get_page_sizes(document)
+      assert %{width: 600.0, height: 400.0} = turned
+      assert %{width: 200.0, height: 300.0} = upright
     end
 
     test "reports nothing for a document with no pages" do
       document = tmp_path() |> Document.write!([]) |> open!()
 
-      assert {:ok, []} = PDFium.get_page_boxes(document)
+      assert {:ok, []} = PDFium.get_page_sizes(document)
     end
 
     test "reports a closed document" do
       document = open!(@plain)
       PDFium.close_document(document)
 
-      assert {:error, :document_closed} = PDFium.get_page_boxes(document)
-    end
-  end
-
-  describe "get_page_sizes/1" do
-    test "reports every page as displayed, turned pages included" do
-      pages = [[box: {0, 0, 400, 600}, rotation: 90], [box: {0, 0, 200, 300}]]
-      document = tmp_path() |> Document.write!(pages) |> open!()
-
-      assert {:ok, [[turned, upright]]} = PDFium.get_page_sizes([document])
-      assert %{width: 600.0, height: 400.0} = turned
-      assert %{width: 200.0, height: 300.0} = upright
+      assert {:error, :document_closed} = PDFium.get_page_sizes(document)
     end
   end
 
@@ -401,8 +356,8 @@ defmodule PDFiumTest do
         assert {:ok, :saved} = PDFium.save(document, output)
       end)
 
-      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
-      assert Enum.map(boxes, & &1.right) == [400.0, 200.0]
+      assert {:ok, pages} = PDFium.get_page_sizes(open!(output))
+      assert Enum.map(pages, & &1.width) == [400.0, 200.0]
     end
 
     test "importing every page of one into another", %{output: output} do
@@ -426,8 +381,8 @@ defmodule PDFiumTest do
         assert {:ok, :saved} = PDFium.save(document, output)
       end)
 
-      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
-      assert Enum.map(boxes, & &1.right) == [200.0, 100.0]
+      assert {:ok, pages} = PDFium.get_page_sizes(open!(output))
+      assert Enum.map(pages, & &1.width) == [200.0, 100.0]
     end
 
     test "refusing to import no pages at all" do
@@ -471,22 +426,22 @@ defmodule PDFiumTest do
     test "writes the pages it was given", %{source: source, output: output} do
       assert {:ok, :extracted} = Toolbox.extract_pages(source, [1, 2], output)
 
-      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
-      assert Enum.map(boxes, & &1.right) == [300.0, 400.0]
+      assert {:ok, pages} = PDFium.get_page_sizes(open!(output))
+      assert Enum.map(pages, & &1.width) == [300.0, 400.0]
     end
 
     test "writes them in the order it was given", %{source: source, output: output} do
       assert {:ok, :extracted} = Toolbox.extract_pages(source, [3, 0], output)
 
-      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
-      assert Enum.map(boxes, & &1.right) == [500.0, 200.0]
+      assert {:ok, pages} = PDFium.get_page_sizes(open!(output))
+      assert Enum.map(pages, & &1.width) == [500.0, 200.0]
     end
 
     test "writes a page named twice twice", %{source: source, output: output} do
       assert {:ok, :extracted} = Toolbox.extract_pages(source, [0, 0], output)
 
-      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
-      assert Enum.map(boxes, & &1.right) == [200.0, 200.0]
+      assert {:ok, pages} = PDFium.get_page_sizes(open!(output))
+      assert Enum.map(pages, & &1.width) == [200.0, 200.0]
     end
 
     test "keeps what is drawn on the page it took", %{output: output} do
@@ -526,8 +481,8 @@ defmodule PDFiumTest do
 
       assert {:ok, :merged} = Toolbox.merge([first, second], output)
 
-      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
-      assert Enum.map(boxes, & &1.right) == [100.0, 200.0, 300.0]
+      assert {:ok, pages} = PDFium.get_page_sizes(open!(output))
+      assert Enum.map(pages, & &1.width) == [100.0, 200.0, 300.0]
     end
 
     test "writes a document given twice twice", %{output: output} do
@@ -535,8 +490,8 @@ defmodule PDFiumTest do
 
       assert {:ok, :merged} = Toolbox.merge([document, document], output)
 
-      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
-      assert length(boxes) == 2
+      assert {:ok, pages} = PDFium.get_page_sizes(open!(output))
+      assert length(pages) == 2
     end
 
     test "keeps what is drawn on each page", %{output: output} do
@@ -555,8 +510,8 @@ defmodule PDFiumTest do
 
       assert {:ok, :merged} = Toolbox.merge([empty, page, empty], output)
 
-      assert {:ok, boxes} = PDFium.get_page_boxes(open!(output))
-      assert Enum.map(boxes, & &1.right) == [100.0]
+      assert {:ok, pages} = PDFium.get_page_sizes(open!(output))
+      assert Enum.map(pages, & &1.width) == [100.0]
     end
 
     test "refuses to merge nothing at all", %{output: output} do
@@ -928,8 +883,8 @@ defmodule PDFiumTest do
 
       assert {:ok, merged} = Toolbox.merge_to_binary([{:bytes, File.read!(first)}, second])
 
-      assert {:ok, boxes} = PDFium.with_memory_document(merged, &PDFium.get_page_boxes/1)
-      assert Enum.map(boxes, & &1.right) == [100.0, 200.0, 300.0]
+      assert {:ok, pages} = PDFium.with_memory_document(merged, &PDFium.get_page_sizes/1)
+      assert Enum.map(pages, & &1.width) == [100.0, 200.0, 300.0]
     end
 
     test "refuses to merge nothing" do
@@ -942,8 +897,8 @@ defmodule PDFiumTest do
       assert {:ok, extracted} =
                Toolbox.extract_pages_to_binary({:bytes, File.read!(source)}, [1, 2])
 
-      assert {:ok, boxes} = PDFium.with_memory_document(extracted, &PDFium.get_page_boxes/1)
-      assert Enum.map(boxes, & &1.right) == [300.0, 400.0]
+      assert {:ok, pages} = PDFium.with_memory_document(extracted, &PDFium.get_page_sizes/1)
+      assert Enum.map(pages, & &1.width) == [300.0, 400.0]
     end
 
     test "stamps from contents, drawing what it would have from files", %{output: output} do
