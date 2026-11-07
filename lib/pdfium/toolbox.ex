@@ -1,17 +1,18 @@
 defmodule PDFium.Toolbox do
   @moduledoc """
-  Whole jobs built from `PDFium`.
-
-  A job takes documents as paths or `{:bytes, contents}`, opens and closes them
-  itself, and answers with the document it made.
+  Whole jobs built from `PDFium`. A job takes documents as paths or
+  `{:bytes, contents}`, opens and closes them itself, and answers with the
+  document it made as a binary.
   """
 
   @doc """
-  Draws overlays over the pages of `source`, each scaled to fit and centred.
+  Draws overlays over pages of `source`, each scaled to fit and centred.
+
+      {:ok, binary} = PDFium.Toolbox.stamp("contract.pdf", [{"signature.pdf", 2}])
 
   A placement is `{overlay, page_index}`, pages counted from zero. An overlay
-  is drawn by its first page, and placements landing on the same page stack
-  in the order given.
+  is drawn by its first page, and placements on one page stack in the order
+  given.
   """
   @spec stamp(PDFium.source(), [{PDFium.source(), non_neg_integer()}], PDFium.security()) ::
           {:ok, binary()} | {:error, atom()}
@@ -35,6 +36,8 @@ defmodule PDFium.Toolbox do
   @doc """
   Draws each page of `overlay_source` over the page of `source` in the same
   place, scaled to fit and centred. The two must have the same number of pages.
+
+      {:ok, binary} = PDFium.Toolbox.overlay("contract.pdf", {:bytes, header_and_footer})
   """
   @spec overlay(PDFium.source(), PDFium.source()) :: {:ok, binary()} | {:error, atom()}
   def overlay(source, overlay_source) do
@@ -52,8 +55,8 @@ defmodule PDFium.Toolbox do
   @doc """
   Draws every annotation into the page it sits on and drops it.
 
-  `usage` picks the appearance: `:display` is what a reader shows, `:print`
-  what it would print.
+      {:ok, binary} = PDFium.Toolbox.flatten("contract.pdf")
+      {:ok, binary} = PDFium.Toolbox.flatten("contract.pdf", :print, :remove)
   """
   @spec flatten(PDFium.source(), :display | :print, PDFium.security()) ::
           {:ok, binary()} | {:error, atom()}
@@ -66,8 +69,9 @@ defmodule PDFium.Toolbox do
   end
 
   @doc """
-  Writes the documents as one, in the order given. A document named twice is
-  written twice.
+  Writes the documents as one, in the order given.
+
+      {:ok, binary} = PDFium.Toolbox.merge(["contract.pdf", {:bytes, attachment}])
   """
   @spec merge([PDFium.source()]) :: {:ok, binary()} | {:error, atom()}
   def merge([]), do: {:error, :no_documents}
@@ -81,10 +85,10 @@ defmodule PDFium.Toolbox do
   end
 
   @doc """
-  Writes the given pages, in the order asked for, as a document of their own.
+  Writes the given pages, counted from zero and in the order asked for, as a
+  document of their own.
 
-  Pages are numbered from zero. A page named twice is written twice; naming
-  none is refused.
+      {:ok, binary} = PDFium.Toolbox.extract_pages("contract.pdf", [0, 2])
   """
   @spec extract_pages(PDFium.source(), [non_neg_integer()]) :: {:ok, binary()} | {:error, atom()}
   def extract_pages(source, page_indices) do
@@ -97,11 +101,11 @@ defmodule PDFium.Toolbox do
   end
 
   @doc """
-  Renders every page of `source` at `dpi`, one page at a time as the stream is
-  read, each as `{pixels, width, height}` in RGBA.
+  Renders every page of `source` at `dpi`, one at a time as the stream is read,
+  each as `{pixels, width, height}` in RGBA. Raises when the document cannot be
+  opened.
 
-  The document stays open while the stream is read and is closed when it
-  ends or is halted. Raises when the document cannot be opened.
+      PDFium.Toolbox.render_pages!("contract.pdf", 150) |> Enum.map(&to_png/1)
   """
   @spec render_pages!(PDFium.source(), pos_integer()) :: Enumerable.t()
   def render_pages!(source, dpi) do

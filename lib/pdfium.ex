@@ -1,4 +1,12 @@
 defmodule PDFium do
+  @moduledoc """
+  Bindings to pdfium: open, inspect, render, flatten, stamp and write PDF
+  documents. `PDFium.Toolbox` does whole jobs on top of these.
+
+  Every call on a document waits its turn on one lock, since pdfium is not
+  thread safe, and runs on a dirty scheduler.
+  """
+
   @typedoc "A document to open: a path, or its contents."
   @type source :: Path.t() | {:bytes, binary()}
 
@@ -23,11 +31,12 @@ defmodule PDFium do
           | :xfa_layout
 
   @doc """
-  Opens a document, given as a path or as `{:bytes, contents}`.
+  Opens a document from a path or from `{:bytes, contents}`.
 
-  A path is read whole first, so pdfium never reads the disk while it holds
-  the lock every call waits on. The document keeps the bytes for as long as it
-  is open. `password:` unlocks a document that needs one.
+      {:ok, document} = PDFium.open_document("contract.pdf")
+      {:ok, document} = PDFium.open_document({:bytes, contents}, password: "secret")
+
+  The document keeps the contents for as long as it is open.
   """
   @spec open_document(source(), password: binary()) ::
           {:ok, reference()} | {:error, load_error()}
@@ -43,11 +52,18 @@ defmodule PDFium do
     end
   end
 
+  @doc """
+  Closes a document and frees what it held. A closed document answers
+  `{:error, :document_closed}` to everything.
+  """
+  @spec close_document(reference()) :: :ok
   defdelegate close_document(document), to: PDFium.NIF
 
   @doc """
   Opens `source`, runs `function` with the document, and closes it again, even
   if the work raises.
+
+      {:ok, 3} = PDFium.with_document("contract.pdf", &PDFium.get_page_count/1)
   """
   @spec with_document(source(), (reference() -> result), password: binary()) ::
           result | {:error, load_error()}
@@ -62,14 +78,18 @@ defmodule PDFium do
     end
   end
 
+  @doc """
+  How many pages the document has.
+
+      {:ok, 3} = PDFium.get_page_count(document)
+  """
+  @spec get_page_count(reference()) :: {:ok, non_neg_integer()} | {:error, atom()}
   defdelegate get_page_count(document), to: PDFium.NIF
 
   @doc """
-  Renders a page to RGBA pixels at the given resolution.
+  Renders a page to RGBA pixels at `dpi`, annotations included.
 
-  Annotations are drawn, because a page is what a reader shows and every reader
-  draws them. A page whose annotation paints over its content renders without
-  that content, which is the point of the annotation.
+      {:ok, {pixels, width, height}} = PDFium.get_page_bitmap(document, 0, 150)
   """
   @spec get_page_bitmap(reference(), non_neg_integer(), pos_integer()) ::
           {:ok, {binary(), non_neg_integer(), non_neg_integer()}} | {:error, atom()}
@@ -89,7 +109,10 @@ defmodule PDFium do
 
   @doc """
   The MediaBox and rotation of every page, in order: what placing content in
-  a page's own coordinates needs, which sizes do not carry.
+  a page's own coordinates needs.
+
+      {:ok, [%{left: 0.0, bottom: 0.0, right: 612.0, top: 792.0, rotation: 0}]} =
+        PDFium.get_page_boxes(document)
   """
   @spec get_page_boxes(reference()) :: {:ok, [page_box()]} | {:error, atom()}
   def get_page_boxes(document) do
@@ -101,16 +124,13 @@ defmodule PDFium do
     end
   end
 
-  @typedoc """
-  How large a page is as a reader shows it, in points.
-
-  This is the box the page is laid out in rather than the one written down, so
-  a page turned a quarter has already had the two swapped.
-  """
+  @typedoc "The size of a page as a reader shows it, in points."
   @type page_size :: %{width: float(), height: float()}
 
   @doc """
-  The displayed size of every page, in order.
+  The size of every page as a reader shows it, in points, in order.
+
+      {:ok, [%{width: 612.0, height: 792.0}]} = PDFium.get_page_sizes(document)
   """
   @spec get_page_sizes(reference()) :: {:ok, [page_size()]} | {:error, atom()}
   def get_page_sizes(document) do
@@ -119,11 +139,9 @@ defmodule PDFium do
   end
 
   @doc """
-  An entry of the document's Info dictionary, as text.
+  An entry of the document's Info dictionary, or `""` when it has none.
 
-  Any key may be asked for, not only the ones the specification names, and the
-  answer is decoded whichever of the two encodings a PDF is allowed to store it
-  in. A key the document does not carry reads as an empty string.
+      {:ok, "A contract"} = PDFium.get_meta_text(document, "Title")
   """
   @spec get_meta_text(reference(), binary()) :: {:ok, binary()} | {:error, atom()}
   def get_meta_text(document, key) do
@@ -134,6 +152,8 @@ defmodule PDFium do
 
   @doc """
   How many annotations each page carries, in order.
+
+      {:ok, [2, 0]} = PDFium.get_annotation_counts(document)
   """
   @spec get_annotation_counts(reference()) :: {:ok, [non_neg_integer()]} | {:error, atom()}
   defdelegate get_annotation_counts(document), to: PDFium.NIF
@@ -141,6 +161,8 @@ defmodule PDFium do
   @doc """
   The revision of the standard security handler the document is encrypted
   with, or `nil` when it is not encrypted.
+
+      {:ok, 6} = PDFium.get_security_handler_revision(document)
   """
   @spec get_security_handler_revision(reference()) ::
           {:ok, pos_integer() | nil} | {:error, atom()}
@@ -150,18 +172,17 @@ defmodule PDFium do
     end
   end
 
-  @typedoc """
-  What to do with a document's encryption when writing it: `:keep` writes it
-  encrypted as it was opened, `:remove` writes it in the clear.
-  """
+  @typedoc "Whether a written document keeps its encryption or is written in the clear."
   @type security :: :keep | :remove
 
   @doc """
-  Draws a page's annotations into its content and drops them.
+  Draws a page's annotations into its content and drops them, in place.
 
-  `usage` says which appearance to draw: `:display` is the one a reader shows,
-  `:print` the one it would print. The page is changed where it sits, so the
-  document has to be written out for it to keep.
+      {:ok, :flattened} = PDFium.flatten_page(document, 0)
+      {:ok, :nothing_to_do} = PDFium.flatten_page(document, 1, :print)
+
+  `usage` picks the appearance drawn: `:display` is what a reader shows,
+  `:print` what it would print.
   """
   @spec flatten_page(reference(), non_neg_integer(), :display | :print) ::
           {:ok, :flattened | :nothing_to_do} | {:error, atom()}
@@ -175,12 +196,17 @@ defmodule PDFium do
 
   @doc """
   Makes an empty document.
+
+      {:ok, document} = PDFium.create_document()
   """
   @spec create_document() :: {:ok, reference()} | {:error, atom()}
   defdelegate create_document(), to: PDFium.NIF
 
   @doc """
-  Writes a document out.
+  Writes the document to `output_path`.
+
+      :ok = PDFium.save(document, "out.pdf")
+      :ok = PDFium.save(document, "out.pdf", :remove)
   """
   @spec save(reference(), Path.t(), security()) :: :ok | {:error, atom()}
   def save(document, output_path, security \\ :keep) do
@@ -188,17 +214,20 @@ defmodule PDFium do
   end
 
   @doc """
-  Answers with the document as it would have been written.
+  The document as it would be written.
+
+      {:ok, <<"%PDF-", _::binary>>} = PDFium.save_to_binary(document)
   """
   @spec save_to_binary(reference(), security()) :: {:ok, binary()} | {:error, atom()}
   def save_to_binary(document, security \\ :keep),
     do: PDFium.NIF.save_to_binary(document, security == :remove)
 
   @doc """
-  Copies pages of `source` into `destination`, starting at page `at`.
+  Copies pages of `source` into `destination` at position `at`. `pages` is
+  `:all` or page indexes counted from zero, in the order they should arrive.
 
-  `pages` is `:all` or a list of page indexes counted from zero, in the order
-  they should arrive.
+      :ok = PDFium.import_pages(destination, source, :all)
+      :ok = PDFium.import_pages(destination, source, [2, 0], 1)
   """
   @spec import_pages(reference(), reference(), :all | [non_neg_integer()], non_neg_integer()) ::
           :ok | {:error, atom()}
@@ -214,6 +243,11 @@ defmodule PDFium do
 
   @doc """
   Runs `function` with an empty document and closes it again.
+
+      {:ok, binary} =
+        PDFium.with_new_document(fn output ->
+          with :ok <- PDFium.import_pages(output, source, [0]), do: PDFium.save_to_binary(output)
+        end)
   """
   @spec with_new_document((reference() -> result)) :: result | {:error, atom()}
         when result: term()
@@ -228,24 +262,20 @@ defmodule PDFium do
   end
 
   @typedoc """
-  Where an overlay goes, as `{a, b, c, d, e, f}`.
-
-  The matrix is read in the page as displayed: the origin is the bottom left of
-  the page the way a reader shows it, whatever box the page is written in and
-  however far it is turned. `{1, 0, 0, 1, 0, 0}` leaves the overlay where it was
-  drawn, at the size it was drawn.
+  Where an overlay goes, as the matrix `{a, b, c, d, e, f}` in the page as a
+  reader shows it, origin at its bottom left. `{1, 0, 0, 1, 0, 0}` leaves the
+  overlay where and how large it was drawn.
   """
   @type placement :: {number(), number(), number(), number(), number(), number()}
 
   @doc """
-  Draws overlays over the pages of `document`, in place.
+  Draws overlays over pages of `document`, in place.
 
-  Each placement is `{overlay, overlay_page, page_index, matrix}`, drawing that
-  page of the overlay over that page of the document, both numbered from zero.
-  Placements landing on the same page stack in the order given. An overlay
-  arrives the way a reader shows it: turned the right way up, with its own box
-  shifted onto the origin. A placement that fails leaves the ones before it
-  drawn.
+      :ok = PDFium.stamp(document, [{overlay, 0, 0, {1, 0, 0, 1, 0, 0}}])
+
+  A placement is `{overlay, overlay_page, page_index, matrix}`, pages counted
+  from zero. Placements on one page stack in the order given. A placement that
+  fails leaves the ones before it drawn.
   """
   @spec stamp(reference(), [{reference(), non_neg_integer(), non_neg_integer(), placement()}]) ::
           :ok | {:error, atom()}
