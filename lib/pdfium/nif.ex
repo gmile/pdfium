@@ -36,14 +36,9 @@ defmodule PDFium.NIF do
   def flatten_page(_document, _page_index, _usage), do: :erlang.nif_error(:nif_not_loaded)
   def create_document, do: :erlang.nif_error(:nif_not_loaded)
 
-  def save(_document, _output_path, _remove_security), do: :erlang.nif_error(:nif_not_loaded)
-
   def save_to_binary(_document, _remove_security), do: :erlang.nif_error(:nif_not_loaded)
 
   def import_pages(_dest, _src, _page_indices, _at), do: :erlang.nif_error(:nif_not_loaded)
-
-  def stamp(_document, _placements, _output_path, _remove_security),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def stamp_in_place(_document, _placements), do: :erlang.nif_error(:nif_not_loaded)
 end

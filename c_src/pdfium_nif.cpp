@@ -9,7 +9,6 @@
 #include <fpdf_transformpage.h>
 #include <fpdfview.h>
 #include <algorithm>
-#include <cstdio>
 #include <map>
 #include <mutex>
 #include <tuple>
@@ -33,7 +32,6 @@ static fine::Atom error_xfa_load("xfa_load");
 static fine::Atom error_xfa_layout("xfa_layout");
 static fine::Atom document_creation_failed("document_creation_failed");
 static fine::Atom import_failed("import_failed");
-static fine::Atom saved("saved");
 static fine::Atom imported_atom("imported");
 static fine::Atom generate_content_failed("generate_content_failed");
 static fine::Atom xobject_failed("xobject_failed");
@@ -45,7 +43,6 @@ static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
 static fine::Atom flattened("flattened");
 static fine::Atom nothing_to_do("nothing_to_do");
 static fine::Atom flatten_failed("flatten_failed");
-static fine::Atom output_open_failed("output_open_failed");
 static fine::Atom save_failed("save_failed");
 
 struct PendingClose {
@@ -364,10 +361,6 @@ FINE_NIF(get_meta_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 namespace {
 
-struct FileWriter : FPDF_FILEWRITE {
-    std::FILE *file;
-};
-
 struct BufferWriter : FPDF_FILEWRITE {
     std::string *buffer;
 };
@@ -378,33 +371,7 @@ int append_block(FPDF_FILEWRITE *self, const void *data, unsigned long size) {
     return 1;
 }
 
-int write_block(FPDF_FILEWRITE *self, const void *data, unsigned long size) {
-    auto *writer = static_cast<FileWriter *>(self);
-    return std::fwrite(data, 1, size, writer->file) == size ? 1 : 0;
-}
-
 FPDF_DWORD save_flags(bool remove_security) { return remove_security ? FPDF_REMOVE_SECURITY : 0; }
-
-std::optional<fine::Atom> write_document(FPDF_DOCUMENT document, const std::string &path,
-                                         bool remove_security) {
-    FileWriter writer{};
-    writer.version = 1;
-    writer.WriteBlock = write_block;
-    writer.file = std::fopen(path.c_str(), "wb");
-
-    if (!writer.file) {
-        return output_open_failed;
-    }
-
-    FPDF_BOOL saved = FPDF_SaveAsCopy(document, &writer, save_flags(remove_security));
-    std::fclose(writer.file);
-
-    if (!saved) {
-        return save_failed;
-    }
-
-    return std::nullopt;
-}
 
 } // namespace
 
@@ -452,23 +419,6 @@ Result<fine::ResourcePtr<PDFDoc>> create_document(ErlNifEnv *env) {
 }
 
 FINE_NIF(create_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
-
-Result<fine::Atom> save(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc, std::string output_path,
-                 bool remove_security) {
-    auto lock = lock_pdfium();
-
-    if (!doc->document) {
-        return fine::Error(document_closed);
-    }
-
-    if (auto error = write_document(doc->document, output_path, remove_security)) {
-        return fine::Error(*error);
-    }
-
-    return fine::Ok(saved);
-}
-
-FINE_NIF(save, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 Result<std::string> save_to_binary(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
                                   bool remove_security) {
@@ -672,26 +622,6 @@ std::optional<fine::Atom> apply_stamps(fine::ResourcePtr<PDFDoc> doc,
 
     return failure;
 }
-
-Result<fine::Atom> stamp(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
-                  std::vector<Placement> placements, std::string output_path,
-                  bool remove_security) {
-    auto lock = lock_pdfium();
-
-    auto failure = apply_stamps(doc, placements);
-
-    if (!failure) {
-        failure = write_document(doc->document, output_path, remove_security);
-    }
-
-    if (failure) {
-        return fine::Error(*failure);
-    }
-
-    return fine::Ok(stamped);
-}
-
-FINE_NIF(stamp, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 Result<fine::Atom> stamp_in_place(ErlNifEnv *env, fine::ResourcePtr<PDFDoc> doc,
                            std::vector<Placement> placements) {

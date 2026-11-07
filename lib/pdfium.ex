@@ -213,8 +213,11 @@ defmodule PDFium do
   Writes a document out.
   """
   @spec save(reference(), Path.t(), security()) :: {:ok, :saved} | {:error, atom()}
-  def save(document, output_path, security \\ :keep),
-    do: PDFium.NIF.save(document, output_path, security == :remove)
+  def save(document, output_path, security \\ :keep) do
+    with {:ok, binary} <- save_to_binary(document, security),
+         :ok <- File.write(output_path, binary),
+         do: {:ok, :saved}
+  end
 
   @doc """
   Answers with the document as it would have been written.
@@ -287,7 +290,9 @@ defmodule PDFium do
           security()
         ) :: {:ok, :stamped} | {:error, atom()}
   def stamp(document, placements, output_path, security \\ :keep) do
-    PDFium.NIF.stamp(document, as_floats(placements), output_path, security == :remove)
+    with {:ok, :stamped} <- stamp_in_place(document, placements),
+         {:ok, :saved} <- save(document, output_path, security),
+         do: {:ok, :stamped}
   end
 
   @doc """
