@@ -10,6 +10,7 @@ defmodule PDFiumVisualTest do
   @moduletag :visual
 
   @encrypted_r6 Path.expand("fixtures/encrypted-r6-marked.pdf", __DIR__)
+  @encrypted_user Path.expand("fixtures/encrypted-r6-marked-user.pdf", __DIR__)
 
   test "pages are drawn in their box, turned and cropped" do
     path =
@@ -117,6 +118,15 @@ defmodule PDFiumVisualTest do
     decrypted = open!({:bytes, binary})
     assert {:ok, nil} = PDFium.get_security_handler_revision(decrypted)
     assert_looks_like(sheet(decrypted), "encrypted-r6-marked")
+
+    assert {:error, :password} = PDFium.open_document(@encrypted_user)
+
+    assert :ok =
+             PDFium.with_document(
+               @encrypted_user,
+               &assert_looks_like(sheet(&1), "encrypted-r6-marked"),
+               password: "secret"
+             )
 
     source = open!(bars)
     assert {:ok, "Bars"} = PDFium.get_meta_text(source, "Title")

@@ -10,6 +10,7 @@ defmodule PDFiumTest do
   @plain Path.expand("fixtures/test.pdf", __DIR__)
   @encrypted_r5 Path.expand("fixtures/encrypted-r5.pdf", __DIR__)
   @encrypted_r6 Path.expand("fixtures/encrypted-r6.pdf", __DIR__)
+  @encrypted_user Path.expand("fixtures/encrypted-user.pdf", __DIR__)
 
   describe "open_document/1" do
     test "opens a document" do
@@ -25,6 +26,17 @@ defmodule PDFiumTest do
 
     test "names the reason a file is not there" do
       assert {:error, :file} = PDFium.open_document("/nonexistent-directory/absent.pdf")
+    end
+  end
+
+  describe "open_document/2 with a password" do
+    test "refuses a document that needs a password it was not given" do
+      assert {:error, :password} = PDFium.open_document(@encrypted_user)
+    end
+
+    test "opens it with the password" do
+      assert {:ok, 2} =
+               PDFium.with_document(@encrypted_user, &PDFium.get_page_count/1, password: "secret")
     end
   end
 

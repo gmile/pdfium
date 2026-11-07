@@ -27,14 +27,18 @@ defmodule PDFium do
 
   A path is read whole first, so pdfium never reads the disk while it holds
   the lock every call waits on. The document keeps the bytes for as long as it
-  is open.
+  is open. `password:` unlocks a document that needs one.
   """
-  @spec open_document(source()) :: {:ok, reference()} | {:error, load_error()}
-  def open_document({:bytes, contents}), do: PDFium.NIF.load_memory_document(contents)
+  @spec open_document(source(), password: binary()) ::
+          {:ok, reference()} | {:error, load_error()}
+  def open_document(source, options \\ [])
 
-  def open_document(path) do
+  def open_document({:bytes, contents}, options),
+    do: PDFium.NIF.load_memory_document(contents, Keyword.get(options, :password, ""))
+
+  def open_document(path, options) do
     case File.read(path) do
-      {:ok, contents} -> open_document({:bytes, contents})
+      {:ok, contents} -> open_document({:bytes, contents}, options)
       {:error, _reason} -> {:error, :file}
     end
   end
@@ -45,10 +49,11 @@ defmodule PDFium do
   Opens `source`, runs `function` with the document, and closes it again, even
   if the work raises.
   """
-  @spec with_document(source(), (reference() -> result)) :: result | {:error, load_error()}
+  @spec with_document(source(), (reference() -> result), password: binary()) ::
+          result | {:error, load_error()}
         when result: term()
-  def with_document(source, function) do
-    with {:ok, document} <- open_document(source) do
+  def with_document(source, function, options \\ []) do
+    with {:ok, document} <- open_document(source, options) do
       try do
         function.(document)
       after
