@@ -41,6 +41,17 @@ defmodule PDFiumVisualTest do
              {100.0, 70.0}
            ]
 
+    assert {:ok, boxes} = PDFium.get_page_boxes(document)
+
+    assert Enum.map(boxes, &{&1.left, &1.bottom, &1.right, &1.top, &1.rotation}) == [
+             {0.0, 0.0, 120.0, 80.0, 0},
+             {0.0, 0.0, 120.0, 80.0, 90},
+             {0.0, 0.0, 120.0, 80.0, 180},
+             {0.0, 0.0, 120.0, 80.0, 270},
+             {50.0, 30.0, 170.0, 110.0, 90},
+             {0.0, 0.0, 120.0, 80.0, 0}
+           ]
+
     assert_looks_like(sheet(document), "geometry")
     assert_looks_like(page(document, 0, 144), "geometry-144-dpi")
   end

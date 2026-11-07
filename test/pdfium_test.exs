@@ -199,6 +199,24 @@ defmodule PDFiumTest do
     end
   end
 
+  describe "get_page_boxes/1" do
+    test "reports the sorted box and rotation of every page, in order" do
+      pages = [[box: {0, 0, 200, 300}], [box: {590, 772, -10, -20}, rotation: 90]]
+      document = tmp_path() |> Document.write!(pages) |> open!()
+
+      assert {:ok, [first, second]} = PDFium.get_page_boxes(document)
+      assert %{left: +0.0, bottom: +0.0, right: 200.0, top: 300.0, rotation: 0} = first
+      assert %{left: -10.0, bottom: -20.0, right: 590.0, top: 772.0, rotation: 90} = second
+    end
+
+    test "reports a closed document" do
+      document = open!(@plain)
+      PDFium.close_document(document)
+
+      assert {:error, :document_closed} = PDFium.get_page_boxes(document)
+    end
+  end
+
   describe "get_page_sizes/1" do
     test "reports every page as displayed, turned pages included" do
       pages = [[box: {0, 0, 400, 600}, rotation: 90], [box: {0, 0, 200, 300}]]
