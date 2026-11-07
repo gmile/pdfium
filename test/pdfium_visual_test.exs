@@ -1,6 +1,7 @@
 defmodule PDFiumVisualTest do
   use ExUnit.Case
 
+  import PDFium.Test.Helpers
   import PDFium.Test.Visual
 
   alias PDFium.Test.Document
@@ -185,19 +186,5 @@ defmodule PDFiumVisualTest do
       end
 
     Document.write!(tmp_path(), pages, Title: "Bars")
-  end
-
-  defp document!(pages), do: Document.write!(tmp_path(), pages)
-
-  defp tmp_path do
-    path = Path.join(System.tmp_dir!(), "pdfium-visual-#{System.unique_integer([:positive])}.pdf")
-    on_exit(fn -> File.rm(path) end)
-    path
-  end
-
-  defp open!(source) do
-    {:ok, document} = PDFium.open_document(source)
-    on_exit(fn -> PDFium.close_document(document) end)
-    document
   end
 end
