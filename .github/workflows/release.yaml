@@ -27,17 +27,7 @@ jobs:
           name: gmile
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - uses: nix-community/cache-nix-action@v7
-        with:
-          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-archives-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'mix.exs', 'c_src/**') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-archives-
-          gc-max-store-size: 0
-          purge: true
-          purge-prefixes: nix-${{ runner.os }}-${{ runner.arch }}-archives-
-          purge-created: 0
-          purge-primary-key: never
-
-      - run: nix build .#archives .#inputs --print-build-logs
+      - run: nix build .#archives --print-build-logs
 
       - uses: actions/upload-artifact@v7
         with:
@@ -58,16 +48,6 @@ jobs:
           name: gmile
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - uses: nix-community/cache-nix-action@v7
-        with:
-          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-shell-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-shell-
-          gc-max-store-size: 0
-          purge: true
-          purge-prefixes: nix-${{ runner.os }}-${{ runner.arch }}-shell-
-          purge-created: 0
-          purge-primary-key: never
-
       - uses: actions/download-artifact@v8
         with:
           pattern: archives-*
@@ -80,9 +60,7 @@ jobs:
           client-id: ${{ vars.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
-      - run: nix build .#release .#inputs
-
       - env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
-        run: result/bin/release archives
+        run: nix run .#release -- archives

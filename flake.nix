@@ -27,37 +27,17 @@
       forAllSystems = f: lib.mapAttrs (system: _: f system nixpkgs.legacyPackages.${system}) buildable;
       named = prefix: f: list: lib.listToAttrs (map (target: lib.nameValuePair "${prefix}-${target}" (f target)) list);
       erlLibs = beam: "${beam.hex}/lib/erlang/lib";
+      nifFor = pkgs: pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_27) erlang; };
     in
     {
       packages = forAllSystems (
         system: pkgs:
         let
-          nif = pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_27) erlang; };
+          nif = nifFor pkgs;
           beam = pkgs.beam_minimal.packages.erlang_29;
-          beamFor =
-            target:
-            if lib.hasSuffix "-musl" target then
-              beam.overrideScope (_: _: { inherit (pkgs.pkgsMusl.beam_minimal.packages.erlang_29) erlang; })
-            else
-              beam;
-          test =
-            target:
-            let
-              beam = beamFor target;
-            in
-            pkgs.writeShellApplication {
-              name = "test-${target}";
-              text = builtins.readFile ./nix/test.sh;
-              runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.coreutils ];
-              runtimeEnv = {
-                ERL_LIBS = erlLibs beam;
-                NIF = "${nif.nif target}";
-              };
-            };
         in
         {
           default = nif.nif (builtins.head testable.${system});
-          inputs = pkgs.linkFarm "inputs" { inherit nixpkgs; };
           archives = pkgs.symlinkJoin {
             name = "pdfium-nif-archives";
             paths = map nif.archive buildable.${system};
@@ -85,7 +65,49 @@
         // named "nif" nif.nif buildable.${system}
         // named "archive" nif.archive buildable.${system}
         // named "libpdfium" nif.libpdfium targets
-        // named "test" test testable.${system}
+      );
+
+      checks = forAllSystems (
+        system: pkgs:
+        let
+          nif = nifFor pkgs;
+          beam = pkgs.beam_minimal.packages.erlang_29;
+          beamFor =
+            target:
+            if lib.hasSuffix "-musl" target then
+              beam.overrideScope (_: _: { inherit (pkgs.pkgsMusl.beam_minimal.packages.erlang_29) erlang; })
+            else
+              beam;
+          deps = beam.fetchMixDeps {
+            pname = "pdfium-deps";
+            version = nif.version;
+            src = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
+            mixEnv = "test";
+            hash = "sha256-4X8xCsxkvurD48sp0j1qcAnrOtA7wCVQrHK1iGBodOw=";
+          };
+          test =
+            target:
+            let
+              beam = beamFor target;
+            in
+            pkgs.stdenvNoCC.mkDerivation {
+              name = "test-${target}";
+              src = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ./lib ./test ]; };
+              nativeBuildInputs = [ beam.erlang beam.elixir_1_20 beam.hex ];
+              MIX_ENV = "test";
+              MIX_DEPS_PATH = deps;
+              HEX_OFFLINE = 1;
+              buildPhase = ''
+                export HOME=$TMPDIR
+                mkdir priv
+                install --mode 755 ${nif.nif target}/* priv
+                mix deps.compile --no-deps-check
+                mix test --no-deps-check
+              '';
+              installPhase = "touch $out";
+            };
+        in
+        named "test" test testable.${system}
       );
 
       devShells = forAllSystems (
