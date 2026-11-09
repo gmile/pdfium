@@ -16,6 +16,7 @@ defmodule PDFium.Test.Document do
   """
   @type page :: [
           box: {number(), number(), number(), number()},
+          crop: {number(), number(), number(), number()},
           rotation: 0 | 90 | 180 | 270,
           content: binary()
         ]
@@ -118,9 +119,15 @@ defmodule PDFium.Test.Document do
     rotation = Keyword.get(page, :rotation, 0)
     content = Keyword.get(page, :content, "")
 
+    crop =
+      case Keyword.get(page, :crop) do
+        nil -> ""
+        {l, b, r, t} -> " /CropBox [#{l} #{b} #{r} #{t}]"
+      end
+
     [
       """
-      << /Type /Page /Parent 2 0 R /MediaBox [#{left} #{bottom} #{right} #{top}] \
+      << /Type /Page /Parent 2 0 R /MediaBox [#{left} #{bottom} #{right} #{top}]#{crop} \
       /Rotate #{rotation} /Resources << >> /Contents #{number + 1} 0 R >>\
       """,
       "<< /Length #{byte_size(content)} >>\nstream\n#{content}\nendstream"
