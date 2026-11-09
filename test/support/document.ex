@@ -18,6 +18,17 @@ defmodule PDFium.Test.Document do
           box: {number(), number(), number(), number()},
           crop: {number(), number(), number(), number()},
           rotation: 0 | 90 | 180 | 270,
+          content: binary(),
+          annotations: [annotation()]
+        ]
+
+  @typedoc """
+  A square annotation: where it sits, its flags, and the content stream of its
+  appearance, drawn with the origin at the bottom left of `rect`.
+  """
+  @type annotation :: [
+          rect: {number(), number(), number(), number()},
+          flags: non_neg_integer(),
           content: binary()
         ]
 
@@ -55,12 +66,19 @@ defmodule PDFium.Test.Document do
     page_object_numbers = Enum.map(1..length(pages)//1, &(3 + (&1 - 1) * 2))
     kids = Enum.map_join(page_object_numbers, " ", &"#{&1} 0 R")
 
+    {annotation_numbers, _next} =
+      Enum.map_reduce(pages, 3 + 2 * length(pages), fn page, next ->
+        count = length(Keyword.get(page, :annotations, []))
+        {Enum.map(0..(count - 1)//1, &(next + 2 * &1)), next + 2 * count}
+      end)
+
     objects =
       [
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [#{kids}] /Count #{length(pages)} >>"
       ] ++
-        Enum.flat_map(Enum.zip(pages, page_object_numbers), &page_objects/1) ++
+        Enum.flat_map(Enum.zip([pages, page_object_numbers, annotation_numbers]), &page_objects/1) ++
+        Enum.flat_map(Enum.zip(pages, annotation_numbers), &annotation_objects/1) ++
         info_object(info)
 
     {body, offsets} =
@@ -113,8 +131,8 @@ defmodule PDFium.Test.Document do
   @spec ascii?(binary()) :: boolean()
   defp ascii?(value), do: for(<<byte <- value>>, byte > 127, do: byte) == []
 
-  @spec page_objects({page(), pos_integer()}) :: [binary()]
-  defp page_objects({page, number}) do
+  @spec page_objects({page(), pos_integer(), [pos_integer()]}) :: [binary()]
+  defp page_objects({page, number, annotation_numbers}) do
     {left, bottom, right, top} = Keyword.get(page, :box, {0, 0, 612, 792})
     rotation = Keyword.get(page, :rotation, 0)
     content = Keyword.get(page, :content, "")
@@ -125,12 +143,43 @@ defmodule PDFium.Test.Document do
         {l, b, r, t} -> " /CropBox [#{l} #{b} #{r} #{t}]"
       end
 
+    annotations =
+      case annotation_numbers do
+        [] -> ""
+        numbers -> " /Annots [#{Enum.map_join(numbers, " ", &"#{&1} 0 R")}]"
+      end
+
     [
       """
       << /Type /Page /Parent 2 0 R /MediaBox [#{left} #{bottom} #{right} #{top}]#{crop} \
-      /Rotate #{rotation} /Resources << >> /Contents #{number + 1} 0 R >>\
+      /Rotate #{rotation} /Resources << >> /Contents #{number + 1} 0 R#{annotations} >>\
       """,
       "<< /Length #{byte_size(content)} >>\nstream\n#{content}\nendstream"
     ]
+  end
+
+  @spec annotation_objects({page(), [pos_integer()]}) :: [binary()]
+  defp annotation_objects({page, numbers}) do
+    page
+    |> Keyword.get(:annotations, [])
+    |> Enum.zip(numbers)
+    |> Enum.flat_map(fn {annotation, number} ->
+      {left, bottom, right, top} = Keyword.fetch!(annotation, :rect)
+      content = Keyword.fetch!(annotation, :content)
+
+      [
+        """
+        << /Type /Annot /Subtype /Square /Rect [#{left} #{bottom} #{right} #{top}] \
+        /F #{Keyword.get(annotation, :flags, 0)} /AP << /N #{number + 1} 0 R >> >>\
+        """,
+        """
+        << /Type /XObject /Subtype /Form /BBox [0 0 #{right - left} #{top - bottom}] \
+        /Length #{byte_size(content)} >>
+        stream
+        #{content}
+        endstream\
+        """
+      ]
+    end)
   end
 end
