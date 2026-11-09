@@ -4,6 +4,7 @@ defmodule PDFiumVisualTest do
   import PDFium.Test.Visual
 
   alias PDFium.Test.Document
+  alias PDFium.Toolbox
 
   @moduletag :visual
 
@@ -122,6 +123,37 @@ defmodule PDFiumVisualTest do
     assembled = open_binary!(binary)
     assert {:ok, 4} = PDFium.get_page_count(assembled)
     assert_looks_like(sheet(assembled), "assembled")
+  end
+
+  test "the toolbox jobs draw what the building blocks do" do
+    target = document!([[box: {0, 0, 120, 80}], [box: {0, 0, 120, 80}, rotation: 90]])
+    overlay = document!([[box: {0, 0, 20, 20}, content: mark(0, 0)]])
+
+    overlays =
+      document!([
+        [box: {0, 0, 120, 80}, content: mark(10, 10)],
+        [box: {0, 0, 80, 120}, content: mark(50, 90)]
+      ])
+
+    annotated = annotated!()
+    bars = bars!()
+
+    assert {:ok, binary} = Toolbox.stamp_to_binary(target, [{overlay, 0}, {overlay, 1}])
+    assert_looks_like(sheet(open_binary!(binary)), "toolbox-stamp")
+
+    assert {:ok, binary} = Toolbox.overlay_to_binary(target, {:bytes, File.read!(overlays)})
+    assert_looks_like(sheet(open_binary!(binary)), "toolbox-overlay")
+
+    for usage <- [:display, :print] do
+      assert {:ok, binary} = Toolbox.flatten_to_binary(annotated, usage)
+      assert_looks_like(sheet(open_binary!(binary)), "annotations-flattened-#{usage}")
+    end
+
+    assert {:ok, binary} = Toolbox.merge_to_binary([bars, {:bytes, File.read!(@encrypted_r6)}])
+    assert_looks_like(sheet(open_binary!(binary)), "toolbox-merge")
+
+    assert {:ok, binary} = Toolbox.extract_pages_to_binary(bars, [2, 0, 2])
+    assert_looks_like(sheet(open_binary!(binary)), "toolbox-extract")
   end
 
   defp mark(x, y) do
