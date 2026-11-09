@@ -66,6 +66,14 @@ Run the tests for every target this machine can run:
 nix flake check
 ```
 
+The visual tests compare renders with the images in `test/fixtures/visual`.
+After a change that is meant to draw differently, rewrite them and review the
+image diff:
+
+```sh
+UPDATE_VISUALS=1 mix test --only visual
+```
+
 Build the NIF for a target, or the release archives:
 
 ```sh
