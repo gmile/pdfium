@@ -44,6 +44,23 @@ defmodule PDFiumVisualTest do
     assert_looks_like(page(document, 0, 144), "geometry-144-dpi")
   end
 
+  test "annotations are drawn, and flattened by the appearance asked for" do
+    path = annotated!()
+    document = open!(path)
+    assert {:ok, [3]} = PDFium.get_annotation_counts(document)
+    assert_looks_like(sheet(document), "annotations")
+
+    for usage <- [:display, :print] do
+      document = open!(path)
+      assert {:ok, :flattened} = PDFium.flatten_page(document, 0, usage)
+      assert {:ok, binary} = PDFium.save_to_binary(document)
+
+      flattened = open_binary!(binary)
+      assert {:ok, [0]} = PDFium.get_annotation_counts(flattened)
+      assert_looks_like(sheet(flattened), "annotations-flattened-#{usage}")
+    end
+  end
+
   defp mark(x, y) do
     "1 0 0 rg #{x} #{y} 5 20 re f " <>
       "0 1 0 rg #{x + 5} #{y + 15} 10 5 re f " <>
@@ -51,6 +68,20 @@ defmodule PDFiumVisualTest do
   end
 
   defp content, do: mark(10, 10) <> " 0 g 100 60 10 10 re f"
+
+  defp annotated! do
+    document!([
+      [
+        box: {0, 0, 120, 80},
+        content: mark(10, 10),
+        annotations: [
+          [rect: {40, 40, 60, 60}, flags: 0, content: "1 0 0 rg 0 0 20 20 re f"],
+          [rect: {65, 40, 85, 60}, flags: 5, content: "0 1 0 rg 0 0 20 20 re f"],
+          [rect: {90, 40, 110, 60}, flags: 4, content: "0 0 1 rg 0 0 20 20 re f"]
+        ]
+      ]
+    ])
+  end
 
   defp document!(pages), do: Document.write!(tmp_path(), pages)
 
@@ -62,6 +93,12 @@ defmodule PDFiumVisualTest do
 
   defp open!(path) do
     {:ok, document} = PDFium.load_document(path)
+    on_exit(fn -> PDFium.close_document(document) end)
+    document
+  end
+
+  defp open_binary!(binary) do
+    {:ok, document} = PDFium.load_memory_document(binary)
     on_exit(fn -> PDFium.close_document(document) end)
     document
   end
