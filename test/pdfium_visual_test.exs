@@ -61,6 +61,39 @@ defmodule PDFiumVisualTest do
     end
   end
 
+  test "overlays are drawn where the matrix puts them, in the page as displayed" do
+    path =
+      document!([
+        [box: {0, 0, 120, 80}],
+        [box: {0, 0, 120, 80}, rotation: 90],
+        [box: {50, 30, 170, 110}]
+      ])
+
+    upright = open!(document!([[box: {0, 0, 20, 20}, content: mark(0, 0)]]))
+
+    turned =
+      open!(document!([[box: {100, 100, 120, 120}, rotation: 90, content: mark(100, 100)]]))
+
+    placements = [
+      {upright, 0, 0, {1, 0, 0, 1, 10, 10}},
+      {upright, 0, 0, {2, 0, 0, 2, 40, 10}},
+      {upright, 0, 0, {0, 1, -1, 0, 110, 10}},
+      {upright, 0, 0, {1, 0, 0, 1, 90, 50}},
+      {turned, 0, 0, {1, 0, 0, 1, 90, 50}},
+      {upright, 0, 1, {1, 0, 0, 1, 10, 10}},
+      {turned, 0, 1, {1, 0, 0, 1, 50, 90}},
+      {upright, 0, 2, {1, 0, 0, 1, 10, 10}}
+    ]
+
+    output = tmp_path()
+    assert {:ok, :stamped} = PDFium.stamp(open!(path), placements, output)
+    assert_looks_like(sheet(open!(output)), "stamped")
+
+    document = open!(path)
+    assert {:ok, :stamped} = PDFium.stamp_in_place(document, placements)
+    assert_looks_like(sheet(document), "stamped")
+  end
+
   defp mark(x, y) do
     "1 0 0 rg #{x} #{y} 5 20 re f " <>
       "0 1 0 rg #{x + 5} #{y + 15} 10 5 re f " <>
