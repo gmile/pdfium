@@ -7,6 +7,8 @@ defmodule PDFiumVisualTest do
 
   @moduletag :visual
 
+  @encrypted_r6 Path.expand("fixtures/encrypted-r6-marked.pdf", __DIR__)
+
   test "pages are drawn in their box, turned and cropped" do
     path =
       document!([
@@ -94,6 +96,34 @@ defmodule PDFiumVisualTest do
     assert_looks_like(sheet(document), "stamped")
   end
 
+  test "documents are assembled from the pages of others, encrypted ones included" do
+    bars = bars!()
+
+    encrypted = open!(@encrypted_r6)
+    assert {:ok, 6} = PDFium.get_security_handler_revision(encrypted)
+    assert_looks_like(sheet(encrypted), "encrypted-r6-marked")
+
+    assert {:ok, binary} = PDFium.save_to_binary(encrypted, :remove)
+    decrypted = open_binary!(binary)
+    assert {:ok, nil} = PDFium.get_security_handler_revision(decrypted)
+    assert_looks_like(sheet(decrypted), "encrypted-r6-marked")
+
+    source = open!(bars)
+    assert {:ok, "Bars"} = PDFium.get_meta_text(source, "Title")
+
+    assert {:ok, binary} =
+             PDFium.with_new_document(fn output ->
+               with {:ok, :imported} <- PDFium.import_pages(output, source, [2, 0]),
+                    {:ok, :imported} <- PDFium.import_pages(output, encrypted, :all, 1),
+                    {:ok, :imported} <- PDFium.import_pages(output, source, [1], 3),
+                    do: PDFium.save_to_binary(output)
+             end)
+
+    assembled = open_binary!(binary)
+    assert {:ok, 4} = PDFium.get_page_count(assembled)
+    assert_looks_like(sheet(assembled), "assembled")
+  end
+
   defp mark(x, y) do
     "1 0 0 rg #{x} #{y} 5 20 re f " <>
       "0 1 0 rg #{x + 5} #{y + 15} 10 5 re f " <>
@@ -114,6 +144,18 @@ defmodule PDFiumVisualTest do
         ]
       ]
     ])
+  end
+
+  defp bars! do
+    pages =
+      for count <- 1..3 do
+        [
+          box: {0, 0, 60, 60},
+          content: Enum.map_join(1..count, " ", &"0 g #{&1 * 12} 10 6 40 re f")
+        ]
+      end
+
+    Document.write!(tmp_path(), pages, Title: "Bars")
   end
 
   defp document!(pages), do: Document.write!(tmp_path(), pages)
