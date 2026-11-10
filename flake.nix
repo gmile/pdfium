@@ -59,6 +59,7 @@
         fileset = lib.fileset.unions [
           ./mix.exs
           ./mix.lock
+          ./VERSION
         ];
       };
       named =
@@ -190,6 +191,7 @@
               HEX_OFFLINE = 1;
               buildPhase = ''
                 export HOME=$TMPDIR MIX_DEPS_PATH=$PWD/deps
+                echo 0.0.0 > VERSION
                 cp --recursive --no-preserve=mode ${deps} deps
                 mix deps.compile --no-deps-check
                 mkdir priv
@@ -200,7 +202,13 @@
             };
           test = target: mix "test-${target}" target "mix test --no-deps-check";
           plt = (mix "plt" host "mix dialyzer --plt").overrideAttrs {
-            src = mixFiles;
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.unions [
+                ./mix.exs
+                ./mix.lock
+              ];
+            };
             installPhase = "mkdir $out && cp _build/plts/*.plt $out";
           };
           dialyzer = mix "dialyzer" host ''

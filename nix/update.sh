@@ -15,8 +15,8 @@ hashes=$(
 echo "$hashes" > nix/libpdfium.nix
 git commit mix.exs nix/libpdfium.nix --message "Update libpdfium to $tag"
 next="${VERSION%.*}.$(( ${VERSION##*.} + 1 ))"
-sed --in-place "s/@version \"$VERSION\"/@version \"$next\"/" mix.exs
-git commit mix.exs --message "Update package to version $next"
+echo "$next" > VERSION
+git commit VERSION --message "Update package to version $next"
 git push origin HEAD:refs/heads/update-libpdfium
 gh pr create --base main --head update-libpdfium --reviewer gmile --fill-first
 gh workflow run ci.yaml --ref update-libpdfium
