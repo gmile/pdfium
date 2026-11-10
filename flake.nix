@@ -14,40 +14,49 @@
         "x86_64-linux-musl"
         "aarch64-apple-darwin"
       ];
+      linux = lib.filter (lib.hasInfix "-linux-") targets;
       buildable = {
         aarch64-darwin = [ "aarch64-apple-darwin" ];
-        aarch64-linux = lib.filter (lib.hasInfix "-linux-") targets;
-        x86_64-linux = lib.filter (lib.hasInfix "-linux-") targets;
+        aarch64-linux = linux;
+        x86_64-linux = linux;
       };
-      testable = {
-        aarch64-darwin = [ "aarch64-apple-darwin" ];
-        aarch64-linux = [ "aarch64-linux-gnu" "aarch64-linux-musl" ];
-        x86_64-linux = [ "x86_64-linux-gnu" "x86_64-linux-musl" ];
-      };
-      forAllSystems = f: lib.mapAttrs (system: _: f system nixpkgs.legacyPackages.${system}) buildable;
+      forAllSystems =
+        f:
+        lib.mapAttrs (
+          system: buildable:
+          let
+            pkgs = nixpkgs.legacyPackages.${system};
+            testable = lib.filter (lib.hasPrefix "${lib.head (lib.splitString "-" system)}-") buildable;
+          in
+          f {
+            inherit pkgs buildable testable;
+            host = lib.head testable;
+            beam = pkgs.beam_minimal.packages.erlang_29;
+            nif = pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_27) erlang; };
+          }
+        ) buildable;
       named = prefix: f: list: lib.listToAttrs (map (target: lib.nameValuePair "${prefix}-${target}" (f target)) list);
-      erlLibs = beam: "${beam.hex}/lib/erlang/lib";
-      nifFor = pkgs: pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_27) erlang; };
     in
     {
       packages = forAllSystems (
-        system: pkgs:
-        let
-          nif = nifFor pkgs;
-          beam = pkgs.beam_minimal.packages.erlang_29;
-        in
+        { pkgs, beam, nif, buildable, host, ... }:
         {
-          default = nif.nif (builtins.head testable.${system});
+          default = nif.nif host;
           archives = pkgs.symlinkJoin {
             name = "pdfium-nif-archives";
-            paths = map nif.archive buildable.${system};
+            paths = map nif.archive buildable;
           };
           release = pkgs.writeShellApplication {
             name = "release";
-            text = builtins.readFile ./nix/release.sh;
+            text = ''
+              gh release create "v$VERSION" --target "$(git rev-parse HEAD)" --title "v$VERSION" "$1"/*
+              mix deps.get
+              mix elixir_make.checksum --all
+              mix hex.publish package --yes
+            '';
             runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.gh pkgs.git ];
             runtimeEnv = {
-              ERL_LIBS = erlLibs beam;
+              ERL_LIBS = "${beam.hex}/lib/erlang/lib";
               VERSION = nif.version;
             };
           };
@@ -62,16 +71,14 @@
             };
           };
         }
-        // named "nif" nif.nif buildable.${system}
-        // named "archive" nif.archive buildable.${system}
+        // named "nif" nif.nif buildable
+        // named "archive" nif.archive buildable
         // named "libpdfium" nif.libpdfium targets
       );
 
       checks = forAllSystems (
-        system: pkgs:
+        { pkgs, beam, nif, testable, host, ... }:
         let
-          nif = nifFor pkgs;
-          beam = pkgs.beam_minimal.packages.erlang_29;
           beamFor =
             target:
             if lib.hasSuffix "-musl" target then
@@ -85,7 +92,6 @@
             mixEnv = "test";
             hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";
           };
-          host = builtins.head testable.${system};
           mix =
             name: target: command:
             let
@@ -121,17 +127,14 @@
             mix dialyzer --no-check
           '');
         in
-        named "test" test testable.${system}
+        named "test" test testable
         // {
           inherit dialyzer;
         }
       );
 
       devShells = forAllSystems (
-        system: pkgs:
-        let
-          beam = pkgs.beam_minimal.packages.erlang_29;
-        in
+        { pkgs, beam, ... }:
         {
           default = pkgs.mkShell {
             packages = [
