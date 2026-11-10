@@ -90,7 +90,7 @@
               grep --fixed-strings --quiet "## [v$VERSION]" CHANGELOG.md
               mix deps.get
               mix hex.audit
-              gh release create "v$VERSION" --target "$(git rev-parse HEAD)" --title "v$VERSION" "$1"/*
+              gh release create "v$VERSION" --target "$(git rev-parse HEAD)" --generate-notes "$1"/*
               mix elixir_make.checksum --all
               mix hex.publish --yes
             '';
