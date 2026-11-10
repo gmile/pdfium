@@ -2,9 +2,6 @@ name: Update to latest libpdfium
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: libpdfium tag, such as chromium/8152; the latest when empty
   schedule:
     - cron: 0 13 * * 1
 
@@ -27,5 +24,4 @@ jobs:
           GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-          TAG: ${{ inputs.tag }}
-        run: nix run .#update -- ${TAG:+"$TAG"}
+        run: nix run .#update

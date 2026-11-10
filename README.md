@@ -87,14 +87,13 @@ CI publishes it to Hex and GitHub once the tests pass. A release that failed
 before its tag was created can be retried by running the CI workflow on `main`.
 
 Every Monday a workflow opens a pull request that updates libpdfium to its
-latest release and bumps `VERSION`. To get one now, run it yourself, adding
-`--field tag=chromium/8152` for a specific tag:
+latest release and bumps `VERSION`. To get one now:
 
 ```sh
 gh workflow run update-libpdfium.yaml
 ```
 
-Or do the same from your machine:
+To update to a specific tag, from your machine:
 
 ```sh
 nix run .#update -- chromium/8152
