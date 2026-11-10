@@ -5,14 +5,11 @@
   fetchzip,
   native,
   fine,
+  version,
+  libpdfiumTag,
 }:
 
 let
-  mixExs = builtins.readFile ../mix.exs;
-  attribute = name: builtins.head (builtins.match ".*@${name} \"([^\"]+)\".*" mixExs);
-  version = attribute "version";
-  libpdfiumTag = attribute "libpdfium";
-
   darwin = target: lib.hasSuffix "-apple-darwin" target;
   musl = target: lib.hasSuffix "-musl" target;
   arch =
@@ -49,8 +46,7 @@ let
   nif =
     target:
     (stdenvFor target).mkDerivation {
-      pname = "pdfium-nif-${target}";
-      inherit version;
+      name = "pdfium-nif-${target}";
       src = lib.fileset.toSource {
         root = ../.;
         fileset = lib.fileset.unions [
@@ -87,11 +83,5 @@ let
     };
 in
 {
-  inherit
-    nif
-    archive
-    libpdfium
-    version
-    libpdfiumTag
-    ;
+  inherit nif archive libpdfium;
 }

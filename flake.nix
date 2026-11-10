@@ -7,6 +7,16 @@
     { self, nixpkgs }:
     let
       lib = nixpkgs.lib;
+      mixExs = builtins.readFile ./mix.exs;
+      attribute = name: lib.head (builtins.match ".*@${name} \"([^\"]+)\".*" mixExs);
+      version = attribute "version";
+      libpdfiumTag = attribute "libpdfium";
+      checkedMixExs = builtins.toFile "mix.exs" (
+        lib.replaceStrings
+          [ ''@version "${version}"'' ''@libpdfium "${libpdfiumTag}"'' ]
+          [ ''@version "0.0.0"'' ''@libpdfium "none"'' ]
+          mixExs
+      );
       targets = [
         "aarch64-linux-gnu"
         "aarch64-linux-musl"
@@ -31,13 +41,14 @@
             beam = pkgs.beam_minimal.packages.erlang_29;
             deps = beam.fetchMixDeps {
               pname = "pdfium-deps";
-              version = nif.version;
+              version = "locked";
               src = mixFiles;
               mixEnv = "test";
               hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";
             };
             nif = pkgs.callPackage ./nix/nif.nix {
               inherit (pkgs.beam_minimal.packages.erlang_27) erlang;
+              inherit version libpdfiumTag;
               native = host;
               fine = "${deps}/fine";
             };
@@ -97,7 +108,7 @@
             ];
             runtimeEnv = {
               ERL_LIBS = "${beam.hex}/lib/erlang/lib";
-              VERSION = nif.version;
+              VERSION = version;
             };
           };
           update = pkgs.writeShellApplication {
@@ -110,8 +121,8 @@
               pkgs.jq
             ];
             runtimeEnv = {
-              VERSION = nif.version;
-              LIBPDFIUM = nif.libpdfiumTag;
+              VERSION = version;
+              LIBPDFIUM = libpdfiumTag;
               TARGETS = lib.concatStringsSep " " targets;
             };
           };
@@ -175,7 +186,6 @@
               src = lib.fileset.toSource {
                 root = ./.;
                 fileset = lib.fileset.unions [
-                  ./mix.exs
                   ./mix.lock
                   ./lib
                   ./test
@@ -190,6 +200,7 @@
               HEX_OFFLINE = 1;
               buildPhase = ''
                 export HOME=$TMPDIR MIX_DEPS_PATH=$PWD/deps
+                cp ${checkedMixExs} mix.exs
                 cp --recursive --no-preserve=mode ${deps} deps
                 mix deps.compile --no-deps-check
                 mkdir priv
@@ -200,7 +211,10 @@
             };
           test = target: mix "test-${target}" target "mix test --no-deps-check";
           plt = (mix "plt" host "mix dialyzer --plt").overrideAttrs {
-            src = mixFiles;
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = ./mix.lock;
+            };
             installPhase = "mkdir $out && cp _build/plts/*.plt $out";
           };
           dialyzer = mix "dialyzer" host ''
