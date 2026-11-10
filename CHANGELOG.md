@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Documentation is published to HexDocs with each release.
+
 ## 0.2.1
 
 - Built against libpdfium chromium/8152, whose macOS library names itself
