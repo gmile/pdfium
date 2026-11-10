@@ -13,7 +13,7 @@ hashes=$(
 jq --slurp --arg tag "$tag" '{$tag, hashes: add}' <<< "$hashes" > libpdfium.json
 sed --in-place "s|^## \[Unreleased\]$|## [Unreleased]\n\n### Changed\n\n- Built against libpdfium $tag.|" CHANGELOG.md
 git commit libpdfium.json CHANGELOG.md --message "Update libpdfium to $tag"
-cut patch
+release patch
 git push origin HEAD:refs/heads/update-libpdfium
 gh pr create --base main --head update-libpdfium --reviewer gmile --fill-first
 gh workflow run ci.yaml --ref update-libpdfium

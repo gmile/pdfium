@@ -90,8 +90,8 @@
           ...
         }:
         let
-          cut = pkgs.writeShellApplication {
-            name = "cut";
+          release = pkgs.writeShellApplication {
+            name = "release";
             runtimeInputs = [
               pkgs.gawk
               pkgs.git
@@ -101,7 +101,7 @@
             text = ''
               case ''${1:-} in
                 major | minor | patch) version=''${!1} ;;
-                *) echo "usage: cut major|minor|patch" >&2 && exit 1 ;;
+                *) echo "usage: release major|minor|patch" >&2 && exit 1 ;;
               esac
               awk '/^## \[Unreleased\]/ { open = 1; next } /^## / { exit } open && NF { found = 1 } END { exit !found }' CHANGELOG.md ||
                 { echo "CHANGELOG.md has nothing under [Unreleased]" >&2 && exit 1; }
@@ -116,7 +116,7 @@
           bump = pkgs.writeShellApplication {
             name = "bump";
             runtimeInputs = [
-              cut
+              release
               pkgs.git
             ];
             text = ''
@@ -127,7 +127,7 @@
                 echo "bump releases from a clean main that matches origin/main" >&2
                 exit 1
               fi
-              cut "$@"
+              release "$@"
               git push origin main
             '';
           };
@@ -135,8 +135,8 @@
             name = "pdfium-nif-archives";
             paths = map nif.archive buildable;
           };
-          release = pkgs.writeShellApplication {
-            name = "release";
+          publish = pkgs.writeShellApplication {
+            name = "publish";
             text = ''
               grep --fixed-strings --quiet "## [v$VERSION]" CHANGELOG.md
               mix deps.get
@@ -161,7 +161,7 @@
             text = builtins.readFile ./nix/update.sh;
             excludeShellChecks = [ "SC2016" ];
             runtimeInputs = [
-              cut
+              release
               pkgs.gh
               pkgs.git
               pkgs.gnused

@@ -97,4 +97,4 @@ jobs:
 
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: nix run .#release -- archives
+        run: nix run .#publish -- archives
