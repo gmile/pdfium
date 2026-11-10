@@ -1,7 +1,7 @@
 defmodule PDFium.MixProject do
   use Mix.Project
 
-  @version "0.2.2"
+  @version File.read!("VERSION") |> String.trim()
   @libpdfium "chromium/8152"
 
   def project do
@@ -91,6 +91,7 @@ defmodule PDFium.MixProject do
         Makefile
         mix.exs
         README.md
+        VERSION
       ",
       licenses: ~w"MIT",
       links: %{

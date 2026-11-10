@@ -10,7 +10,7 @@
 let
   mixExs = builtins.readFile ../mix.exs;
   attribute = name: builtins.head (builtins.match ".*@${name} \"([^\"]+)\".*" mixExs);
-  version = attribute "version";
+  version = lib.trim (builtins.readFile ../VERSION);
   libpdfiumTag = attribute "libpdfium";
 
   darwin = target: lib.hasSuffix "-apple-darwin" target;

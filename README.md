@@ -92,8 +92,8 @@ To update to a specific libpdfium tag:
 nix run .#update -- chromium/8138
 ```
 
-Every push to `main` that touches `mix.exs` releases, so bump `@version` with
-it. If a release fails, bump `@version` again. Tags cannot be reused.
+Every push to `main` that changes `VERSION` releases. If a release fails, bump
+`VERSION` again. Tags cannot be reused.
 
 ## License
 
