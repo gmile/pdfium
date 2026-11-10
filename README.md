@@ -94,6 +94,12 @@ latest release and bumps `VERSION`. To get one now, run it yourself, adding
 gh workflow run update-libpdfium.yaml
 ```
 
+Or do the same from your machine:
+
+```sh
+nix run .#update -- chromium/8152
+```
+
 ## License
 
 See [LICENSE](https://github.com/gmile/pdfium/blob/main/LICENSE).
