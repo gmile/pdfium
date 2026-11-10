@@ -54,6 +54,12 @@ mix dialyzer
 mix docs
 ```
 
+Format the Nix files:
+
+```sh
+nix fmt
+```
+
 ## Running tests
 
 Run the tests for every target this machine can run, and dialyzer:
