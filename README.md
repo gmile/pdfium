@@ -95,14 +95,6 @@ nix run .#update -- chromium/8138
 Every push to `main` that touches `mix.exs` releases, so bump `@version` with
 it. If a release fails, bump `@version` again. Tags cannot be reused.
 
-## Repository settings
-
-* a GitHub App with write access to contents and pull requests: `GH_APP_ID`
-  variable and `GH_APP_PRIVATE_KEY` secret
-* a `hex` environment, which the workload identity of the `pdfium` package on
-  hex.pm trusts for `release.yaml`
-* immutable releases
-
 ## License
 
 See [LICENSE](https://github.com/gmile/pdfium/blob/main/LICENSE).
