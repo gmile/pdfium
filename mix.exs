@@ -83,7 +83,7 @@ defmodule PDFium.MixProject do
   defp package do
     [
       files: ~w"
-        c_src/pdfium_nif.cpp
+        c_src
         CHANGELOG.md
         checksum.exs
         lib

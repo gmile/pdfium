@@ -11,6 +11,7 @@ else
   LDFLAGS = -Wl,-rpath,'$$ORIGIN' -static-libstdc++ -static-libgcc -s
 endif
 
+SOURCES = c_src/pdfium.cpp c_src/toolbox.cpp
 CXXFLAGS = -std=c++17 -O2 -fPIC -fvisibility=hidden -Wall -Wextra -Werror -Wno-unused-parameter -I$(ERTS_INCLUDE_DIR) -I$(PDFIUM)/include -I$(FINE_INCLUDE_DIR)
 
 all: $(PREFIX)/pdfium_nif.so $(PREFIX)/$(LIBRARY)
@@ -19,9 +20,9 @@ $(PDFIUM)/lib/$(LIBRARY):
 	mkdir -p $(PDFIUM)
 	curl --fail --location --silent https://github.com/bblanchon/pdfium-binaries/releases/download/$(subst /,%2F,$(PDFIUM_TAG))/pdfium-$(OS)-$(ARCH).tgz | tar --extract --gzip --directory $(PDFIUM)
 
-$(PREFIX)/pdfium_nif.so: c_src/pdfium_nif.cpp $(PDFIUM)/lib/$(LIBRARY)
+$(PREFIX)/pdfium_nif.so: $(SOURCES) c_src/pdfium_nif.hpp $(PDFIUM)/lib/$(LIBRARY)
 	mkdir -p $(PREFIX)
-	$(CXX) $(CXXFLAGS) -shared -o $@ $< -L$(PDFIUM)/lib -lpdfium $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -shared -o $@ $(SOURCES) -L$(PDFIUM)/lib -lpdfium $(LDFLAGS)
 
 $(PREFIX)/$(LIBRARY): $(PDFIUM)/lib/$(LIBRARY)
 	cp $< $@
