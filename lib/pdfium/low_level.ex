@@ -5,9 +5,9 @@ defmodule PDFium.LowLevel do
   `PDFium.Toolbox` are built from these.
 
   They hold no hands. Arguments mean what pdfium's headers say they mean,
-  flags are the integers pdfium takes, and the caller closes what it opens in
-  the order pdfium asks for. A mistake gives a wrong answer or a broken
-  document, so read pdfium's documentation before reaching for them.
+  flags are the integers pdfium takes, and the caller closes what it opens. A
+  mistake gives a wrong answer or a broken document, so read pdfium's
+  documentation before reaching for them.
 
   What they do keep is the VM safe. Every call waits its turn on the one lock
   pdfium needs and runs on a dirty scheduler. A handle the garbage collector

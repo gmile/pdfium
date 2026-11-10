@@ -42,6 +42,29 @@ Render a page to a file, with Vix:
 {:ok, _image} = Image.write(image, "/tmp/sample.png")
 ```
 
+Do whole jobs, such as merging documents, with `PDFium.Toolbox`:
+
+```elixir
+{:ok, binary} = PDFium.Toolbox.merge(["contract.pdf", "attachment.pdf"])
+```
+
+`PDFium` and `PDFium.Toolbox` are built from `PDFium.LowLevel`, which calls
+pdfium's own functions one for one, under their own names. It keeps the VM
+safe but nothing else: the caller closes what it opens, and passes the flags
+pdfium's headers describe. Render a page without its annotations:
+
+```elixir
+alias PDFium.LowLevel
+
+{:ok, page} = LowLevel.fpdf_load_page(document, 0)
+{:ok, bitmap} = LowLevel.fpdfbitmap_create(612, 792, 0)
+:ok = LowLevel.fpdfbitmap_fill_rect(bitmap, 0, 0, 612, 792, 0xFFFFFFFF)
+:ok = LowLevel.fpdf_render_page_bitmap(bitmap, page, 0, 0, 612, 792, 0, 0)
+{:ok, bgrx} = LowLevel.fpdfbitmap_get_buffer(bitmap)
+:ok = LowLevel.fpdfbitmap_destroy(bitmap)
+:ok = LowLevel.fpdf_close_page(page)
+```
+
 ## Development
 
 Enter the shell, then use mix as usual:

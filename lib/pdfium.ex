@@ -1,9 +1,10 @@
 defmodule PDFium do
   @moduledoc """
-  Bindings to pdfium: open, inspect, render, flatten, stamp and write PDF
-  documents. `PDFium.Toolbox` does whole jobs on top of these.
+  Open, inspect, render, flatten, stamp and write PDF documents, built from
+  pdfium's own functions in `PDFium.LowLevel`. `PDFium.Toolbox` does whole
+  jobs on top of these.
 
-  Every call on a document waits its turn on one lock, since pdfium is not
+  Every call into pdfium waits its turn on one lock, since pdfium is not
   thread safe, and runs on a dirty scheduler.
   """
 

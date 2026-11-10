@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- The undocumented `PDFium.NIF` now holds pdfium's own functions under their
+  own names, such as `fpdf_load_mem_document64/2` instead of
+  `load_memory_document/2`, and no longer walks pages or renders. Use
+  `PDFium.LowLevel` for those functions, or `PDFium` as before. `PDFium` and
+  `PDFium.Toolbox` answer as they did.
+
+### Added
+
+- `PDFium.LowLevel`, pdfium's functions one for one under their own names:
+  documents, pages and bitmaps, loaded, measured, flattened, rendered, saved
+  and closed by the caller. A closed or dropped handle never crashes the VM.
+
 ## 0.2.2
 
 - Documentation is published to HexDocs with each release.
