@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Built against libpdfium chromium/8152, whose macOS library names itself
+  `@rpath/libpdfium.dylib`.
+
 ## 0.2.0
 
 ### Breaking changes
