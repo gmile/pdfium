@@ -79,12 +79,14 @@ nix build .#archives
 
 ## Releasing
 
-1. Bump `VERSION` and add a section for it to `CHANGELOG.md`.
+1. Bump `VERSION` and rename the `[Unreleased]` section of `CHANGELOG.md` to
+   `[vX.Y.Z] - YYYY-MM-DD`, with a new empty `[Unreleased]` above it.
 2. Commit.
 3. Push to `main`.
 
-CI publishes it to Hex and GitHub once the tests pass. A release that failed
-before its tag was created can be retried by running the CI workflow on `main`.
+Once the tests pass, CI publishes the package and its docs to Hex and creates
+the GitHub release. A release that failed before its tag was created can be
+retried by running the CI workflow on `main`.
 
 Every Monday a workflow opens a pull request that updates libpdfium to its
 latest release and bumps `VERSION`. To get one now:

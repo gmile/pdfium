@@ -87,6 +87,7 @@
           release = pkgs.writeShellApplication {
             name = "release";
             text = ''
+              grep --fixed-strings --quiet "## [v$VERSION]" CHANGELOG.md
               mix deps.get
               mix hex.audit
               gh release create "v$VERSION" --target "$(git rev-parse HEAD)" --title "v$VERSION" "$1"/*
