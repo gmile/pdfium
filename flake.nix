@@ -31,7 +31,7 @@
             beam = pkgs.beam_minimal.packages.erlang_29;
             deps = beam.fetchMixDeps {
               pname = "pdfium-deps";
-              version = nif.version;
+              version = "locked";
               src = mixFiles;
               mixEnv = "test";
               hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";

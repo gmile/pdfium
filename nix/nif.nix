@@ -48,8 +48,7 @@ let
   nif =
     target:
     (stdenvFor target).mkDerivation {
-      pname = "pdfium-nif-${target}";
-      inherit version;
+      name = "pdfium-nif-${target}";
       src = lib.fileset.toSource {
         root = ../.;
         fileset = lib.fileset.unions [
