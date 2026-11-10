@@ -19,7 +19,6 @@ static fine::Atom bitmap_destroyed("bitmap_destroyed");
 static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
 static fine::Atom bounding_box_failed("bounding_box_failed");
 static fine::Atom fill_rect_failed("fill_rect_failed");
-static fine::Atom flatten_failed("flatten_failed");
 static fine::Atom save_failed("save_failed");
 static fine::Atom import_failed("import_failed");
 
@@ -123,21 +122,6 @@ static auto with_bitmap(const fine::ResourcePtr<PDFBitmap> &bitmap, F f) -> decl
     return f(bitmap->bitmap);
 }
 
-template <typename T, typename F>
-static Result<std::vector<T>> each_page(const fine::ResourcePtr<PDFDoc> &doc, F f) {
-    return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<std::vector<T>> {
-        std::vector<T> out;
-        for (int index = 0, count = FPDF_GetPageCount(document); index < count; index++) {
-            ScopedFPDFPage page(FPDF_LoadPage(document, index));
-            if (!page) {
-                return fine::Error(page_load_failed);
-            }
-            out.push_back(f(page.get()));
-        }
-        return fine::Ok(std::move(out));
-    });
-}
-
 Result<fine::ResourcePtr<PDFDoc>> fpdf_load_mem_document64(ErlNifEnv *, std::string data,
                                                            std::optional<std::string> password) {
     auto doc = fine::make_resource<PDFDoc>(nullptr, std::move(data));
@@ -211,42 +195,6 @@ Result<std::tuple<std::string, int64_t, int64_t>> get_page_bitmap(ErlNifEnv *, f
 
 FINE_NIF(get_page_bitmap, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-using PageBox = std::tuple<double, double, double, double, int64_t>;
-
-Result<std::vector<PageBox>> get_page_boxes(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
-    return each_page<PageBox>(doc, [](FPDF_PAGE page) {
-        FS_RECTF box;
-        FPDF_GetPageBoundingBox(page, &box);
-        return PageBox(box.left, box.bottom, box.right, box.top, FPDFPage_GetRotation(page) * 90);
-    });
-}
-
-FINE_NIF(get_page_boxes, ERL_NIF_DIRTY_JOB_CPU_BOUND);
-
-using PageSize = std::tuple<double, double>;
-
-Result<std::vector<PageSize>> get_page_sizes(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
-    return with_document(doc, [](FPDF_DOCUMENT document) -> Result<std::vector<PageSize>> {
-        std::vector<PageSize> sizes;
-        for (int index = 0, count = FPDF_GetPageCount(document); index < count; index++) {
-            FS_SIZEF size;
-            if (!FPDF_GetPageSizeByIndexF(document, index, &size)) {
-                return fine::Error(page_load_failed);
-            }
-            sizes.emplace_back(size.width, size.height);
-        }
-        return fine::Ok(std::move(sizes));
-    });
-}
-
-FINE_NIF(get_page_sizes, ERL_NIF_DIRTY_JOB_CPU_BOUND);
-
-Result<std::vector<int64_t>> get_annotation_counts(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
-    return each_page<int64_t>(doc, [](FPDF_PAGE page) { return int64_t(FPDFPage_GetAnnotCount(page)); });
-}
-
-FINE_NIF(get_annotation_counts, ERL_NIF_DIRTY_JOB_CPU_BOUND);
-
 Result<std::string> fpdf_get_meta_text(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, std::string tag) {
     return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<std::string> {
         std::string utf16(FPDF_GetMetaText(document, tag.c_str(), nullptr, 0), '\0');
@@ -258,20 +206,18 @@ Result<std::string> fpdf_get_meta_text(ErlNifEnv *, fine::ResourcePtr<PDFDoc> do
 
 FINE_NIF(fpdf_get_meta_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-Result<> flatten_page(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, int64_t index, int64_t usage) {
-    return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<> {
-        ScopedFPDFPage page(FPDF_LoadPage(document, index));
-        if (!page) {
+Result<std::tuple<double, double>> fpdf_get_page_size_by_index_f(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc,
+                                                                  int64_t index) {
+    return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<std::tuple<double, double>> {
+        FS_SIZEF size;
+        if (!FPDF_GetPageSizeByIndexF(document, index, &size)) {
             return fine::Error(page_load_failed);
         }
-        if (FPDFPage_Flatten(page.get(), usage) == FLATTEN_FAIL) {
-            return fine::Error(flatten_failed);
-        }
-        return fine::Ok<>();
+        return fine::Ok(std::make_tuple(double(size.width), double(size.height)));
     });
 }
 
-FINE_NIF(flatten_page, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_get_page_size_by_index_f, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 Result<std::string> fpdf_save_as_copy(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, int64_t flags) {
     return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<std::string> {

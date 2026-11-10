@@ -86,6 +86,16 @@ defmodule PDFium.LowLevel do
   defdelegate fpdf_get_meta_text(document, tag), to: PDFium.NIF
 
   @doc """
+  `FPDF_GetPageSizeByIndexF`: the size of a page as a reader shows it, in
+  points, without loading it.
+
+      {:ok, {612.0, 792.0}} = PDFium.LowLevel.fpdf_get_page_size_by_index_f(document, 0)
+  """
+  @spec fpdf_get_page_size_by_index_f(document(), non_neg_integer()) ::
+          {:ok, {float(), float()}} | {:error, atom()}
+  defdelegate fpdf_get_page_size_by_index_f(document, index), to: PDFium.NIF
+
+  @doc """
   `FPDF_SaveAsCopy`: the document as it would be written with `flags`, such as
   `FPDF_REMOVE_SECURITY`, `4`.
 

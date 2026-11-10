@@ -29,6 +29,8 @@ defmodule PDFium.NIF do
 
   def fpdf_get_meta_text(_document, _tag), do: :erlang.nif_error(:nif_not_loaded)
 
+  def fpdf_get_page_size_by_index_f(_document, _index), do: :erlang.nif_error(:nif_not_loaded)
+
   def fpdf_save_as_copy(_document, _flags), do: :erlang.nif_error(:nif_not_loaded)
 
   def fpdf_import_pages_by_index(_dest, _src, _page_indices, _index),
@@ -63,14 +65,6 @@ defmodule PDFium.NIF do
   def fpdfbitmap_destroy(_bitmap), do: :erlang.nif_error(:nif_not_loaded)
 
   def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
-
-  def get_page_boxes(_document), do: :erlang.nif_error(:nif_not_loaded)
-
-  def get_page_sizes(_document), do: :erlang.nif_error(:nif_not_loaded)
-
-  def get_annotation_counts(_document), do: :erlang.nif_error(:nif_not_loaded)
-
-  def flatten_page(_document, _page_index, _usage), do: :erlang.nif_error(:nif_not_loaded)
 
   def stamp(_document, _placements), do: :erlang.nif_error(:nif_not_loaded)
 end

@@ -10,6 +10,8 @@ defmodule PDFium do
   alias PDFium.LowLevel
 
   @fpdf_remove_security 4
+  @flat %{display: 0, print: 1}
+  @flatten_fail 0
 
   @typedoc "A document to open: a path, or its contents."
   @type source :: Path.t() | {:bytes, binary()}
@@ -108,12 +110,12 @@ defmodule PDFium do
   """
   @spec get_page_boxes(reference()) :: {:ok, [page_box()]} | {:error, atom()}
   def get_page_boxes(document) do
-    with {:ok, boxes} <- PDFium.NIF.get_page_boxes(document) do
-      {:ok,
-       Enum.map(boxes, fn {left, bottom, right, top, rotation} ->
-         %{left: left, bottom: bottom, right: right, top: top, rotation: rotation}
-       end)}
-    end
+    each_page(document, fn page ->
+      with {:ok, {left, top, right, bottom}} <- LowLevel.fpdf_get_page_bounding_box(page),
+           {:ok, rotation} <- LowLevel.fpdfpage_get_rotation(page) do
+        {:ok, %{left: left, bottom: bottom, right: right, top: top, rotation: rotation * 90}}
+      end
+    end)
   end
 
   @typedoc "The size of a page as a reader shows it, in points."
@@ -126,8 +128,10 @@ defmodule PDFium do
   """
   @spec get_page_sizes(reference()) :: {:ok, [page_size()]} | {:error, atom()}
   def get_page_sizes(document) do
-    with {:ok, sizes} <- PDFium.NIF.get_page_sizes(document),
-         do: {:ok, Enum.map(sizes, fn {width, height} -> %{width: width, height: height} end)}
+    each_index(document, fn index ->
+      with {:ok, {width, height}} <- LowLevel.fpdf_get_page_size_by_index_f(document, index),
+           do: {:ok, %{width: width, height: height}}
+    end)
   end
 
   @doc """
@@ -148,7 +152,8 @@ defmodule PDFium do
       {:ok, [2, 0]} = PDFium.get_annotation_counts(document)
   """
   @spec get_annotation_counts(reference()) :: {:ok, [non_neg_integer()]} | {:error, atom()}
-  defdelegate get_annotation_counts(document), to: PDFium.NIF
+  def get_annotation_counts(document),
+    do: each_page(document, &LowLevel.fpdfpage_get_annot_count/1)
 
   @doc """
   The revision of the standard security handler the document is encrypted
@@ -177,13 +182,15 @@ defmodule PDFium do
   `:print` what it would print.
   """
   @spec flatten_page(reference(), non_neg_integer(), :display | :print) :: :ok | {:error, atom()}
-  def flatten_page(document, page_index, usage \\ :display)
-
-  def flatten_page(document, page_index, :display),
-    do: PDFium.NIF.flatten_page(document, page_index, 0)
-
-  def flatten_page(document, page_index, :print),
-    do: PDFium.NIF.flatten_page(document, page_index, 1)
+  def flatten_page(document, page_index, usage \\ :display) do
+    with_page(document, page_index, fn page ->
+      case LowLevel.fpdfpage_flatten(page, Map.fetch!(@flat, usage)) do
+        {:ok, @flatten_fail} -> {:error, :flatten_failed}
+        {:ok, _flattened} -> :ok
+        error -> error
+      end
+    end)
+  end
 
   @doc """
   Makes an empty document.
@@ -283,5 +290,34 @@ defmodule PDFium do
     Enum.map(placements, fn {overlay, overlay_page, page_index, {a, b, c, d, e, f}} ->
       {overlay, overlay_page, page_index, {a / 1, b / 1, c / 1, d / 1, e / 1, f / 1}}
     end)
+  end
+
+  defp each_page(document, function),
+    do: each_index(document, &with_page(document, &1, function))
+
+  defp each_index(document, function) do
+    with {:ok, count} <- LowLevel.fpdf_get_page_count(document) do
+      0..(count - 1)//1
+      |> Enum.reduce_while({:ok, []}, fn index, {:ok, results} ->
+        case function.(index) do
+          {:ok, result} -> {:cont, {:ok, [result | results]}}
+          error -> {:halt, error}
+        end
+      end)
+      |> case do
+        {:ok, results} -> {:ok, Enum.reverse(results)}
+        error -> error
+      end
+    end
+  end
+
+  defp with_page(document, index, function) do
+    with {:ok, page} <- LowLevel.fpdf_load_page(document, index) do
+      try do
+        function.(page)
+      after
+        LowLevel.fpdf_close_page(page)
+      end
+    end
   end
 end
