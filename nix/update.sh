@@ -4,14 +4,15 @@ if [ "$tag" = "$LIBPDFIUM" ]; then
   exit 0
 fi
 sed --in-place "s|@libpdfium \"$LIBPDFIUM\"|@libpdfium \"$tag\"|" mix.exs
-{
+hashes=$(
   echo "{"
   for target in $TARGETS; do
     url=$(nix eval --json ".#libpdfium-$target.urls" | jq --raw-output '.[0]')
     echo "  \"$target\" = \"$(nix store prefetch-file --unpack --json "$url" | jq --raw-output .hash)\";"
   done
   echo "}"
-} > nix/libpdfium.nix
+)
+echo "$hashes" > nix/libpdfium.nix
 git commit mix.exs nix/libpdfium.nix --message "Update libpdfium to $tag"
 next="${VERSION%.*}.$(( ${VERSION##*.} + 1 ))"
 sed --in-place "s/@version \"$VERSION\"/@version \"$next\"/" mix.exs
