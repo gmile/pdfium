@@ -92,8 +92,9 @@ To update to a specific libpdfium tag:
 nix run .#update -- chromium/8138
 ```
 
-Every push to `main` that changes `VERSION` releases. If a release fails, bump
-`VERSION` again. Tags cannot be reused.
+A push to `main` releases once its tests pass, when `VERSION` names a version
+with no GitHub release yet. If publishing fails after the GitHub release was
+created, bump `VERSION` again, since tags cannot be reused.
 
 ## License
 
