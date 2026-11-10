@@ -47,11 +47,6 @@ jobs:
 
       - uses: nixbuild/nix-quick-install-action@v35
 
-      - uses: DeterminateSystems/magic-nix-cache-action@v15
-        with:
-          use-flakehub: false
-          diagnostic-endpoint: ""
-
       - uses: actions/download-artifact@v8.0.2
         with:
           pattern: archives-*

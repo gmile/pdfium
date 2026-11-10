@@ -18,11 +18,6 @@ jobs:
 
       - uses: nixbuild/nix-quick-install-action@v35
 
-      - uses: DeterminateSystems/magic-nix-cache-action@v15
-        with:
-          use-flakehub: false
-          diagnostic-endpoint: ""
-
       - env:
           GH_TOKEN: ${{ github.token }}
           GIT_AUTHOR_NAME: github-actions[bot]
