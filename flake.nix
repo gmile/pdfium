@@ -43,15 +43,38 @@
             };
           in
           f {
-            inherit pkgs buildable testable host beam deps nif;
+            inherit
+              pkgs
+              buildable
+              testable
+              host
+              beam
+              deps
+              nif
+              ;
           }
         ) buildable;
-      mixFiles = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
-      named = prefix: f: list: lib.listToAttrs (map (target: lib.nameValuePair "${prefix}-${target}" (f target)) list);
+      mixFiles = lib.fileset.toSource {
+        root = ./.;
+        fileset = lib.fileset.unions [
+          ./mix.exs
+          ./mix.lock
+        ];
+      };
+      named =
+        prefix: f: list:
+        lib.listToAttrs (map (target: lib.nameValuePair "${prefix}-${target}" (f target)) list);
     in
     {
       packages = forAllSystems (
-        { pkgs, beam, nif, buildable, host, ... }:
+        {
+          pkgs,
+          beam,
+          nif,
+          buildable,
+          host,
+          ...
+        }:
         {
           default = nif.nif host;
           archives = pkgs.symlinkJoin {
@@ -66,7 +89,12 @@
               mix elixir_make.checksum --all
               mix hex.publish package --yes
             '';
-            runtimeInputs = [ beam.erlang beam.elixir_1_20 pkgs.gh pkgs.git ];
+            runtimeInputs = [
+              beam.erlang
+              beam.elixir_1_20
+              pkgs.gh
+              pkgs.git
+            ];
             runtimeEnv = {
               ERL_LIBS = "${beam.hex}/lib/erlang/lib";
               VERSION = nif.version;
@@ -75,7 +103,12 @@
           update = pkgs.writeShellApplication {
             name = "update";
             text = builtins.readFile ./nix/update.sh;
-            runtimeInputs = [ pkgs.gh pkgs.git pkgs.gnused pkgs.jq ];
+            runtimeInputs = [
+              pkgs.gh
+              pkgs.git
+              pkgs.gnused
+              pkgs.jq
+            ];
             runtimeEnv = {
               VERSION = nif.version;
               LIBPDFIUM = nif.libpdfiumTag;
@@ -89,7 +122,15 @@
       );
 
       checks = forAllSystems (
-        { pkgs, beam, deps, nif, testable, host, ... }:
+        {
+          pkgs,
+          beam,
+          deps,
+          nif,
+          testable,
+          host,
+          ...
+        }:
         let
           beamFor =
             target:
@@ -104,8 +145,20 @@
             in
             pkgs.stdenvNoCC.mkDerivation {
               inherit name;
-              src = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ./lib ./test ]; };
-              nativeBuildInputs = [ beam.erlang beam.elixir_1_20 beam.hex ];
+              src = lib.fileset.toSource {
+                root = ./.;
+                fileset = lib.fileset.unions [
+                  ./mix.exs
+                  ./mix.lock
+                  ./lib
+                  ./test
+                ];
+              };
+              nativeBuildInputs = [
+                beam.erlang
+                beam.elixir_1_20
+                beam.hex
+              ];
               MIX_ENV = "test";
               HEX_OFFLINE = 1;
               buildPhase = ''
