@@ -6,10 +6,10 @@
   native,
   fine,
   binaries,
+  version,
 }:
 
 let
-  version = lib.trim (builtins.readFile ../VERSION);
   libpdfiumTag = binaries.tag;
 
   darwin = target: lib.hasSuffix "-apple-darwin" target;
