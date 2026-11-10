@@ -132,10 +132,37 @@
           ...
         }:
         let
+          trimmed =
+            erlang:
+            erlang.overrideAttrs (old: {
+              installTargets = [ "install" ];
+              configureFlags =
+                old.configureFlags
+                ++ map (app: "--without-${app}") [
+                  "common_test"
+                  "debugger"
+                  "diameter"
+                  "eldap"
+                  "et"
+                  "ftp"
+                  "jinterface"
+                  "megaco"
+                  "mnesia"
+                  "observer"
+                  "odbc"
+                  "reltool"
+                  "snmp"
+                  "ssh"
+                  "tftp"
+                  "wx"
+                ];
+            });
           beamFor =
             target:
             if lib.hasSuffix "-musl" target then
-              beam.overrideScope (_: _: { inherit (pkgs.pkgsMusl.beam_minimal.packages.erlang_29) erlang; })
+              beam.overrideScope (
+                _: _: { erlang = trimmed pkgs.pkgsMusl.beam_minimal.packages.erlang_29.erlang; }
+              )
             else
               beam;
           mix =
