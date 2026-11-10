@@ -101,13 +101,7 @@ it. If a release fails, bump `@version` again. Tags cannot be reused.
   variable and `GH_APP_PRIVATE_KEY` secret
 * a `hex` environment, which the workload identity of the `pdfium` package on
   hex.pm trusts for `release.yaml`
-* required checks named after the CI jobs
 * immutable releases
-
-## Known issues
-
-* Installing works on macOS and in Docker images built by Bob. It does not work
-  with an Elixir from a package manager, such as `apk add elixir`.
 
 ## License
 
