@@ -22,10 +22,10 @@ jobs:
 
       - uses: nixbuild/nix-quick-install-action@v35
 
-      - uses: cachix/cachix-action@v17
+      - uses: DeterminateSystems/magic-nix-cache-action@v15
         with:
-          name: gmile
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          use-flakehub: false
+          diagnostic-endpoint: ""
 
       - env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}

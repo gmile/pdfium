@@ -54,12 +54,6 @@ mix dialyzer
 mix docs
 ```
 
-Trust the project cache once, so builds download instead of compile:
-
-```sh
-cachix use gmile
-```
-
 ## Running tests
 
 Run the tests for every target this machine can run, and dialyzer:
@@ -106,7 +100,6 @@ it. If a release fails, bump `@version` again. Tags cannot be reused.
 * a GitHub App with write access to contents and pull requests: `GH_APP_ID`
   variable and `GH_APP_PRIVATE_KEY` secret
 * `HEX_API_KEY` secret
-* `CACHIX_AUTH_TOKEN` secret, a write token for the `gmile` Cachix cache
 * required checks named after the CI jobs
 * immutable releases
 
