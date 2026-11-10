@@ -27,14 +27,26 @@
           let
             pkgs = nixpkgs.legacyPackages.${system};
             testable = lib.filter (lib.hasPrefix "${lib.head (lib.splitString "-" system)}-") buildable;
-          in
-          f {
-            inherit pkgs buildable testable;
             host = lib.head testable;
             beam = pkgs.beam_minimal.packages.erlang_29;
-            nif = pkgs.callPackage ./nix/nif.nix { inherit (pkgs.beam_minimal.packages.erlang_27) erlang; };
+            deps = beam.fetchMixDeps {
+              pname = "pdfium-deps";
+              version = nif.version;
+              src = mixFiles;
+              mixEnv = "test";
+              hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";
+            };
+            nif = pkgs.callPackage ./nix/nif.nix {
+              inherit (pkgs.beam_minimal.packages.erlang_27) erlang;
+              native = host;
+              fine = "${deps}/fine";
+            };
+          in
+          f {
+            inherit pkgs buildable testable host beam deps nif;
           }
         ) buildable;
+      mixFiles = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
       named = prefix: f: list: lib.listToAttrs (map (target: lib.nameValuePair "${prefix}-${target}" (f target)) list);
     in
     {
@@ -77,7 +89,7 @@
       );
 
       checks = forAllSystems (
-        { pkgs, beam, nif, testable, host, ... }:
+        { pkgs, beam, deps, nif, testable, host, ... }:
         let
           beamFor =
             target:
@@ -85,14 +97,6 @@
               beam.overrideScope (_: _: { inherit (pkgs.pkgsMusl.beam_minimal.packages.erlang_29) erlang; })
             else
               beam;
-          mixFiles = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
-          deps = beam.fetchMixDeps {
-            pname = "pdfium-deps";
-            version = nif.version;
-            src = mixFiles;
-            mixEnv = "test";
-            hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";
-          };
           mix =
             name: target: command:
             let
