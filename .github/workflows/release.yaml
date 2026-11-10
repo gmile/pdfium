@@ -18,7 +18,7 @@ jobs:
           - macos-15
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - uses: nixbuild/nix-quick-install-action@v35
 
@@ -29,7 +29,7 @@ jobs:
 
       - run: nix build .#archives --print-build-logs
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: archives-${{ runner.os }}
           path: result/*
@@ -43,7 +43,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - uses: nixbuild/nix-quick-install-action@v35
 
@@ -52,7 +52,7 @@ jobs:
           use-flakehub: false
           diagnostic-endpoint: ""
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: archives-*
           merge-multiple: true
