@@ -76,7 +76,7 @@ jobs:
           name: archives-${{ runner.os }}
           path: result/*
 
-  release:
+  publish:
     needs: archives
     runs-on: ubuntu-26.04
     environment: hex
