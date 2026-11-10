@@ -99,7 +99,8 @@ it. If a release fails, bump `@version` again. Tags cannot be reused.
 
 * a GitHub App with write access to contents and pull requests: `GH_APP_ID`
   variable and `GH_APP_PRIVATE_KEY` secret
-* `HEX_API_KEY` secret
+* a `hex` environment, which the workload identity of the `pdfium` package on
+  hex.pm trusts for `release.yaml`
 * required checks named after the CI jobs
 * immutable releases
 

@@ -37,6 +37,10 @@ jobs:
   release:
     needs: archives
     runs-on: ubuntu-24.04
+    environment: hex
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v7
@@ -62,5 +66,4 @@ jobs:
 
       - env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
         run: nix run .#release -- archives
