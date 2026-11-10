@@ -97,7 +97,8 @@ the GitHub release. A release that failed before its tag was created can be
 retried by running the CI workflow on `main`.
 
 Every Monday a workflow opens a pull request that updates libpdfium to its
-latest release and bumps `VERSION`. To get one now:
+latest release, notes it in `CHANGELOG.md` and bumps the patch version. To get
+one now:
 
 ```sh
 gh workflow run update-libpdfium.yaml

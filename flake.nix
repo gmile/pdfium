@@ -161,13 +161,13 @@
             text = builtins.readFile ./nix/update.sh;
             excludeShellChecks = [ "SC2016" ];
             runtimeInputs = [
+              cut
               pkgs.gh
               pkgs.git
               pkgs.gnused
               pkgs.jq
             ];
             runtimeEnv = {
-              VERSION = version;
               LIBPDFIUM = nif.libpdfiumTag;
               TARGETS = lib.concatStringsSep " " targets;
             };

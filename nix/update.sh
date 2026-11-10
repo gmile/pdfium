@@ -11,10 +11,9 @@ hashes=$(
   done
 )
 jq --slurp --arg tag "$tag" '{$tag, hashes: add}' <<< "$hashes" > libpdfium.json
-git commit libpdfium.json --message "Update libpdfium to $tag"
-next="${VERSION%.*}.$(( ${VERSION##*.} + 1 ))"
-echo "$next" > VERSION
-git commit VERSION --message "Update package to version $next"
+sed --in-place "s|^## \[Unreleased\]$|## [Unreleased]\n\n### Changed\n\n- Built against libpdfium $tag.|" CHANGELOG.md
+git commit libpdfium.json CHANGELOG.md --message "Update libpdfium to $tag"
+cut patch
 git push origin HEAD:refs/heads/update-libpdfium
 gh pr create --base main --head update-libpdfium --reviewer gmile --fill-first
 gh workflow run ci.yaml --ref update-libpdfium
