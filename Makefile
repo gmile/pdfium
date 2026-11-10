@@ -22,9 +22,6 @@ $(PDFIUM)/lib/$(LIBRARY):
 $(PREFIX)/pdfium_nif.so: c_src/pdfium_nif.cpp $(PDFIUM)/lib/$(LIBRARY)
 	mkdir -p $(PREFIX)
 	$(CXX) $(CXXFLAGS) -shared -o $@ $< -L$(PDFIUM)/lib -lpdfium $(LDFLAGS)
-ifeq ($(OS),mac)
-	install_name_tool -change ./libpdfium.dylib @rpath/libpdfium.dylib $@
-endif
 
 $(PREFIX)/$(LIBRARY): $(PDFIUM)/lib/$(LIBRARY)
 	cp $< $@
