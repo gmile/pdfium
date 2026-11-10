@@ -3,6 +3,7 @@
 #include <fine.hpp>
 #include <fine/sync.hpp>
 #include <fpdfview.h>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <variant>
@@ -23,6 +24,7 @@ struct PDFDoc {
 };
 
 std::unique_lock<fine::Mutex> lock_pdfium();
+void release_later(std::function<void()> release);
 
 template <typename F>
 auto with_document(const fine::ResourcePtr<PDFDoc> &doc, F f) -> decltype(f(doc->document)) {
