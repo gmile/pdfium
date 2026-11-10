@@ -15,7 +15,6 @@ workflows:
         - 'nixbuild/nix-quick-install-action@v35'
     '.github/workflows/update-libpdfium.yaml':
         - 'actions/checkout@v7.0.1'
-        - 'determinatesystems/magic-nix-cache-action@v15'
         - 'nixbuild/nix-quick-install-action@v35'
 dependencies:
     'actions/checkout@v7.0.1':
