@@ -12,6 +12,8 @@ defmodule PDFium do
   @fpdf_remove_security 4
   @flat %{display: 0, print: 1}
   @flatten_fail 0
+  @fpdf_annot 0x01
+  @fpdf_reverse_byte_order 0x10
 
   @typedoc "A document to open: a path, or its contents."
   @type source :: Path.t() | {:bytes, binary()}
@@ -86,7 +88,14 @@ defmodule PDFium do
   """
   @spec get_page_bitmap(reference(), non_neg_integer(), pos_integer()) ::
           {:ok, {binary(), non_neg_integer(), non_neg_integer()}} | {:error, atom()}
-  defdelegate get_page_bitmap(document, page_number, dpi), to: PDFium.NIF
+  def get_page_bitmap(document, page_number, dpi) do
+    with_page(document, page_number, fn page ->
+      with {:ok, width} <- LowLevel.fpdf_get_page_width_f(page),
+           {:ok, height} <- LowLevel.fpdf_get_page_height_f(page) do
+        render(page, pixels(width, dpi), pixels(height, dpi))
+      end
+    end)
+  end
 
   @typedoc """
   The box a page is drawn in, its MediaBox clipped by its CropBox, in points
@@ -290,6 +299,30 @@ defmodule PDFium do
     Enum.map(placements, fn {overlay, overlay_page, page_index, {a, b, c, d, e, f}} ->
       {overlay, overlay_page, page_index, {a / 1, b / 1, c / 1, d / 1, e / 1, f / 1}}
     end)
+  end
+
+  defp render(page, width, height) do
+    with {:ok, bitmap} <- LowLevel.fpdfbitmap_create(width, height, 0) do
+      try do
+        flags = Bitwise.bor(@fpdf_annot, @fpdf_reverse_byte_order)
+
+        with :ok <- LowLevel.fpdfbitmap_fill_rect(bitmap, 0, 0, width, height, 0xFFFFFFFF),
+             :ok <- LowLevel.fpdf_render_page_bitmap(bitmap, page, 0, 0, width, height, 0, flags),
+             {:ok, pixels} <- LowLevel.fpdfbitmap_get_buffer(bitmap),
+             do: {:ok, {pixels, width, height}}
+      after
+        LowLevel.fpdfbitmap_destroy(bitmap)
+      end
+    end
+  end
+
+  # pdfium measures pages in single precision, so the pixels are counted in it
+  # too, or a page could come out a pixel narrower than it always has.
+  defp pixels(points, dpi), do: trunc(single(single(points * dpi) / 72))
+
+  defp single(value) do
+    <<single::float-32>> = <<value::float-32>>
+    single
   end
 
   defp each_page(document, function),

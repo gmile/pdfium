@@ -64,7 +64,5 @@ defmodule PDFium.NIF do
 
   def fpdfbitmap_destroy(_bitmap), do: :erlang.nif_error(:nif_not_loaded)
 
-  def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
-
   def stamp(_document, _placements), do: :erlang.nif_error(:nif_not_loaded)
 end

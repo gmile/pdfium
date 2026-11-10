@@ -1,6 +1,5 @@
 #include "pdfium_nif.hpp"
 
-#include <cpp/fpdf_scopers.h>
 #include <fpdf_annot.h>
 #include <fpdf_doc.h>
 #include <fpdf_edit.h>
@@ -172,28 +171,6 @@ Result<int64_t> fpdf_get_security_handler_revision(ErlNifEnv *, fine::ResourcePt
 }
 
 FINE_NIF(fpdf_get_security_handler_revision, ERL_NIF_DIRTY_JOB_CPU_BOUND);
-
-Result<std::tuple<std::string, int64_t, int64_t>> get_page_bitmap(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc,
-                                                                  int64_t index, int64_t dpi) {
-    return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<std::tuple<std::string, int64_t, int64_t>> {
-        ScopedFPDFPage page(FPDF_LoadPage(document, index));
-        if (!page) {
-            return fine::Error(page_load_failed);
-        }
-        int width = FPDF_GetPageWidthF(page.get()) * dpi / 72;
-        int height = FPDF_GetPageHeightF(page.get()) * dpi / 72;
-        ScopedFPDFBitmap bitmap(FPDFBitmap_Create(width, height, 0));
-        if (!bitmap) {
-            return fine::Error(bitmap_creation_failed);
-        }
-        FPDFBitmap_FillRect(bitmap.get(), 0, 0, width, height, 0xFFFFFFFF);
-        FPDF_RenderPageBitmap(bitmap.get(), page.get(), 0, 0, width, height, 0, FPDF_ANNOT | FPDF_REVERSE_BYTE_ORDER);
-        std::string rgba(static_cast<const char *>(FPDFBitmap_GetBuffer(bitmap.get())), size_t(width) * height * 4);
-        return fine::Ok(std::make_tuple(std::move(rgba), int64_t(width), int64_t(height)));
-    });
-}
-
-FINE_NIF(get_page_bitmap, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 Result<std::string> fpdf_get_meta_text(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, std::string tag) {
     return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<std::string> {
