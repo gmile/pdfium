@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Requires Elixir 1.18 or newer.
+
 ## 0.2.2
 
 - Documentation is published to HexDocs with each release.

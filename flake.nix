@@ -40,6 +40,7 @@
               inherit (pkgs.beam_minimal.packages.erlang_27) erlang;
               native = host;
               fine = "${deps}/fine";
+              binaries = lib.importJSON ./libpdfium.json;
             };
           in
           f {
@@ -60,6 +61,7 @@
           ./mix.exs
           ./mix.lock
           ./VERSION
+          ./libpdfium.json
         ];
       };
       named =
@@ -104,6 +106,7 @@
           update = pkgs.writeShellApplication {
             name = "update";
             text = builtins.readFile ./nix/update.sh;
+            excludeShellChecks = [ "SC2016" ];
             runtimeInputs = [
               pkgs.gh
               pkgs.git
@@ -192,6 +195,7 @@
               buildPhase = ''
                 export HOME=$TMPDIR MIX_DEPS_PATH=$PWD/deps
                 echo 0.0.0 > VERSION
+                echo '{"tag": "none"}' > libpdfium.json
                 cp --recursive --no-preserve=mode ${deps} deps
                 mix deps.compile --no-deps-check
                 mkdir priv
