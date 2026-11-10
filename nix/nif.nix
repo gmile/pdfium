@@ -5,13 +5,12 @@
   fetchzip,
   native,
   fine,
+  binaries,
 }:
 
 let
-  mixExs = builtins.readFile ../mix.exs;
-  attribute = name: builtins.head (builtins.match ".*@${name} \"([^\"]+)\".*" mixExs);
   version = lib.trim (builtins.readFile ../VERSION);
-  libpdfiumTag = attribute "libpdfium";
+  libpdfiumTag = binaries.tag;
 
   darwin = target: lib.hasSuffix "-apple-darwin" target;
   musl = target: lib.hasSuffix "-musl" target;
@@ -32,7 +31,7 @@ let
       }/pdfium-${
         if darwin target then "mac" else "linux"
       }${lib.optionalString (musl target) "-musl"}-${arch target}.tgz";
-      hash = (import ./libpdfium.nix).${target};
+      hash = binaries.hashes.${target} or lib.fakeHash;
       stripRoot = false;
     };
 

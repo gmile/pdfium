@@ -3,17 +3,15 @@ if [ "$tag" = "$LIBPDFIUM" ]; then
   echo "Already at $tag"
   exit 0
 fi
-sed --in-place "s|@libpdfium \"$LIBPDFIUM\"|@libpdfium \"$tag\"|" mix.exs
+jq --null-input --arg tag "$tag" '{$tag}' > libpdfium.json
 hashes=$(
-  echo "{"
   for target in $TARGETS; do
-    url=$(nix eval --json ".#libpdfium-$target.urls" | jq --raw-output '.[0]')
-    echo "  \"$target\" = \"$(nix store prefetch-file --unpack --json "$url" | jq --raw-output .hash)\";"
+    url=$(nix eval --raw ".#libpdfium-$target.urls" --apply builtins.head)
+    nix store prefetch-file --unpack --json "$url" | jq --arg target "$target" '{($target): .hash}'
   done
-  echo "}"
 )
-echo "$hashes" > nix/libpdfium.nix
-git commit mix.exs nix/libpdfium.nix --message "Update libpdfium to $tag"
+jq --slurp --arg tag "$tag" '{$tag, hashes: add}' <<< "$hashes" > libpdfium.json
+git commit libpdfium.json --message "Update libpdfium to $tag"
 next="${VERSION%.*}.$(( ${VERSION##*.} + 1 ))"
 echo "$next" > VERSION
 git commit VERSION --message "Update package to version $next"

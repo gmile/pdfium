@@ -2,7 +2,7 @@ defmodule PDFium.MixProject do
   use Mix.Project
 
   @version File.read!("VERSION") |> String.trim()
-  @libpdfium "chromium/8152"
+  @libpdfium "libpdfium.json" |> File.read!() |> JSON.decode!() |> Map.fetch!("tag")
 
   def project do
     [
@@ -10,7 +10,7 @@ defmodule PDFium.MixProject do
       description: "Elixir interface for pdfium",
       link: "https://github.com/gmile/pdfium",
       version: @version,
-      elixir: "~> 1.17",
+      elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:elixir_make] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
@@ -87,6 +87,7 @@ defmodule PDFium.MixProject do
         CHANGELOG.md
         checksum.exs
         lib
+        libpdfium.json
         LICENSE
         Makefile
         mix.exs
