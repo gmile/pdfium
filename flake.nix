@@ -172,7 +172,17 @@
             else
               beam;
           mix =
-            name: target: command:
+            {
+              name,
+              target ? host,
+              files ? [
+                ./mix.exs
+                ./mix.lock
+                ./lib
+                ./test
+              ],
+              command,
+            }:
             let
               beam = beamFor target;
             in
@@ -180,12 +190,7 @@
               inherit name;
               src = lib.fileset.toSource {
                 root = ./.;
-                fileset = lib.fileset.unions [
-                  ./mix.exs
-                  ./mix.lock
-                  ./lib
-                  ./test
-                ];
+                fileset = lib.fileset.unions files;
               };
               nativeBuildInputs = [
                 beam.erlang
@@ -206,22 +211,33 @@
               '';
               installPhase = "touch $out";
             };
-          test = target: mix "test-${target}" target "mix test --no-deps-check";
-          plt = (mix "plt" host "mix dialyzer --plt").overrideAttrs {
-            src = lib.fileset.toSource {
-              root = ./.;
-              fileset = lib.fileset.unions [
-                ./mix.exs
-                ./mix.lock
-              ];
+          test =
+            target:
+            mix {
+              name = "test-${target}";
+              inherit target;
+              command = "mix test --no-deps-check";
             };
-            installPhase = "mkdir $out && cp _build/plts/*.plt $out";
+          plt = mix {
+            name = "plt";
+            files = [
+              ./mix.exs
+              ./mix.lock
+            ];
+            command = ''
+              mix dialyzer --plt
+              mkdir $out
+              cp _build/plts/*.plt $out
+            '';
           };
-          dialyzer = mix "dialyzer" host ''
-            mkdir -p _build/plts
-            cp ${plt}/* _build/plts
-            mix dialyzer --no-check
-          '';
+          dialyzer = mix {
+            name = "dialyzer";
+            command = ''
+              mkdir -p _build/plts
+              cp ${plt}/* _build/plts
+              mix dialyzer --no-check
+            '';
+          };
         in
         named "test" test testable
         // {
