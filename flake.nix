@@ -85,10 +85,11 @@
               beam.overrideScope (_: _: { inherit (pkgs.pkgsMusl.beam_minimal.packages.erlang_29) erlang; })
             else
               beam;
+          mixFiles = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
           deps = beam.fetchMixDeps {
             pname = "pdfium-deps";
             version = nif.version;
-            src = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
+            src = mixFiles;
             mixEnv = "test";
             hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";
           };
@@ -107,25 +108,22 @@
                 export HOME=$TMPDIR MIX_DEPS_PATH=$PWD/deps
                 cp --recursive --no-preserve=mode ${deps} deps
                 mix deps.compile --no-deps-check
+                mkdir priv
+                install --mode 755 ${nif.nif target}/* priv
                 ${command}
               '';
               installPhase = "touch $out";
             };
-          withNif = target: command: ''
-            mkdir priv
-            install --mode 755 ${nif.nif target}/* priv
-            ${command}
-          '';
-          test = target: mix "test-${target}" target (withNif target "mix test --no-deps-check");
-          plt = (mix "plt" host (withNif host "mix dialyzer --plt")).overrideAttrs {
-            src = lib.fileset.toSource { root = ./.; fileset = lib.fileset.unions [ ./mix.exs ./mix.lock ]; };
+          test = target: mix "test-${target}" target "mix test --no-deps-check";
+          plt = (mix "plt" host "mix dialyzer --plt").overrideAttrs {
+            src = mixFiles;
             installPhase = "mkdir $out && cp _build/plts/*.plt $out";
           };
-          dialyzer = mix "dialyzer" host (withNif host ''
+          dialyzer = mix "dialyzer" host ''
             mkdir -p _build/plts
             cp ${plt}/* _build/plts
             mix dialyzer --no-check
-          '');
+          '';
         in
         named "test" test testable
         // {
