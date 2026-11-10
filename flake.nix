@@ -227,6 +227,7 @@
               name,
               target ? host,
               files ? [
+                ./.formatter.exs
                 ./mix.exs
                 ./mix.lock
                 ./lib
@@ -267,7 +268,10 @@
             mix {
               name = "test-${target}";
               inherit target;
-              command = "mix test --no-deps-check";
+              command = ''
+                mix format --check-formatted
+                mix test --no-deps-check
+              '';
             };
           plt = mix {
             name = "plt";
@@ -293,8 +297,23 @@
         named "test" test testable
         // {
           inherit dialyzer;
+          nixfmt =
+            pkgs.runCommand "nixfmt"
+              {
+                nativeBuildInputs = [ pkgs.nixfmt ];
+                src = lib.fileset.toSource {
+                  root = ./.;
+                  fileset = lib.fileset.fileFilter (file: file.hasExt "nix") ./.;
+                };
+              }
+              ''
+                find $src -name '*.nix' -exec nixfmt --check {} +
+                touch $out
+              '';
         }
       );
+
+      formatter = forAllSystems ({ pkgs, ... }: pkgs.nixfmt-tree);
 
       devShells = forAllSystems (
         { pkgs, beam, ... }:
