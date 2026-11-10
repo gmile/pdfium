@@ -17,11 +17,22 @@ defmodule PDFium.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  def load_memory_document(_contents, _password), do: :erlang.nif_error(:nif_not_loaded)
+  def fpdf_load_mem_document64(_contents, _password), do: :erlang.nif_error(:nif_not_loaded)
 
-  def close_document(_document), do: :erlang.nif_error(:nif_not_loaded)
+  def fpdf_create_new_document, do: :erlang.nif_error(:nif_not_loaded)
 
-  def get_page_count(_document), do: :erlang.nif_error(:nif_not_loaded)
+  def fpdf_close_document(_document), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_get_page_count(_document), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_get_security_handler_revision(_document), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_get_meta_text(_document, _tag), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_save_as_copy(_document, _flags), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_import_pages_by_index(_dest, _src, _page_indices, _index),
+    do: :erlang.nif_error(:nif_not_loaded)
 
   def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -31,16 +42,7 @@ defmodule PDFium.NIF do
 
   def get_annotation_counts(_document), do: :erlang.nif_error(:nif_not_loaded)
 
-  def get_meta_text(_document, _key), do: :erlang.nif_error(:nif_not_loaded)
-
-  def get_security_handler_revision(_document), do: :erlang.nif_error(:nif_not_loaded)
-
   def flatten_page(_document, _page_index, _usage), do: :erlang.nif_error(:nif_not_loaded)
-  def create_document, do: :erlang.nif_error(:nif_not_loaded)
-
-  def save_to_binary(_document, _remove_security), do: :erlang.nif_error(:nif_not_loaded)
-
-  def import_pages(_dest, _src, _page_indices, _at), do: :erlang.nif_error(:nif_not_loaded)
 
   def stamp(_document, _placements), do: :erlang.nif_error(:nif_not_loaded)
 end

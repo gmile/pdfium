@@ -7,6 +7,7 @@
 #include <fpdf_flatten.h>
 #include <fpdf_ppo.h>
 #include <fpdf_save.h>
+#include <optional>
 #include <tuple>
 #include <vector>
 
@@ -83,11 +84,12 @@ static Result<std::vector<T>> each_page(const fine::ResourcePtr<PDFDoc> &doc, F 
     });
 }
 
-Result<fine::ResourcePtr<PDFDoc>> load_memory_document(ErlNifEnv *, std::string data, std::string password) {
+Result<fine::ResourcePtr<PDFDoc>> fpdf_load_mem_document64(ErlNifEnv *, std::string data,
+                                                           std::optional<std::string> password) {
     auto doc = fine::make_resource<PDFDoc>(nullptr, std::move(data));
     auto lock = lock_pdfium();
-    doc->document = FPDF_LoadMemDocument64(doc->buffer.data(), doc->buffer.size(),
-                                           password.empty() ? nullptr : password.c_str());
+    doc->document =
+        FPDF_LoadMemDocument64(doc->buffer.data(), doc->buffer.size(), password ? password->c_str() : nullptr);
     if (!doc->document) {
         unsigned long error = FPDF_GetLastError();
         return fine::Error(load_errors[error < std::size(load_errors) ? error : 0]);
@@ -95,9 +97,9 @@ Result<fine::ResourcePtr<PDFDoc>> load_memory_document(ErlNifEnv *, std::string 
     return fine::Ok(doc);
 }
 
-FINE_NIF(load_memory_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_load_mem_document64, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-fine::Ok<> close_document(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
+fine::Ok<> fpdf_close_document(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
     auto lock = lock_pdfium();
     if (doc->document) {
         FPDF_CloseDocument(doc->document);
@@ -106,30 +108,30 @@ fine::Ok<> close_document(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
     return fine::Ok<>();
 }
 
-FINE_NIF(close_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_close_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-fine::Ok<fine::ResourcePtr<PDFDoc>> create_document(ErlNifEnv *) {
+fine::Ok<fine::ResourcePtr<PDFDoc>> fpdf_create_new_document(ErlNifEnv *) {
     auto lock = lock_pdfium();
     return fine::Ok(fine::make_resource<PDFDoc>(FPDF_CreateNewDocument()));
 }
 
-FINE_NIF(create_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_create_new_document, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-Result<int64_t> get_page_count(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
+Result<int64_t> fpdf_get_page_count(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
     return with_document(doc, [](FPDF_DOCUMENT document) -> Result<int64_t> {
         return fine::Ok<int64_t>(FPDF_GetPageCount(document));
     });
 }
 
-FINE_NIF(get_page_count, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_get_page_count, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-Result<int64_t> get_security_handler_revision(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
+Result<int64_t> fpdf_get_security_handler_revision(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc) {
     return with_document(doc, [](FPDF_DOCUMENT document) -> Result<int64_t> {
         return fine::Ok<int64_t>(FPDF_GetSecurityHandlerRevision(document));
     });
 }
 
-FINE_NIF(get_security_handler_revision, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_get_security_handler_revision, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 Result<std::tuple<std::string, int64_t, int64_t>> get_page_bitmap(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc,
                                                                   int64_t index, int64_t dpi) {
@@ -189,16 +191,16 @@ Result<std::vector<int64_t>> get_annotation_counts(ErlNifEnv *, fine::ResourcePt
 
 FINE_NIF(get_annotation_counts, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-Result<std::string> get_meta_text(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, std::string key) {
+Result<std::string> fpdf_get_meta_text(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, std::string tag) {
     return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<std::string> {
-        std::string utf16(FPDF_GetMetaText(document, key.c_str(), nullptr, 0), '\0');
-        FPDF_GetMetaText(document, key.c_str(), utf16.data(), utf16.size());
+        std::string utf16(FPDF_GetMetaText(document, tag.c_str(), nullptr, 0), '\0');
+        FPDF_GetMetaText(document, tag.c_str(), utf16.data(), utf16.size());
         utf16.resize(utf16.size() >= 2 ? utf16.size() - 2 : 0);
         return fine::Ok(std::move(utf16));
     });
 }
 
-FINE_NIF(get_meta_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_get_meta_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 Result<> flatten_page(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, int64_t index, int64_t usage) {
     return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<> {
@@ -215,7 +217,7 @@ Result<> flatten_page(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, int64_t index,
 
 FINE_NIF(flatten_page, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-Result<std::string> save_to_binary(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, bool remove_security) {
+Result<std::string> fpdf_save_as_copy(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, int64_t flags) {
     return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<std::string> {
         struct Writer : FPDF_FILEWRITE {
             std::string out;
@@ -225,31 +227,36 @@ Result<std::string> save_to_binary(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, b
             static_cast<Writer *>(self)->out.append(static_cast<const char *>(data), size);
             return 1;
         };
-        if (!FPDF_SaveAsCopy(document, &writer, remove_security ? FPDF_REMOVE_SECURITY : 0)) {
+        if (!FPDF_SaveAsCopy(document, &writer, flags)) {
             return fine::Error(save_failed);
         }
         return fine::Ok(std::move(writer.out));
     });
 }
 
-FINE_NIF(save_to_binary, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_save_as_copy, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-// An empty list of pages is pdfium's way of asking for all of them.
-Result<> import_pages(ErlNifEnv *, fine::ResourcePtr<PDFDoc> dest, fine::ResourcePtr<PDFDoc> src,
-                      std::vector<int64_t> pages, int64_t at) {
+Result<> fpdf_import_pages_by_index(ErlNifEnv *, fine::ResourcePtr<PDFDoc> dest, fine::ResourcePtr<PDFDoc> src,
+                                    std::optional<std::vector<int64_t>> page_indices, int64_t index) {
     return with_document(dest, [&](FPDF_DOCUMENT document) -> Result<> {
         if (!src->document) {
             return fine::Error(document_closed);
         }
-        std::vector<int> indices(pages.begin(), pages.end());
-        if (!FPDF_ImportPagesByIndex(document, src->document, indices.empty() ? nullptr : indices.data(),
-                                     indices.size(), at)) {
+        if (page_indices && page_indices->empty()) {
+            return fine::Error(import_failed);
+        }
+        std::vector<int> indices;
+        if (page_indices) {
+            indices.assign(page_indices->begin(), page_indices->end());
+        }
+        if (!FPDF_ImportPagesByIndex(document, src->document, page_indices ? indices.data() : nullptr,
+                                     indices.size(), index)) {
             return fine::Error(import_failed);
         }
         return fine::Ok<>();
     });
 }
 
-FINE_NIF(import_pages, ERL_NIF_DIRTY_JOB_CPU_BOUND);
+FINE_NIF(fpdf_import_pages_by_index, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
 FINE_INIT("Elixir.PDFium.NIF");

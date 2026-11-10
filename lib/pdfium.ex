@@ -7,6 +7,10 @@ defmodule PDFium do
   thread safe, and runs on a dirty scheduler.
   """
 
+  alias PDFium.LowLevel
+
+  @fpdf_remove_security 4
+
   @typedoc "A document to open: a path, or its contents."
   @type source :: Path.t() | {:bytes, binary()}
 
@@ -15,7 +19,7 @@ defmodule PDFium do
   a missing or wrong `:password`, an unsupported `:security` scheme, an
   unreadable `:page`, or `:unknown`.
   """
-  @type load_error :: :unknown | :file | :format | :password | :security | :page
+  @type load_error :: LowLevel.load_error()
 
   @doc """
   Opens a document from a path or from `{:bytes, contents}`.
@@ -30,7 +34,7 @@ defmodule PDFium do
   def open_document(source, options \\ [])
 
   def open_document({:bytes, contents}, options),
-    do: PDFium.NIF.load_memory_document(contents, Keyword.get(options, :password, ""))
+    do: LowLevel.fpdf_load_mem_document64(contents, Keyword.get(options, :password))
 
   def open_document(path, options) do
     case File.read(path) do
@@ -44,7 +48,7 @@ defmodule PDFium do
   `{:error, :document_closed}` to everything.
   """
   @spec close_document(reference()) :: :ok
-  defdelegate close_document(document), to: PDFium.NIF
+  defdelegate close_document(document), to: LowLevel, as: :fpdf_close_document
 
   @doc """
   Opens `source`, runs `function` with the document, and closes it again, even
@@ -71,7 +75,7 @@ defmodule PDFium do
       {:ok, 3} = PDFium.get_page_count(document)
   """
   @spec get_page_count(reference()) :: {:ok, non_neg_integer()} | {:error, atom()}
-  defdelegate get_page_count(document), to: PDFium.NIF
+  defdelegate get_page_count(document), to: LowLevel, as: :fpdf_get_page_count
 
   @doc """
   Renders a page to RGBA pixels at `dpi`, annotations included.
@@ -133,7 +137,7 @@ defmodule PDFium do
   """
   @spec get_meta_text(reference(), binary()) :: {:ok, binary()} | {:error, atom()}
   def get_meta_text(document, key) do
-    with {:ok, utf16} <- PDFium.NIF.get_meta_text(document, key) do
+    with {:ok, utf16} <- LowLevel.fpdf_get_meta_text(document, key) do
       {:ok, :unicode.characters_to_binary(utf16, {:utf16, :little})}
     end
   end
@@ -155,7 +159,7 @@ defmodule PDFium do
   @spec get_security_handler_revision(reference()) ::
           {:ok, pos_integer() | nil} | {:error, atom()}
   def get_security_handler_revision(document) do
-    with {:ok, revision} <- PDFium.NIF.get_security_handler_revision(document) do
+    with {:ok, revision} <- LowLevel.fpdf_get_security_handler_revision(document) do
       {:ok, if(revision < 0, do: nil, else: revision)}
     end
   end
@@ -187,7 +191,7 @@ defmodule PDFium do
       {:ok, document} = PDFium.create_document()
   """
   @spec create_document() :: {:ok, reference()}
-  defdelegate create_document(), to: PDFium.NIF
+  defdelegate create_document(), to: LowLevel, as: :fpdf_create_new_document
 
   @doc """
   Writes the document to `output_path`.
@@ -206,8 +210,12 @@ defmodule PDFium do
       {:ok, <<"%PDF-", _::binary>>} = PDFium.save_to_binary(document)
   """
   @spec save_to_binary(reference(), security()) :: {:ok, binary()} | {:error, atom()}
-  def save_to_binary(document, security \\ :keep),
-    do: PDFium.NIF.save_to_binary(document, security == :remove)
+  def save_to_binary(document, security \\ :keep)
+
+  def save_to_binary(document, :remove),
+    do: LowLevel.fpdf_save_as_copy(document, @fpdf_remove_security)
+
+  def save_to_binary(document, :keep), do: LowLevel.fpdf_save_as_copy(document, 0)
 
   @doc """
   Copies pages of `source` into `destination` at position `at`. `pages` is
@@ -221,12 +229,12 @@ defmodule PDFium do
   def import_pages(destination, source, pages, at \\ 0)
 
   def import_pages(destination, source, :all, at),
-    do: PDFium.NIF.import_pages(destination, source, [], at)
+    do: LowLevel.fpdf_import_pages_by_index(destination, source, nil, at)
 
   def import_pages(_destination, _source, [], _at), do: {:error, :no_pages}
 
   def import_pages(destination, source, pages, at) when is_list(pages),
-    do: PDFium.NIF.import_pages(destination, source, pages, at)
+    do: LowLevel.fpdf_import_pages_by_index(destination, source, pages, at)
 
   @doc """
   Runs `function` with an empty document and closes it again.
