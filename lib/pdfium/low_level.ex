@@ -11,12 +11,20 @@ defmodule PDFium.LowLevel do
 
   What they do keep is the VM safe. Every call waits its turn on the one lock
   pdfium needs and runs on a dirty scheduler. A handle the garbage collector
-  drops is closed on the next call, and a handle that was closed answers
-  `{:error, :document_closed}` instead of crashing.
+  drops is closed on the next call. A handle that was closed answers
+  `{:error, :document_closed}`, `{:error, :page_closed}` or
+  `{:error, :bitmap_destroyed}` instead of crashing, and so does a page of a
+  closed document.
   """
 
   @typedoc "A document, `FPDF_DOCUMENT`."
   @type document :: reference()
+
+  @typedoc "A page loaded from a document, `FPDF_PAGE`. It keeps its document alive."
+  @type page :: reference()
+
+  @typedoc "A bitmap, `FPDF_BITMAP`."
+  @type bitmap :: reference()
 
   @typedoc """
   Why pdfium would not open a document, from `FPDF_GetLastError`: unreadable
@@ -99,4 +107,143 @@ defmodule PDFium.LowLevel do
           non_neg_integer()
         ) :: :ok | {:error, atom()}
   defdelegate fpdf_import_pages_by_index(dest, src, page_indices, index), to: PDFium.NIF
+
+  @doc """
+  `FPDF_LoadPage`: loads a page, counted from zero.
+
+      {:ok, page} = PDFium.LowLevel.fpdf_load_page(document, 0)
+  """
+  @spec fpdf_load_page(document(), non_neg_integer()) :: {:ok, page()} | {:error, atom()}
+  defdelegate fpdf_load_page(document, index), to: PDFium.NIF
+
+  @doc """
+  `FPDF_ClosePage`: closes a page. Closing it again does nothing.
+
+      :ok = PDFium.LowLevel.fpdf_close_page(page)
+  """
+  @spec fpdf_close_page(page()) :: :ok
+  defdelegate fpdf_close_page(page), to: PDFium.NIF
+
+  @doc """
+  `FPDF_GetPageWidthF`: the width of the page as a reader shows it, in points.
+
+      {:ok, 612.0} = PDFium.LowLevel.fpdf_get_page_width_f(page)
+  """
+  @spec fpdf_get_page_width_f(page()) :: {:ok, float()} | {:error, atom()}
+  defdelegate fpdf_get_page_width_f(page), to: PDFium.NIF
+
+  @doc """
+  `FPDF_GetPageHeightF`: the height of the page as a reader shows it, in points.
+
+      {:ok, 792.0} = PDFium.LowLevel.fpdf_get_page_height_f(page)
+  """
+  @spec fpdf_get_page_height_f(page()) :: {:ok, float()} | {:error, atom()}
+  defdelegate fpdf_get_page_height_f(page), to: PDFium.NIF
+
+  @doc """
+  `FPDF_GetPageBoundingBox`: the MediaBox clipped by the CropBox, as the fields
+  of `FS_RECTF` in order, `{left, top, right, bottom}`.
+
+      {:ok, {0.0, 792.0, 612.0, 0.0}} = PDFium.LowLevel.fpdf_get_page_bounding_box(page)
+  """
+  @spec fpdf_get_page_bounding_box(page()) ::
+          {:ok, {float(), float(), float(), float()}} | {:error, atom()}
+  defdelegate fpdf_get_page_bounding_box(page), to: PDFium.NIF
+
+  @doc """
+  `FPDFPage_GetRotation`: how far the page is turned clockwise, in quarter turns.
+
+      {:ok, 1} = PDFium.LowLevel.fpdfpage_get_rotation(page)
+  """
+  @spec fpdfpage_get_rotation(page()) :: {:ok, 0..3} | {:error, atom()}
+  defdelegate fpdfpage_get_rotation(page), to: PDFium.NIF
+
+  @doc """
+  `FPDFPage_GetAnnotCount`: how many annotations the page carries.
+
+      {:ok, 2} = PDFium.LowLevel.fpdfpage_get_annot_count(page)
+  """
+  @spec fpdfpage_get_annot_count(page()) :: {:ok, non_neg_integer()} | {:error, atom()}
+  defdelegate fpdfpage_get_annot_count(page), to: PDFium.NIF
+
+  @doc """
+  `FPDFPage_Flatten`: draws the page's annotations into its content, by the
+  appearance `flag` names, `FLAT_NORMALDISPLAY` `0` or `FLAT_PRINT` `1`.
+  Answers `FLATTEN_FAIL` `0`, `FLATTEN_SUCCESS` `1` or `FLATTEN_NOTHINGTODO` `2`.
+
+      {:ok, 1} = PDFium.LowLevel.fpdfpage_flatten(page, 0)
+  """
+  @spec fpdfpage_flatten(page(), non_neg_integer()) :: {:ok, 0..2} | {:error, atom()}
+  defdelegate fpdfpage_flatten(page, flag), to: PDFium.NIF
+
+  @doc """
+  `FPDF_RenderPageBitmap`: draws the page into `size_x` by `size_y` pixels of
+  the bitmap from `start_x`, `start_y`, turned `rotate` quarter turns, with
+  `flags` such as `FPDF_ANNOT` `0x01` and `FPDF_REVERSE_BYTE_ORDER` `0x10`.
+
+      :ok = PDFium.LowLevel.fpdf_render_page_bitmap(bitmap, page, 0, 0, 612, 792, 0, 0x11)
+  """
+  @spec fpdf_render_page_bitmap(
+          bitmap(),
+          page(),
+          integer(),
+          integer(),
+          integer(),
+          integer(),
+          0..3,
+          non_neg_integer()
+        ) :: :ok | {:error, atom()}
+  defdelegate fpdf_render_page_bitmap(
+                bitmap,
+                page,
+                start_x,
+                start_y,
+                size_x,
+                size_y,
+                rotate,
+                flags
+              ),
+              to: PDFium.NIF
+
+  @doc """
+  `FPDFBitmap_Create`: a bitmap of 32 bits a pixel, BGRx, or BGRA when `alpha`
+  is not `0`. Its contents are undefined until filled.
+
+      {:ok, bitmap} = PDFium.LowLevel.fpdfbitmap_create(612, 792, 0)
+  """
+  @spec fpdfbitmap_create(integer(), integer(), integer()) ::
+          {:ok, bitmap()} | {:error, atom()}
+  defdelegate fpdfbitmap_create(width, height, alpha), to: PDFium.NIF
+
+  @doc """
+  `FPDFBitmap_FillRect`: fills a rectangle of the bitmap with an ARGB `color`.
+
+      :ok = PDFium.LowLevel.fpdfbitmap_fill_rect(bitmap, 0, 0, 612, 792, 0xFFFFFFFF)
+  """
+  @spec fpdfbitmap_fill_rect(
+          bitmap(),
+          integer(),
+          integer(),
+          integer(),
+          integer(),
+          non_neg_integer()
+        ) :: :ok | {:error, atom()}
+  defdelegate fpdfbitmap_fill_rect(bitmap, left, top, width, height, color), to: PDFium.NIF
+
+  @doc """
+  `FPDFBitmap_GetBuffer`: a copy of the bitmap's pixels, four bytes each, row
+  after row.
+
+      {:ok, pixels} = PDFium.LowLevel.fpdfbitmap_get_buffer(bitmap)
+  """
+  @spec fpdfbitmap_get_buffer(bitmap()) :: {:ok, binary()} | {:error, atom()}
+  defdelegate fpdfbitmap_get_buffer(bitmap), to: PDFium.NIF
+
+  @doc """
+  `FPDFBitmap_Destroy`: frees a bitmap. Destroying it again does nothing.
+
+      :ok = PDFium.LowLevel.fpdfbitmap_destroy(bitmap)
+  """
+  @spec fpdfbitmap_destroy(bitmap()) :: :ok
+  defdelegate fpdfbitmap_destroy(bitmap), to: PDFium.NIF
 end

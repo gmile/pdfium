@@ -40,7 +40,7 @@ Result<> stamp(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, std::vector<Placement
         std::map<std::pair<FPDF_DOCUMENT, int>, std::unique_ptr<fpdf_xobject_t__, XObjectCloser>> templates;
         std::map<int, ScopedFPDFPage> pages;
         for (const auto &[overlay, overlay_page, index, matrix] : placements) {
-            if (!overlay->document) {
+            if (overlay->closed) {
                 return fine::Error(document_closed);
             }
             auto &page = pages[index];

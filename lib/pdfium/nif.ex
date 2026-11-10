@@ -34,6 +34,34 @@ defmodule PDFium.NIF do
   def fpdf_import_pages_by_index(_dest, _src, _page_indices, _index),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def fpdf_load_page(_document, _index), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_close_page(_page), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_get_page_width_f(_page), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_get_page_height_f(_page), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_get_page_bounding_box(_page), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdfpage_get_rotation(_page), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdfpage_get_annot_count(_page), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdfpage_flatten(_page, _flag), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdf_render_page_bitmap(_bitmap, _page, _x, _y, _width, _height, _rotate, _flags),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdfbitmap_create(_width, _height, _alpha), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdfbitmap_fill_rect(_bitmap, _left, _top, _width, _height, _color),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdfbitmap_get_buffer(_bitmap), do: :erlang.nif_error(:nif_not_loaded)
+
+  def fpdfbitmap_destroy(_bitmap), do: :erlang.nif_error(:nif_not_loaded)
+
   def get_page_bitmap(_document, _page_number, _dpi), do: :erlang.nif_error(:nif_not_loaded)
 
   def get_page_boxes(_document), do: :erlang.nif_error(:nif_not_loaded)

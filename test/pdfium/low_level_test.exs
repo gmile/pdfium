@@ -6,6 +6,7 @@ defmodule PDFium.LowLevelTest do
 
   import PDFium.Test.Helpers
 
+  @annotated Path.expand("../fixtures/annotated.pdf", __DIR__)
   @plain Path.expand("../fixtures/test.pdf", __DIR__)
   @encrypted_r5 Path.expand("../fixtures/encrypted-r5.pdf", __DIR__)
   @encrypted_user Path.expand("../fixtures/encrypted-user.pdf", __DIR__)
@@ -80,6 +81,97 @@ defmodule PDFium.LowLevelTest do
       assert :ok = LowLevel.fpdf_import_pages_by_index(dest, source, [1], 3)
       assert {:ok, 4} = LowLevel.fpdf_get_page_count(dest)
       assert {:error, :import_failed} = LowLevel.fpdf_import_pages_by_index(dest, source, [], 0)
+    end
+  end
+
+  describe "pages" do
+    test "are measured as pdfium measures them" do
+      page = [box: {10, 20, 410, 620}, crop: {10, 20, 210, 320}, rotation: 90]
+      {:ok, page} = tmp_path() |> Document.write!([page]) |> load!() |> LowLevel.fpdf_load_page(0)
+
+      assert {:ok, 300.0} = LowLevel.fpdf_get_page_width_f(page)
+      assert {:ok, 200.0} = LowLevel.fpdf_get_page_height_f(page)
+      assert {:ok, {10.0, 320.0, 210.0, 20.0}} = LowLevel.fpdf_get_page_bounding_box(page)
+      assert {:ok, 1} = LowLevel.fpdfpage_get_rotation(page)
+    end
+
+    test "are flattened, answering as pdfium does" do
+      document = load!(@annotated)
+      {:ok, page} = LowLevel.fpdf_load_page(document, 0)
+
+      assert {:ok, 1} = LowLevel.fpdfpage_get_annot_count(page)
+      assert {:ok, 1} = LowLevel.fpdfpage_flatten(page, 0)
+      assert {:ok, 0} = LowLevel.fpdfpage_get_annot_count(page)
+      assert {:ok, 2} = LowLevel.fpdfpage_flatten(page, 0)
+    end
+
+    test "that are not there do not load" do
+      assert {:error, :page_load_failed} = LowLevel.fpdf_load_page(load!(@plain), 99)
+    end
+
+    test "answer page_closed once closed, closing included" do
+      {:ok, page} = LowLevel.fpdf_load_page(load!(@plain), 0)
+
+      assert :ok = LowLevel.fpdf_close_page(page)
+      assert :ok = LowLevel.fpdf_close_page(page)
+      assert {:error, :page_closed} = LowLevel.fpdf_get_page_width_f(page)
+    end
+
+    test "of a closed document answer document_closed, and still close" do
+      document = load!(@plain)
+      {:ok, page} = LowLevel.fpdf_load_page(document, 0)
+
+      assert :ok = LowLevel.fpdf_close_document(document)
+      assert {:error, :document_closed} = LowLevel.fpdf_get_page_count(document)
+      assert {:error, :document_closed} = LowLevel.fpdf_get_page_width_f(page)
+      assert :ok = LowLevel.fpdf_close_page(page)
+      assert {:error, :page_closed} = LowLevel.fpdf_get_page_width_f(page)
+    end
+
+    test "dropped without closing are closed, and so are their documents" do
+      task =
+        Task.async(fn ->
+          {:ok, document} = LowLevel.fpdf_load_mem_document64(File.read!(@plain), nil)
+          for _ <- 1..50, do: LowLevel.fpdf_load_page(document, 0)
+          :ok = LowLevel.fpdf_close_document(document)
+        end)
+
+      Task.await(task)
+      :erlang.garbage_collect()
+
+      assert {:ok, _count} = LowLevel.fpdf_get_page_count(load!(@plain))
+    end
+  end
+
+  describe "bitmaps" do
+    test "are filled, drawn into and read back" do
+      {:ok, bitmap} = LowLevel.fpdfbitmap_create(2, 1, 0)
+
+      assert :ok = LowLevel.fpdfbitmap_fill_rect(bitmap, 0, 0, 2, 1, 0xFFFF0000)
+      assert {:ok, <<0, 0, 255, _, 0, 0, 255, _>>} = LowLevel.fpdfbitmap_get_buffer(bitmap)
+
+      blue = tmp_path() |> Document.filled({0, 0, 1}, box: {0, 0, 2, 1}) |> load!()
+      {:ok, page} = LowLevel.fpdf_load_page(blue, 0)
+
+      assert :ok = LowLevel.fpdf_render_page_bitmap(bitmap, page, 0, 0, 2, 1, 0, 0x10)
+      assert {:ok, <<0, 0, 255, _, 0, 0, 255, _>>} = LowLevel.fpdfbitmap_get_buffer(bitmap)
+    end
+
+    test "that cannot be made are refused" do
+      assert {:error, :bitmap_creation_failed} = LowLevel.fpdfbitmap_create(0, 1, 0)
+    end
+
+    test "answer bitmap_destroyed once destroyed, destroying included" do
+      {:ok, bitmap} = LowLevel.fpdfbitmap_create(2, 1, 0)
+      {:ok, page} = LowLevel.fpdf_load_page(load!(@plain), 0)
+
+      assert :ok = LowLevel.fpdfbitmap_destroy(bitmap)
+      assert :ok = LowLevel.fpdfbitmap_destroy(bitmap)
+      assert {:error, :bitmap_destroyed} = LowLevel.fpdfbitmap_get_buffer(bitmap)
+      assert {:error, :bitmap_destroyed} = LowLevel.fpdfbitmap_fill_rect(bitmap, 0, 0, 1, 1, 0)
+
+      assert {:error, :bitmap_destroyed} =
+               LowLevel.fpdf_render_page_bitmap(bitmap, page, 0, 0, 2, 1, 0, 0)
     end
   end
 end
