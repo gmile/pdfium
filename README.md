@@ -79,22 +79,20 @@ nix build .#archives
 
 ## Releasing
 
+1. Bump `VERSION` and add a section for it to `CHANGELOG.md`.
+2. Commit.
+3. Push to `main`.
+
+CI publishes it to Hex and GitHub once the tests pass. A release that failed
+before its tag was created can be retried by running the CI workflow on `main`.
+
 Every Monday a workflow opens a pull request that updates libpdfium and bumps
-the version. Merging it releases. To do that now:
+`VERSION`. To get one now, or for a specific libpdfium tag:
 
 ```sh
 gh workflow run update-libpdfium.yaml
+nix run .#update -- chromium/8152
 ```
-
-To update to a specific libpdfium tag:
-
-```sh
-nix run .#update -- chromium/8138
-```
-
-A push to `main` releases once its tests pass, when `VERSION` names a version
-with no GitHub release yet. If publishing fails after the GitHub release was
-created, bump `VERSION` again, since tags cannot be reused.
 
 ## License
 
