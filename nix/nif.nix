@@ -1,4 +1,4 @@
-{ lib, pkgs, erlang, fetchzip, fetchFromGitHub }:
+{ lib, pkgs, erlang, fetchzip, native, fine }:
 
 let
   mixExs = builtins.readFile ../mix.exs;
@@ -17,19 +17,6 @@ let
     stripRoot = false;
   };
 
-  fine = fetchFromGitHub {
-    owner = "elixir-nx";
-    repo = "fine";
-    tag = "v0.2.0";
-    hash = "sha256-nk/OXlAyID5oxW64BYbJhrEDdNA3afDiu6Ry1EeOsMo=";
-  };
-
-  native = {
-    aarch64-darwin = "aarch64-apple-darwin";
-    aarch64-linux = "aarch64-linux-gnu";
-    x86_64-linux = "x86_64-linux-gnu";
-  }.${pkgs.stdenv.hostPlatform.system};
-
   cross = {
     aarch64-linux-gnu = "aarch64-multiplatform";
     aarch64-linux-musl = "aarch64-multiplatform-musl";
@@ -37,9 +24,7 @@ let
     x86_64-linux-musl = "musl64";
   };
 
-  stdenvFor = target:
-    if target == native then pkgs.stdenv
-    else pkgs.pkgsCross.${cross.${target} or (throw "${target} cannot be built on ${pkgs.stdenv.hostPlatform.system}")}.stdenv;
+  stdenvFor = target: if target == native then pkgs.stdenv else pkgs.pkgsCross.${cross.${target}}.stdenv;
 
   nif = target: (stdenvFor target).mkDerivation {
     pname = "pdfium-nif-${target}";
