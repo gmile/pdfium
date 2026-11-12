@@ -161,7 +161,6 @@
             text = builtins.readFile ./nix/update.sh;
             excludeShellChecks = [ "SC2016" ];
             runtimeInputs = [
-              release
               pkgs.gh
               pkgs.git
               pkgs.gnused
