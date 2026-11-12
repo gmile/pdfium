@@ -82,7 +82,7 @@ nix build .#archives
 From a clean `main` that matches `origin/main`, with `major`, `minor` or `patch`:
 
 ```sh
-nix run .#bump -- minor
+nix run .#release -- minor
 ```
 
 It does what you would by hand:
@@ -97,8 +97,8 @@ the GitHub release. A release that failed before its tag was created can be
 retried by running the CI workflow on `main`.
 
 Every Monday a workflow opens a pull request that updates libpdfium to its
-latest release, notes it in `CHANGELOG.md` and bumps the patch version. To get
-one now:
+latest release and notes it in `CHANGELOG.md`, replacing the previous week's if
+it was not merged. Release it like any other change. To get one now:
 
 ```sh
 gh workflow run update-libpdfium.yaml
