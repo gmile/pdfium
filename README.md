@@ -82,7 +82,7 @@ nix build .#archives
 From a clean `main` that matches `origin/main`, with `major`, `minor` or `patch`:
 
 ```sh
-nix run .#bump -- minor
+nix run .#release -- minor
 ```
 
 It does what you would by hand:
