@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.3.0] - 2026-11-15
+
 ### Changed
 
 - **Breaking:** requires Elixir 1.18 or newer.
