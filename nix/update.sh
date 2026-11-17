@@ -21,4 +21,3 @@ if [ "$(gh pr list --head update-libpdfium --json number --jq length)" = 0 ]; th
 else
   gh pr edit update-libpdfium --title "$title" --body "$body"
 fi
-gh workflow run ci.yaml --ref update-libpdfium
