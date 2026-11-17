@@ -9,7 +9,6 @@ jobs:
   update-to-latest:
     runs-on: ubuntu-26.04
     permissions:
-      actions: write
       contents: write
       pull-requests: write
 
