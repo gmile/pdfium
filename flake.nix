@@ -257,6 +257,7 @@
               inherit target;
               command = ''
                 mix format --check-formatted
+                mix compile --no-deps-check --warnings-as-errors
                 mix test --no-deps-check
               '';
             };
