@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Built against libpdfium chromium/8165.
+
 ## [v0.3.0] - 2026-11-15
 
 ### Changed
