@@ -415,17 +415,13 @@ defmodule PDFium.ToolboxTest do
       assert {:ok, 1} = PDFium.get_page_count(open!(output))
     end
 
-    test "answers with the document when there is nothing to flatten" do
-      {:ok, pages} = PDFium.with_document(@plain, &PDFium.get_page_count/1)
-
-      assert {:ok, flattened} = Toolbox.flatten(@plain)
-      assert {:ok, ^pages} = PDFium.with_document({:bytes, flattened}, &PDFium.get_page_count/1)
+    test "writes nothing when there is nothing to flatten" do
+      assert {:ok, :nothing_to_do} = Toolbox.flatten(@plain)
     end
 
-    test "is idempotent" do
+    test "has nothing to do the second time" do
       assert {:ok, once} = Toolbox.flatten(@annotated)
-      assert {:ok, twice} = Toolbox.flatten({:bytes, once})
-      assert {:ok, [0]} = PDFium.with_document({:bytes, twice}, &PDFium.get_annotation_counts/1)
+      assert {:ok, :nothing_to_do} = Toolbox.flatten({:bytes, once})
     end
 
     test "reports a document it cannot open" do
