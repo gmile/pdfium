@@ -56,15 +56,23 @@ defmodule PDFium.Toolbox do
   Draws every annotation into the page it sits on and drops it.
 
       {:ok, binary} = PDFium.Toolbox.flatten("contract.pdf")
-      {:ok, binary} = PDFium.Toolbox.flatten("contract.pdf", :print, :remove)
+      {:ok, :nothing_to_do} = PDFium.Toolbox.flatten("plain.pdf")
+      {:ok, binary} = PDFium.Toolbox.flatten("plain.pdf", :print, :remove)
+
+  Answers `{:ok, :nothing_to_do}` when pdfium left every page as it was, so a
+  document that needed no flattening is not written again. With `:remove` the
+  document is written either way, since dropping its encryption is a change.
   """
   @spec flatten(PDFium.source(), :display | :print, PDFium.security()) ::
-          {:ok, binary()} | {:error, atom()}
+          {:ok, binary() | :nothing_to_do} | {:error, atom()}
   def flatten(source, usage \\ :display, security \\ :keep) do
     PDFium.with_document(source, fn document ->
       with {:ok, count} <- PDFium.get_page_count(document),
-           :ok <- each_page(count, &PDFium.flatten_page(document, &1, usage)),
-           do: PDFium.save_to_binary(document, security)
+           {:ok, outcome} <- flatten_each(document, count, usage) do
+        if outcome == :success or security == :remove,
+          do: PDFium.save_to_binary(document, security),
+          else: {:ok, :nothing_to_do}
+      end
     end)
   end
 
@@ -165,10 +173,11 @@ defmodule PDFium.Toolbox do
     {scale, 0.0, 0.0, scale, (page_width - width * scale) / 2, (page_height - height * scale) / 2}
   end
 
-  defp each_page(count, function) do
-    Enum.reduce_while(0..(count - 1)//1, :ok, fn index, :ok ->
-      case function.(index) do
-        :ok -> {:cont, :ok}
+  defp flatten_each(document, count, usage) do
+    Enum.reduce_while(0..(count - 1)//1, {:ok, :nothing_to_do}, fn index, {:ok, outcome} ->
+      case PDFium.flatten_page(document, index, usage) do
+        {:ok, :success} -> {:cont, {:ok, :success}}
+        {:ok, :nothing_to_do} -> {:cont, {:ok, outcome}}
         error -> {:halt, error}
       end
     end)

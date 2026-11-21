@@ -25,6 +25,8 @@ static fine::Atom load_errors[] = {fine::Atom("unknown"),  fine::Atom("unknown")
 static fine::Atom document_closed("document_closed");
 static fine::Atom page_load_failed("page_load_failed");
 static fine::Atom bitmap_creation_failed("bitmap_creation_failed");
+static fine::Atom success("success");
+static fine::Atom nothing_to_do("nothing_to_do");
 static fine::Atom flatten_failed("flatten_failed");
 static fine::Atom save_failed("save_failed");
 static fine::Atom import_failed("import_failed");
@@ -219,16 +221,20 @@ Result<std::string> get_meta_text(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, st
 
 FINE_NIF(get_meta_text, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-Result<> flatten_page(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, int64_t index, int64_t usage) {
-    return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<> {
+Result<fine::Atom> flatten_page(ErlNifEnv *, fine::ResourcePtr<PDFDoc> doc, int64_t index, int64_t usage) {
+    return with_document(doc, [&](FPDF_DOCUMENT document) -> Result<fine::Atom> {
         ScopedFPDFPage page(FPDF_LoadPage(document, index));
         if (!page) {
             return fine::Error(page_load_failed);
         }
-        if (FPDFPage_Flatten(page.get(), usage) == FLATTEN_FAIL) {
+        switch (FPDFPage_Flatten(page.get(), usage)) {
+        case FLATTEN_SUCCESS:
+            return fine::Ok(success);
+        case FLATTEN_NOTHINGTODO:
+            return fine::Ok(nothing_to_do);
+        default:
             return fine::Error(flatten_failed);
         }
-        return fine::Ok<>();
     });
 }
 

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `PDFium.flatten_page/3` answers `{:ok, :success}` or
+  `{:ok, :nothing_to_do}`, pdfium's own answer, where it answered `:ok`.
+- **Breaking:** `PDFium.Toolbox.flatten/3` answers `{:ok, :nothing_to_do}`
+  when no page changed, where it wrote the document again. With `:remove` it
+  still writes.
+
 ## [v0.3.1] - 2026-11-17
 
 ### Changed

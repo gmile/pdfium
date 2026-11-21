@@ -424,14 +424,25 @@ defmodule PDFiumTest do
     test "draws the annotations on the page it names" do
       document = open!(@annotated)
 
-      assert :ok = PDFium.flatten_page(document, 0)
+      assert {:ok, :success} = PDFium.flatten_page(document, 0)
       assert {:ok, [0]} = PDFium.get_annotation_counts(document)
     end
 
     test "says when a page had nothing to draw" do
       document = tmp_path() |> Document.write!([[]]) |> open!()
 
-      assert :ok = PDFium.flatten_page(document, 0)
+      assert {:ok, :nothing_to_do} = PDFium.flatten_page(document, 0)
+    end
+
+    test "drops a hidden annotation without drawing it" do
+      hidden = [rect: {0, 0, 10, 10}, flags: 2, content: "0 0 10 10 re f"]
+      path = tmp_path() |> Document.write!([[annotations: [hidden]]])
+      document = open!(path)
+
+      assert {:ok, :success} = PDFium.flatten_page(document, 0)
+      assert {:ok, [0]} = PDFium.get_annotation_counts(document)
+      assert :ok = PDFium.save(document, path)
+      assert ink(path) == 0
     end
 
     test "leaves the pages it was not asked about" do
@@ -439,7 +450,7 @@ defmodule PDFiumTest do
       assert :ok = write(Toolbox.merge([@annotated, @annotated]), output)
       document = open!(output)
 
-      assert :ok = PDFium.flatten_page(document, 0)
+      assert {:ok, :success} = PDFium.flatten_page(document, 0)
       assert {:ok, [0, 1]} = PDFium.get_annotation_counts(document)
     end
 
