@@ -293,6 +293,7 @@
                 mix format --check-formatted
                 mix compile --warnings-as-errors
                 mix deps.unlock --check-unused
+                mix xref graph --format cycles --label compile-connected --fail-above 0
                 mix test --warnings-as-errors
               '';
             };
