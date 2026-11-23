@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.4.0] - 2026-11-23
+
 ### Changed
 
 - **Breaking:** `PDFium.flatten_page/3` answers `{:ok, :success}` or
