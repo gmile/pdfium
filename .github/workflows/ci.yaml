@@ -34,7 +34,7 @@ jobs:
           use-flakehub: false
           diagnostic-endpoint: ""
 
-      - run: nix flake check --print-build-logs
+      - run: nix flake check --print-build-logs --max-jobs auto
 
   version:
     if: github.ref == 'refs/heads/main'
