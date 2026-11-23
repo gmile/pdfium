@@ -22,9 +22,8 @@ defmodule PDFium.MixProject do
         skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
       ],
       dialyzer: [
-        plt_add_apps: [:ex_unit],
-        plt_core_path: "_build/plts",
-        plt_local_path: "_build/plts"
+        plt_local_path: "_build/plts",
+        plt_core_path: "_build/plts"
       ]
     ] ++ make_precompiler()
   end
@@ -75,7 +74,7 @@ defmodule PDFium.MixProject do
       {:cc_precompiler, "~> 0.1", runtime: false},
       {:elixir_make, "~> 0.1", runtime: false},
       {:fine, "~> 0.2", runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: :dev, runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false}
     ]
   end

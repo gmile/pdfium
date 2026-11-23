@@ -62,7 +62,7 @@ nix fmt
 
 ## Running tests
 
-Run the tests for every target this machine can run, and dialyzer:
+Run the tests for every target this machine can run, the docs and dialyzer:
 
 ```sh
 nix flake check

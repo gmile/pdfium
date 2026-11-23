@@ -33,8 +33,8 @@
               pname = "pdfium-deps";
               version = "locked";
               src = mixFiles;
-              mixEnv = "test";
-              hash = "sha256-jcdjDCr7qRq8CgRx7OWiN8VdEJXFgkcOLYt9xW0roUQ=";
+              mixEnv = "";
+              hash = "sha256-gsXPt5NJt7ViOtI0MpJVcpLBOIahq4VuTiaqQfm1TDI=";
             };
             nif = pkgs.callPackage ./nix/nif.nix {
               inherit (pkgs.beam_minimal.packages.erlang_27) erlang;
@@ -56,6 +56,11 @@
               ;
           }
         ) buildable;
+      mixTools = beam: [
+        beam.erlang
+        beam.elixir_1_20
+        beam.hex
+      ];
       mixFiles = lib.fileset.toSource {
         root = ./.;
         fileset = lib.fileset.unions [
@@ -212,79 +217,108 @@
           mix =
             {
               name,
+              env ? "test",
               target ? host,
-              files ? [
-                ./.formatter.exs
-                ./mix.exs
-                ./mix.lock
-                ./lib
-                ./test
-              ],
+              files ? [ ],
+              setup ? ''
+                cp --recursive --no-preserve=mode ${compiled.${env}}/. .
+                mkdir priv
+                install --mode 755 ${nif.nif target}/* priv
+              '',
               command,
+              output ? "touch $out",
             }:
-            let
-              beam = beamFor target;
-            in
             pkgs.stdenvNoCC.mkDerivation {
               inherit name;
               src = lib.fileset.toSource {
                 root = ./.;
-                fileset = lib.fileset.unions files;
+                fileset = lib.fileset.unions (
+                  [
+                    ./mix.exs
+                    ./mix.lock
+                  ]
+                  ++ files
+                );
               };
-              nativeBuildInputs = [
-                beam.erlang
-                beam.elixir_1_20
-                beam.hex
-              ];
-              MIX_ENV = "test";
+              nativeBuildInputs = mixTools (beamFor target);
+              MIX_ENV = env;
               HEX_OFFLINE = 1;
               buildPhase = ''
                 export HOME=$TMPDIR MIX_DEPS_PATH=$PWD/deps
                 echo 0.0.0 > VERSION
                 echo '{"tag": "none"}' > libpdfium.json
-                cp --recursive --no-preserve=mode ${deps} deps
-                mix deps.compile --no-deps-check
-                mkdir priv
-                install --mode 755 ${nif.nif target}/* priv
-                ${command}
+                ${setup}
               '';
-              installPhase = "touch $out";
+              doCheck = true;
+              checkPhase = ''
+                runHook preCheck
+                ${command}
+                runHook postCheck
+              '';
+              installPhase = output;
             };
+          compiled = lib.genAttrs [ "dev" "test" ] (
+            env:
+            mix {
+              name = "deps-${env}";
+              inherit env;
+              setup = "cp --recursive --no-preserve=mode ${deps} deps";
+              command = "mix deps.compile --no-deps-check";
+              output = ''
+                mkdir $out
+                cp --recursive deps _build $out
+              '';
+            }
+          );
+          plt = mix {
+            name = "plt";
+            env = "dev";
+            command = "mix dialyzer --plt";
+            output = ''
+              mkdir $out
+              cp _build/plts/*.plt $out
+            '';
+          };
           test =
             target:
             mix {
               name = "test-${target}";
               inherit target;
+              files = [
+                ./.formatter.exs
+                ./lib
+                ./test
+              ];
               command = ''
                 mix format --check-formatted
-                mix compile --no-deps-check --warnings-as-errors
-                mix test --no-deps-check
+                mix compile --warnings-as-errors
+                mix deps.unlock --check-unused
+                mix test --warnings-as-errors
               '';
             };
-          plt = mix {
-            name = "plt";
+        in
+        named "test" test testable
+        // {
+          docs = mix {
+            name = "docs";
+            env = "dev";
             files = [
-              ./mix.exs
-              ./mix.lock
+              ./lib
+              ./README.md
+              ./CHANGELOG.md
             ];
-            command = ''
-              mix dialyzer --plt
-              mkdir $out
-              cp _build/plts/*.plt $out
-            '';
+            command = "mix docs --warnings-as-errors";
           };
           dialyzer = mix {
             name = "dialyzer";
+            env = "dev";
+            files = [ ./lib ];
             command = ''
-              mkdir -p _build/plts
+              mkdir _build/plts
               cp ${plt}/* _build/plts
               mix dialyzer --no-check
             '';
           };
-        in
-        named "test" test testable
-        // {
-          inherit dialyzer;
           nixfmt =
             pkgs.runCommand "nixfmt"
               {
@@ -307,10 +341,7 @@
         { pkgs, beam, ... }:
         {
           default = pkgs.mkShell {
-            packages = [
-              beam.erlang
-              beam.elixir_1_20
-              beam.hex
+            packages = mixTools beam ++ [
               pkgs.fish
               pkgs.gh
             ];
