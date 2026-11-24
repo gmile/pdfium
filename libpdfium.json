@@ -1,10 +1,10 @@
 {
-  "tag": "chromium/8165",
+  "tag": "chromium/8179",
   "hashes": {
-    "aarch64-linux-gnu": "sha256-Vpnl6mRQlsydgFZFFWlHc5/Jx1SPSS8u4i7iN1yHvV4=",
-    "aarch64-linux-musl": "sha256-X1OzsRUn/13bHzmSRLrOxKPZUZqaiCt0HfbFD1+gCLM=",
-    "x86_64-linux-gnu": "sha256-gfhAy9Nxmtj1H5mr2JM0fvScDybzAZOrjQ6rpV8v1Ec=",
-    "x86_64-linux-musl": "sha256-LbBamJXHXDV3OohNk+jEpBps62Fmp2C/ry7ZXIlHv04=",
-    "aarch64-apple-darwin": "sha256-zafnfohLXcXgJ//syea6iKVPh/dsdgr3s+s+bw15vRQ="
+    "aarch64-linux-gnu": "sha256-IkkT7qirlmx0QyK178CKoiS60XAPwQ2B8wfaNMLrXO8=",
+    "aarch64-linux-musl": "sha256-2Lpz/JS8/qImaTr3HqIfw6d1NjC6lO7acfpE1EbrSRM=",
+    "x86_64-linux-gnu": "sha256-+I0UiTYKi2/O2zKE+sPfO0dPB+e4Ffc5YN700JDcaw0=",
+    "x86_64-linux-musl": "sha256-pQI3y0wKeRyk1eXrxTXppmn6mnKa/AYFtw6ytyotYsw=",
+    "aarch64-apple-darwin": "sha256-RaQmBybimvV2x8yxSDyxiTj/zsr1+nLkpFcykiYoQf8="
   }
 }
